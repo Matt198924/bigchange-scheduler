@@ -180,7 +180,7 @@ const DAY_END   = 17;
 const DAY_MINS  = (DAY_END - DAY_START) * 60;
 const HOURS     = Array.from({length: DAY_END - DAY_START + 1}, (_, i) => DAY_START + i);
 
-let jobs = [], engineers = [], schedule = {};
+let jobs = [], engineers = [], schedule = {}, engNames = {};
 let selectedJob = null;
 let assignedToday = 0;
 
@@ -233,6 +233,7 @@ async function loadEngineers() {
 async function loadSchedule() {
   const data = await api('/api/schedule/tomorrow');
   schedule = data.byEngineer || {};
+  engNames = data.engNames || {};
   const totalJobs = Object.values(schedule).reduce((s, arr) => s + arr.length, 0);
   const engCount  = Object.keys(schedule).length;
   document.getElementById('m-engs').textContent    = engCount;
@@ -328,7 +329,14 @@ function getGaps(engId) {
 function renderTimeline() {
   const container = document.getElementById('timeline-scroll');
 
-  const engIds = Object.keys(schedule);
+  // Only engineers with at least 1 job tomorrow
+  const engIds = Object.keys(schedule)
+    .filter(id => (schedule[id] || []).length > 0)
+    .sort((a, b) => {
+      const nameA = (engineers.find(e => e.id === a) || {}).name || '';
+      const nameB = (engineers.find(e => e.id === b) || {}).name || '';
+      return nameA.localeCompare(nameB);
+    });
   if (!engIds.length) {
     container.innerHTML = '<div class="empty-state">No engineers scheduled for tomorrow yet</div>';
     document.getElementById('m-gaps').textContent = '—';
@@ -345,7 +353,7 @@ function renderTimeline() {
   let totalGaps = 0;
 
   const rowsHtml = engIds.map(engId => {
-    const eng = engineers.find(e => e.id === engId) || { name: 'Engineer ' + engId, isTrainee: false };
+    const eng = engineers.find(e => e.id === engId) || { name: engNames[engId] || ('Engineer ' + engId), isTrainee: false };
     const engJobs = schedule[engId] || [];
     const gaps = getGaps(engId);
 
