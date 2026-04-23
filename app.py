@@ -15,6 +15,19 @@ CUSTOMER_ID   = os.environ.get('BIGCHANGE_CUSTOMER_ID', '1564')
 API_BASE      = 'https://api.bigchange.com/v1'
 TOKEN_URL     = 'https://api.bigchange.com/auth/tokens'
 
+# Only show jobs from these allocation categories
+VALID_CATEGORIES = [
+    'new jobs',
+    'allocations - (000) scotland',
+    'allocations - (001-002) north & nth wales',
+    'allocations - (003) midlands & east',
+    'allocations - (004) london',
+    'allocations - (005) south west & sth wales',
+    'allocations - (006) sussex / hamp / kent & s.coast',
+]
+
+COMPLETED_STATUSES = {'completedok', 'completedwithissues', 'cancelled'}
+
 _token_cache = {'token': None, 'expires_at': 0}
 
 def get_token():
@@ -26,7 +39,7 @@ def get_token():
         'client_id': CLIENT_ID,
         'client_secret': CLIENT_SECRET,
     }, timeout=15)
-    print(f"[AUTH] {resp.status_code}: {resp.text[:200]}")
+    print(f"[AUTH] {resp.status_code}")
     resp.raise_for_status()
     data = resp.json()
     _token_cache['token'] = data['access_token']
@@ -42,7 +55,7 @@ def bc_get(path, params=None):
         'Content-Type': 'application/json',
         'customer-id': CUSTOMER_ID,
     }, params=params, timeout=15)
-    print(f"[API] {resp.status_code}: {resp.text[:500]}")
+    print(f"[API] {resp.status_code}: {resp.text[:300]}")
     resp.raise_for_status()
     return resp.json()
 
@@ -64,12 +77,23 @@ def bc_post(path, body):
 def is_group_entry(name):
     return bool(re.match(r'^\(\d+\)', name.strip()))
 
+def is_valid_category(job):
+    cat = (job.get('categoryName') or job.get('category') or '').lower().strip()
+    if not cat:
+        return False
+    return any(cat == v for v in VALID_CATEGORIES)
+
 def parse_sla(job):
     for field in ['slaDeadline', 'requiredByDate', 'dueDate']:
         val = job.get(field)
         if val:
             return val
-    return (job.get('sla') or {}).get('deadline')
+    # Check custom fields for SLA
+    for cf in (job.get('customFields') or []):
+        caption = (cf.get('definition') or {}).get('caption', '').lower()
+        if 'sla' in caption and cf.get('value'):
+            return cf.get('value')
+    return None
 
 def get_priority(job):
     deadline = parse_sla(job)
@@ -85,37 +109,53 @@ def get_priority(job):
         return 'ok'
 
 def get_duration_minutes(job):
-    for field in ['plannedDuration', 'duration', 'estimatedDuration', 'durationMinutes']:
+    # plannedDuration in the sample was 180 (minutes directly)
+    for field in ['plannedDuration', 'actualDuration', 'duration', 'estimatedDuration', 'durationMinutes']:
         val = job.get(field)
         if val:
             try:
                 v = float(val)
-                if v < 24:
-                    return int(v * 60)
-                return int(v)
+                # Values > 24 are already in minutes
+                if v > 24:
+                    return int(v)
+                # Values <= 24 could be hours
+                return int(v * 60)
             except Exception:
                 pass
     return 60
 
 def format_job(j):
-    planned_start = j.get('plannedStartAt') or j.get('startAt') or j.get('scheduledStart')
+    planned_start = j.get('plannedStartAt') or j.get('startAt')
     actual_start  = j.get('actualStartAt')
-    planned_end   = j.get('plannedEndAt') or j.get('endAt') or j.get('scheduledEnd')
+    planned_end   = j.get('plannedEndAt') or j.get('endAt')
     actual_end    = j.get('actualEndAt')
+
+    # Extract SLA from custom fields
+    sla_value = None
+    for cf in (j.get('customFields') or []):
+        caption = (cf.get('definition') or {}).get('caption', '').lower()
+        if 'sla' in caption and cf.get('value'):
+            sla_value = cf.get('value')
+            break
+
+    # Location from contactLocation
+    loc = j.get('contactLocation') or {}
+    lat = loc.get('latitude')
+    lng = loc.get('longitude')
 
     return {
         'id':           str(j.get('id', '')),
         'ref':          str(j.get('reference') or j.get('jobNumber') or j.get('id', '')),
-        'desc':         j.get('description') or j.get('jobType') or 'Job',
-        'client':       j.get('customerName') or j.get('contactName') or j.get('client') or '—',
-        'area':         j.get('postcode') or (j.get('address') or {}).get('postcode') or j.get('location') or '—',
-        'type':         j.get('jobTypeName') or j.get('jobType') or j.get('type') or 'Reactive',
+        'desc':         j.get('description') or 'Job',
+        'client':       j.get('contactName') or j.get('customerName') or '—',
+        'area':         j.get('contactAddress') or j.get('postcode') or '—',
+        'type':         j.get('typeName') or j.get('jobType') or 'Reactive',
         'status':       j.get('status') or '',
-        'sla':          parse_sla(j),
+        'category':     j.get('categoryName') or '',
+        'sla':          sla_value or parse_sla(j),
         'priority':     get_priority(j),
         'resourceId':   str(j.get('resourceId') or ''),
-        'jobGroupId':   str(j.get('jobGroupId') or j.get('groupId') or ''),
-        'jobGroupName': j.get('jobGroupName') or j.get('groupName') or '',
+        'resourceName': j.get('resourceName') or '',
         'plannedStart': planned_start,
         'actualStart':  actual_start,
         'plannedEnd':   planned_end,
@@ -123,10 +163,9 @@ def format_job(j):
         'startTime':    actual_start or planned_start,
         'endTime':      actual_end or planned_end,
         'durationMins': get_duration_minutes(j),
-        '_raw_keys':    list(j.keys()),  # for debugging field names
+        'lat':          lat,
+        'lng':          lng,
     }
-
-COMPLETED_STATUSES = {'completedok', 'completedwithissues', 'cancelled'}
 
 @app.route('/')
 def index():
@@ -155,24 +194,24 @@ def get_engineers():
             if e.get('type', '').lower() in ['vehicle', 'asset']:
                 continue
 
-            status_raw = (e.get('status') or e.get('currentStatus') or '').lower()
+            status_raw = (e.get('status') or '').lower()
             if 'travel' in status_raw or 'driving' in status_raw:
-                status = 'travelling'
-            elif 'busy' in status_raw or 'on site' in status_raw or 'working' in status_raw:
-                status = 'busy'
+                eng_status = 'travelling'
+            elif 'busy' in status_raw or 'on site' in status_raw:
+                eng_status = 'busy'
             else:
-                status = 'available'
+                eng_status = 'available'
 
             is_trainee = '(T)' in name or '(TS)' in name
             clean_name = name.replace('(T)', '').replace('(TS)', '').strip()
 
             engineers.append({
-                'id':        str(e.get('id') or e.get('resourceId', i)),
+                'id':        str(e.get('id') or i),
                 'name':      clean_name,
                 'isTrainee': is_trainee,
                 'region':    e.get('region') or e.get('area') or e.get('homePostcode') or '—',
-                'status':    status,
-                'skills':    e.get('skills') or e.get('certifications') or [],
+                'status':    eng_status,
+                'skills':    e.get('skills') or [],
             })
 
         print(f"[ENG] Returning {len(engineers)} engineers")
@@ -188,7 +227,6 @@ def get_unassigned_jobs():
         today_start  = datetime.now().strftime('%Y-%m-%dT00:00:00')
         tomorrow_end = (datetime.now() + timedelta(days=2)).strftime('%Y-%m-%dT23:59:59')
 
-        # No status filter — pull all jobs and filter ourselves
         data = bc_get('/jobs', {
             'StartAtFrom': today_start,
             'StartAtTo':   tomorrow_end,
@@ -200,25 +238,21 @@ def get_unassigned_jobs():
         )
         print(f"[UNASSIGNED] Got {len(raw)} raw jobs")
 
-        # Log the first job's keys so we can see available fields
-        if raw:
-            print(f"[UNASSIGNED] Sample job keys: {list(raw[0].keys())}")
-            print(f"[UNASSIGNED] Sample job: {raw[0]}")
-
         jobs = []
         for j in raw:
             status = (j.get('status') or '').lower()
-            # Skip completed/cancelled
             if status in COMPLETED_STATUSES:
                 continue
-            # Skip already assigned to a resource
             if j.get('resourceId'):
+                continue
+            # Only include valid allocation categories
+            if not is_valid_category(j):
                 continue
             jobs.append(format_job(j))
 
         order = {'breach': 0, 'urgent': 1, 'ok': 2}
         jobs.sort(key=lambda j: (order.get(j['priority'], 2), j['sla'] or '9999'))
-        print(f"[UNASSIGNED] Returning {len(jobs)} unassigned jobs")
+        print(f"[UNASSIGNED] Returning {len(jobs)} jobs after category filter")
         return jsonify({'jobs': jobs, 'total': len(jobs)})
 
     except Exception as e:
@@ -227,17 +261,16 @@ def get_unassigned_jobs():
 
 @app.route('/api/jobs/sample')
 def get_sample_job():
-    """Debug endpoint - returns raw fields from first job"""
     try:
         today_start = datetime.now().strftime('%Y-%m-%dT00:00:00')
         today_end   = datetime.now().strftime('%Y-%m-%dT23:59:59')
         data = bc_get('/jobs', {
             'StartAtFrom': today_start,
             'StartAtTo':   today_end,
-            'pageSize':    5,
+            'pageSize':    3,
         })
         raw = data if isinstance(data, list) else (data.get('items') or [])
-        return jsonify({'sample': raw[:2] if raw else []})
+        return jsonify({'sample': raw[:3]})
     except Exception as e:
         return jsonify({'error': str(e)}), 500
 
