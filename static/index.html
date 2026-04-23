@@ -8,104 +8,134 @@
 * { box-sizing: border-box; margin: 0; padding: 0; }
 body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; background: #f5f5f3; color: #1a1a1a; font-size: 14px; }
 
-.topbar { background: #fff; border-bottom: 1px solid #e5e5e3; padding: 0 1.5rem; height: 56px; display: flex; align-items: center; justify-content: space-between; position: sticky; top: 0; z-index: 100; }
+.topbar { background: #fff; border-bottom: 1px solid #e5e5e3; padding: 0 1.5rem; height: 52px; display: flex; align-items: center; justify-content: space-between; position: sticky; top: 0; z-index: 100; }
 .logo { font-size: 15px; font-weight: 600; color: #185FA5; }
 .topbar-date { font-size: 12px; color: #888; margin-left: 12px; }
 .topbar-right { display: flex; align-items: center; gap: 10px; }
 .conn-badge { font-size: 11px; padding: 3px 10px; border-radius: 20px; background: #EAF3DE; color: #3B6D11; }
 .conn-badge.error { background: #FCEBEB; color: #A32D2D; }
 .conn-badge.loading { background: #FAEEDA; color: #854F0B; }
-.btn-sm { padding: 6px 14px; border: 1px solid #ddd; border-radius: 8px; background: #fff; font-size: 12px; cursor: pointer; transition: all 0.15s; }
+.btn-sm { padding: 5px 12px; border: 1px solid #ddd; border-radius: 7px; background: #fff; font-size: 12px; cursor: pointer; }
 .btn-sm:hover { background: #f5f5f3; }
 
-.metrics-bar { display: flex; gap: 12px; padding: 1.25rem 1.5rem; background: #fff; border-bottom: 1px solid #e5e5e3; overflow-x: auto; }
-.metric { background: #f5f5f3; border-radius: 8px; padding: 10px 16px; min-width: 130px; flex-shrink: 0; }
+.metrics-bar { display: flex; gap: 10px; padding: 1rem 1.5rem; background: #fff; border-bottom: 1px solid #e5e5e3; overflow-x: auto; }
+.metric { background: #f5f5f3; border-radius: 8px; padding: 10px 16px; min-width: 120px; flex-shrink: 0; }
 .metric .m-label { font-size: 11px; color: #888; margin-bottom: 3px; }
-.metric .m-value { font-size: 22px; font-weight: 600; }
+.metric .m-value { font-size: 20px; font-weight: 600; }
 .metric .m-value.red { color: #A32D2D; }
 .metric .m-value.amber { color: #854F0B; }
 .metric .m-value.green { color: #3B6D11; }
+.metric .m-value.blue { color: #185FA5; }
 
-.main { display: grid; grid-template-columns: 1fr 340px; min-height: calc(100vh - 128px); }
-.left-panel { padding: 1.25rem 1.5rem; border-right: 1px solid #e5e5e3; }
-.right-panel { padding: 1.25rem; background: #f5f5f3; overflow-y: auto; }
+/* Tab nav */
+.tab-nav { display: flex; gap: 0; border-bottom: 1px solid #e5e5e3; background: #fff; padding: 0 1.5rem; }
+.tab-btn { padding: 10px 20px; font-size: 13px; border: none; background: none; cursor: pointer; color: #888; border-bottom: 2px solid transparent; margin-bottom: -1px; }
+.tab-btn.active { color: #185FA5; border-bottom-color: #185FA5; font-weight: 500; }
 
-.section-head { display: flex; align-items: center; justify-content: space-between; margin-bottom: 1rem; }
-.section-title { font-size: 13px; font-weight: 600; }
-.section-count { font-size: 12px; color: #888; }
+/* Main layout */
+.tab-content { display: none; }
+.tab-content.active { display: block; }
 
-.filter-bar { display: flex; gap: 8px; margin-bottom: 1rem; flex-wrap: wrap; }
-.filter-btn { padding: 4px 12px; border-radius: 20px; border: 1px solid #ddd; background: #fff; font-size: 12px; cursor: pointer; transition: all 0.15s; }
+/* ── ASSIGN TAB ── */
+.assign-layout { display: grid; grid-template-columns: 380px 1fr; min-height: calc(100vh - 160px); }
+.jobs-panel { border-right: 1px solid #e5e5e3; background: #fff; display: flex; flex-direction: column; }
+.panel-head { padding: 12px 16px; border-bottom: 1px solid #e5e5e3; display: flex; align-items: center; justify-content: space-between; flex-shrink: 0; }
+.panel-title { font-size: 13px; font-weight: 600; }
+.panel-count { font-size: 12px; color: #888; }
+.filter-bar { padding: 10px 16px; border-bottom: 1px solid #f0f0ee; display: flex; gap: 6px; flex-wrap: wrap; flex-shrink: 0; }
+.filter-btn { padding: 3px 10px; border-radius: 20px; border: 1px solid #ddd; background: #fff; font-size: 11px; cursor: pointer; }
 .filter-btn.active { background: #185FA5; color: #fff; border-color: #185FA5; }
-
-.jobs-list { display: flex; flex-direction: column; gap: 8px; }
-.job-card { background: #fff; border: 1px solid #e5e5e3; border-radius: 10px; padding: 14px 16px; cursor: pointer; transition: all 0.15s; border-left: 3px solid #e5e5e3; }
-.job-card:hover { box-shadow: 0 2px 8px rgba(0,0,0,0.06); }
-.job-card.selected { border-color: #185FA5; border-left-color: #185FA5; background: #f0f6ff; }
+.jobs-list { flex: 1; overflow-y: auto; }
+.job-card { padding: 12px 16px; border-bottom: 1px solid #f0f0ee; cursor: pointer; border-left: 3px solid transparent; transition: background 0.1s; }
+.job-card:hover { background: #fafaf9; }
+.job-card.selected { background: #f0f6ff; border-left-color: #185FA5; }
 .job-card.breach { border-left-color: #E24B4A; }
 .job-card.urgent { border-left-color: #BA7517; }
 .job-card.ok { border-left-color: #639922; }
-.job-top { display: flex; align-items: center; justify-content: space-between; margin-bottom: 5px; }
-.job-ref { font-size: 12px; font-weight: 600; color: #185FA5; }
-.sla-chip { font-size: 11px; padding: 2px 9px; border-radius: 20px; font-weight: 500; }
+.job-top { display: flex; align-items: center; justify-content: space-between; margin-bottom: 4px; }
+.job-ref { font-size: 11px; font-weight: 600; color: #185FA5; }
+.sla-chip { font-size: 10px; padding: 2px 7px; border-radius: 20px; font-weight: 500; }
 .sla-chip.breach { background: #FCEBEB; color: #A32D2D; }
 .sla-chip.urgent { background: #FAEEDA; color: #854F0B; }
 .sla-chip.ok { background: #EAF3DE; color: #3B6D11; }
-.job-desc { font-size: 13px; font-weight: 500; margin-bottom: 3px; }
-.job-client { font-size: 12px; color: #666; margin-bottom: 8px; }
-.job-footer { display: flex; align-items: center; gap: 8px; }
-.tag { font-size: 11px; padding: 2px 8px; border-radius: 4px; background: #f0f0ee; color: #555; }
-.job-area { font-size: 11px; color: #888; margin-left: auto; }
+.job-desc { font-size: 12px; font-weight: 500; margin-bottom: 2px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.job-client { font-size: 11px; color: #666; margin-bottom: 6px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.job-footer { display: flex; align-items: center; gap: 6px; }
+.tag { font-size: 10px; padding: 2px 6px; border-radius: 4px; background: #f0f0ee; color: #555; }
+.dur-tag { font-size: 10px; padding: 2px 6px; border-radius: 4px; background: #E6F1FB; color: #185FA5; }
+.job-area { font-size: 10px; color: #aaa; margin-left: auto; }
 
-.eng-list { display: flex; flex-direction: column; gap: 8px; margin-bottom: 1.5rem; }
-.eng-card { background: #fff; border: 1px solid #e5e5e3; border-radius: 10px; padding: 12px; }
-.eng-top { display: flex; align-items: center; gap: 10px; margin-bottom: 8px; }
+/* Engineer suggestion panel */
+.suggest-panel { padding: 1.25rem; overflow-y: auto; }
+.suggest-empty { display: flex; flex-direction: column; align-items: center; justify-content: center; height: 300px; color: #aaa; font-size: 13px; text-align: center; line-height: 1.7; }
+.suggest-job-info { background: #fff; border: 1px solid #e5e5e3; border-radius: 10px; padding: 14px 16px; margin-bottom: 1rem; }
+.suggest-job-info h3 { font-size: 13px; font-weight: 600; margin-bottom: 4px; }
+.suggest-job-info p { font-size: 12px; color: #666; }
+.suggest-title { font-size: 12px; font-weight: 600; color: #888; text-transform: uppercase; letter-spacing: 0.05em; margin-bottom: 10px; }
+.eng-suggest-list { display: flex; flex-direction: column; gap: 8px; }
+.eng-suggest { background: #fff; border: 1px solid #e5e5e3; border-radius: 10px; padding: 14px 16px; }
+.eng-suggest.top { border-color: #185FA5; background: #f8fbff; }
+.eng-suggest-top { display: flex; align-items: center; gap: 10px; margin-bottom: 10px; }
 .avatar { width: 32px; height: 32px; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: 11px; font-weight: 600; flex-shrink: 0; }
-.eng-name { font-size: 13px; font-weight: 500; }
-.eng-sub { font-size: 11px; color: #888; }
-.status-dot { width: 8px; height: 8px; border-radius: 50%; margin-left: auto; flex-shrink: 0; }
-.status-dot.available { background: #639922; }
-.status-dot.busy { background: #E24B4A; }
-.status-dot.travelling { background: #BA7517; }
-.bar-wrap { height: 3px; background: #f0f0ee; border-radius: 2px; overflow: hidden; margin-bottom: 4px; }
-.bar-fill { height: 100%; border-radius: 2px; }
-.bar-fill.low { background: #639922; }
-.bar-fill.mid { background: #BA7517; }
-.bar-fill.high { background: #E24B4A; }
-.eng-detail { font-size: 11px; color: #888; }
+.eng-suggest-name { font-size: 13px; font-weight: 500; }
+.eng-suggest-sub { font-size: 11px; color: #888; }
+.gap-list { display: flex; flex-direction: column; gap: 5px; }
+.gap-item { display: flex; align-items: center; gap: 8px; padding: 7px 10px; border: 1px solid #e5e5e3; border-radius: 7px; background: #f9f9f7; }
+.gap-time { font-size: 12px; font-weight: 500; min-width: 110px; }
+.gap-duration { font-size: 11px; color: #3B6D11; background: #EAF3DE; padding: 2px 7px; border-radius: 20px; }
+.btn-assign-gap { margin-left: auto; padding: 4px 10px; border-radius: 6px; border: 1px solid #ddd; background: #fff; font-size: 11px; cursor: pointer; }
+.btn-assign-gap:hover { background: #185FA5; color: #fff; border-color: #185FA5; }
+.no-gaps { font-size: 11px; color: #aaa; padding: 6px 0; }
 
-.assign-panel { background: #fff; border: 1px solid #e5e5e3; border-radius: 10px; overflow: hidden; }
-.assign-head { padding: 12px 14px; border-bottom: 1px solid #e5e5e3; background: #f9f9f7; }
-.assign-head h3 { font-size: 12px; font-weight: 600; }
-.assign-head p { font-size: 11px; color: #888; margin-top: 2px; }
-.assign-empty { padding: 2rem 1rem; text-align: center; font-size: 12px; color: #aaa; line-height: 1.7; }
-.suggest-list { padding: 10px; display: flex; flex-direction: column; gap: 6px; }
-.suggest-item { display: flex; align-items: center; gap: 10px; padding: 10px; border: 1px solid #e5e5e3; border-radius: 8px; }
-.suggest-item.top-pick { border-color: #185FA5; background: #f0f6ff; }
-.suggest-rank { font-size: 13px; font-weight: 600; color: #aaa; min-width: 18px; text-align: center; }
-.suggest-rank.gold { color: #BA7517; }
-.suggest-info { flex: 1; min-width: 0; }
-.suggest-name { font-size: 13px; font-weight: 500; }
-.suggest-why { font-size: 11px; color: #888; line-height: 1.4; margin-top: 1px; }
-.score-badge { font-size: 11px; font-weight: 600; padding: 2px 8px; border-radius: 20px; white-space: nowrap; }
-.score-high { background: #EAF3DE; color: #3B6D11; }
-.score-mid { background: #FAEEDA; color: #854F0B; }
-.btn-assign { padding: 5px 12px; border-radius: 6px; border: 1px solid #ddd; background: #fff; font-size: 11px; cursor: pointer; white-space: nowrap; transition: all 0.15s; }
-.btn-assign:hover { background: #f0f0ee; }
-.btn-assign.primary { background: #185FA5; color: #fff; border-color: #185FA5; }
-.btn-assign.primary:hover { background: #0C447C; }
+/* ── SCHEDULE TAB ── */
+.schedule-layout { display: grid; grid-template-columns: 300px 1fr; min-height: calc(100vh - 160px); }
+.eng-list-panel { border-right: 1px solid #e5e5e3; background: #fff; overflow-y: auto; }
+.eng-row { padding: 10px 14px; border-bottom: 1px solid #f0f0ee; cursor: pointer; display: flex; align-items: center; gap: 10px; }
+.eng-row:hover { background: #fafaf9; }
+.eng-row.selected { background: #f0f6ff; }
+.eng-row-info { flex: 1; min-width: 0; }
+.eng-row-name { font-size: 13px; font-weight: 500; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.eng-row-sub { font-size: 11px; color: #888; }
+.eng-job-count { font-size: 11px; padding: 2px 8px; border-radius: 20px; background: #E6F1FB; color: #185FA5; flex-shrink: 0; }
+.eng-job-count.gaps { background: #EAF3DE; color: #3B6D11; }
+.trainee-badge { font-size: 10px; padding: 1px 6px; border-radius: 4px; background: #FAEEDA; color: #854F0B; flex-shrink: 0; }
+
+/* Timeline */
+.timeline-panel { padding: 1.25rem; overflow-y: auto; background: #f9f9f7; }
+.timeline-empty { display: flex; align-items: center; justify-content: center; height: 300px; color: #aaa; font-size: 13px; }
+.timeline-eng-header { display: flex; align-items: center; gap: 10px; margin-bottom: 1rem; }
+.timeline-eng-header h2 { font-size: 15px; font-weight: 600; }
+.timeline-wrap { background: #fff; border: 1px solid #e5e5e3; border-radius: 10px; overflow: hidden; margin-bottom: 1.25rem; }
+.timeline-header { display: flex; border-bottom: 1px solid #e5e5e3; padding: 0 12px; background: #f9f9f7; }
+.timeline-hour { flex: 1; font-size: 10px; color: #aaa; padding: 6px 0; text-align: center; border-right: 1px solid #f0f0ee; }
+.timeline-hour:last-child { border-right: none; }
+.timeline-body { position: relative; height: 60px; padding: 8px 12px; }
+.timeline-track { position: absolute; left: 12px; right: 12px; top: 50%; transform: translateY(-50%); height: 28px; background: #f0f0ee; border-radius: 4px; overflow: hidden; }
+.timeline-block { position: absolute; top: 0; height: 100%; border-radius: 3px; display: flex; align-items: center; padding: 0 6px; overflow: hidden; cursor: pointer; transition: opacity 0.15s; }
+.timeline-block:hover { opacity: 0.85; }
+.timeline-block.scheduled { background: #B5D4F4; border: 1px solid #378ADD; }
+.timeline-block.gap { background: #C0DD97; border: 1px solid #639922; opacity: 0.7; cursor: default; }
+.timeline-block.gap.highlight { opacity: 1; border-color: #3B6D11; background: #9FE1CB; }
+.timeline-block-label { font-size: 10px; font-weight: 500; color: #0C447C; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.timeline-block.gap .timeline-block-label { color: #27500A; }
+
+.gap-suggestions { margin-top: 1.25rem; }
+.gap-suggestions h3 { font-size: 12px; font-weight: 600; color: #888; text-transform: uppercase; letter-spacing: 0.05em; margin-bottom: 10px; }
+.gap-card { background: #fff; border: 1px solid #e5e5e3; border-radius: 8px; padding: 12px 14px; margin-bottom: 8px; display: flex; align-items: center; gap: 12px; }
+.gap-card-time { font-size: 12px; font-weight: 600; color: #3B6D11; min-width: 100px; }
+.gap-card-info { flex: 1; min-width: 0; }
+.gap-card-title { font-size: 12px; font-weight: 500; }
+.gap-card-sub { font-size: 11px; color: #888; margin-top: 2px; }
+.gap-card-dur { font-size: 11px; padding: 2px 7px; border-radius: 20px; background: #EAF3DE; color: #3B6D11; flex-shrink: 0; }
+.btn-assign-small { padding: 4px 10px; border-radius: 6px; border: 1px solid #185FA5; background: #fff; color: #185FA5; font-size: 11px; cursor: pointer; flex-shrink: 0; }
+.btn-assign-small:hover { background: #185FA5; color: #fff; }
 
 .state-box { padding: 3rem 1rem; text-align: center; color: #aaa; }
-.spinner { width: 24px; height: 24px; border: 2px solid #e5e5e3; border-top-color: #185FA5; border-radius: 50%; animation: spin 0.8s linear infinite; margin: 0 auto 12px; }
+.spinner { width: 22px; height: 22px; border: 2px solid #e5e5e3; border-top-color: #185FA5; border-radius: 50%; animation: spin 0.8s linear infinite; margin: 0 auto 12px; }
 @keyframes spin { to { transform: rotate(360deg); } }
-.error-msg { font-size: 13px; color: #A32D2D; line-height: 1.6; }
 
 #toast { position: fixed; bottom: 24px; left: 50%; transform: translateX(-50%); background: #1a1a1a; color: #fff; padding: 10px 20px; border-radius: 8px; font-size: 13px; opacity: 0; transition: opacity 0.3s; pointer-events: none; z-index: 1000; }
 #toast.show { opacity: 1; }
-
-@media (max-width: 768px) {
-  .main { grid-template-columns: 1fr; }
-}
 </style>
 </head>
 <body>
@@ -125,48 +155,57 @@ body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; b
   <div class="metric"><div class="m-label">Unassigned jobs</div><div class="m-value red" id="m-unassigned">—</div></div>
   <div class="metric"><div class="m-label">SLA breaching</div><div class="m-value red" id="m-breach">—</div></div>
   <div class="metric"><div class="m-label">Due &lt; 2 hrs</div><div class="m-value amber" id="m-urgent">—</div></div>
-  <div class="metric"><div class="m-label">Engineers available</div><div class="m-value green" id="m-avail">—</div></div>
+  <div class="metric"><div class="m-label">Engineers</div><div class="m-value green" id="m-eng">—</div></div>
+  <div class="metric"><div class="m-label">Scheduled tomorrow</div><div class="m-value blue" id="m-tomorrow">—</div></div>
   <div class="metric"><div class="m-label">Assigned today</div><div class="m-value" id="m-done">0</div></div>
 </div>
 
-<div class="main">
-  <div class="left-panel">
-    <div class="section-head">
-      <span class="section-title">Unassigned jobs</span>
-      <span class="section-count" id="job-count"></span>
+<div class="tab-nav">
+  <button class="tab-btn active" onclick="switchTab('assign', this)">Assign jobs</button>
+  <button class="tab-btn" onclick="switchTab('schedule', this)">Tomorrow's schedule</button>
+</div>
+
+<!-- ── ASSIGN TAB ── -->
+<div class="tab-content active" id="tab-assign">
+  <div class="assign-layout">
+    <div class="jobs-panel">
+      <div class="panel-head">
+        <span class="panel-title">Unassigned jobs</span>
+        <span class="panel-count" id="job-count"></span>
+      </div>
+      <div class="filter-bar">
+        <button class="filter-btn active" onclick="setFilter('all',this)">All</button>
+        <button class="filter-btn" onclick="setFilter('breach',this)">SLA breach</button>
+        <button class="filter-btn" onclick="setFilter('urgent',this)">Urgent</button>
+        <button class="filter-btn" onclick="setFilter('Reactive',this)">Reactive</button>
+        <button class="filter-btn" onclick="setFilter('PPM',this)">PPM</button>
+      </div>
+      <div class="jobs-list" id="jobs-container">
+        <div class="state-box"><div class="spinner"></div><p>Loading jobs...</p></div>
+      </div>
     </div>
-    <div class="filter-bar">
-      <button class="filter-btn active" onclick="setFilter('all',this)">All</button>
-      <button class="filter-btn" onclick="setFilter('breach',this)">SLA breach</button>
-      <button class="filter-btn" onclick="setFilter('urgent',this)">Urgent</button>
-      <button class="filter-btn" onclick="setFilter('Reactive',this)">Reactive</button>
-      <button class="filter-btn" onclick="setFilter('PPM',this)">PPM</button>
-    </div>
-    <div class="jobs-list" id="jobs-container">
-      <div class="state-box"><div class="spinner"></div><p>Loading jobs...</p></div>
+    <div class="suggest-panel" id="suggest-panel">
+      <div class="suggest-empty">
+        <p>Select an unassigned job<br>to see which engineers have<br>capacity tomorrow</p>
+      </div>
     </div>
   </div>
+</div>
 
-  <div class="right-panel">
-    <div class="section-head" style="margin-bottom:0.75rem;">
-      <span class="section-title">Engineers</span>
-      <span class="section-count" id="eng-count"></span>
-    </div>
-    <div id="eng-container">
-      <div class="state-box"><div class="spinner"></div></div>
-    </div>
-
-    <div class="section-head" style="margin-top:1.25rem;margin-bottom:0.75rem;">
-      <span class="section-title">Smart assignment</span>
-    </div>
-    <div class="assign-panel">
-      <div class="assign-head">
-        <h3 id="assign-title">No job selected</h3>
-        <p id="assign-sub">Click a job to see suggestions</p>
+<!-- ── SCHEDULE TAB ── -->
+<div class="tab-content" id="tab-schedule">
+  <div class="schedule-layout">
+    <div class="eng-list-panel">
+      <div class="panel-head">
+        <span class="panel-title">Engineers</span>
+        <span class="panel-count" id="eng-count"></span>
       </div>
-      <div id="assign-body">
-        <div class="assign-empty">Select a job on the left<br>to see ranked engineer suggestions</div>
+      <div id="eng-list-container">
+        <div class="state-box"><div class="spinner"></div></div>
       </div>
+    </div>
+    <div class="timeline-panel" id="timeline-panel">
+      <div class="timeline-empty">Select an engineer to view their schedule</div>
     </div>
   </div>
 </div>
@@ -174,28 +213,23 @@ body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; b
 <div id="toast"></div>
 
 <script>
-const API = '';  // same origin — backend serves this file
-let jobs = [], engineers = [], selectedId = null, filter = 'all', assignedToday = 0;
-const avatarColors = ['#185FA5','#0F6E56','#534AB7','#993C1D','#854F0B','#3B6D11','#993556','#5F5E5A'];
+const DAY_START = 5;  // 5am
+const DAY_END   = 17; // 5pm
+const DAY_MINS  = (DAY_END - DAY_START) * 60;
+const avatarColors = ['#185FA5','#0F6E56','#534AB7','#993C1D','#854F0B','#3B6D11','#993556','#5F5E5A','#0F6E56','#185FA5'];
 
+let jobs = [], engineers = [], tomorrowSchedule = {}, tomorrowUnassigned = [];
+let selectedJobId = null, selectedEngId = null, jobFilter = 'all', assignedToday = 0;
+
+const tomorrow = new Date(); tomorrow.setDate(tomorrow.getDate() + 1);
 document.getElementById('topbar-date').textContent =
-  new Date().toLocaleDateString('en-GB', {weekday:'long',day:'numeric',month:'long',year:'numeric'});
+  'Today: ' + new Date().toLocaleDateString('en-GB', {weekday:'long',day:'numeric',month:'long'}) +
+  '  |  Tomorrow: ' + tomorrow.toLocaleDateString('en-GB', {weekday:'long',day:'numeric',month:'long'});
 
 async function api(path, opts={}) {
-  const r = await fetch(API + path, opts);
-  if (!r.ok) { const e = await r.json().catch(()=>({error:r.statusText})); throw new Error(e.error || r.statusText); }
+  const r = await fetch(path, opts);
+  if (!r.ok) { const e = await r.json().catch(()=>({error:r.statusText})); throw new Error(e.error||r.statusText); }
   return r.json();
-}
-
-async function loadAll() {
-  setBadge('loading','Loading...');
-  try {
-    await Promise.all([loadJobs(), loadEngineers()]);
-    setBadge('ok','Live');
-  } catch(e) {
-    setBadge('error','Error');
-    showToast('Error: ' + e.message);
-  }
 }
 
 function setBadge(state, text) {
@@ -204,8 +238,19 @@ function setBadge(state, text) {
   b.className = 'conn-badge' + (state==='error'?' error':state==='loading'?' loading':'');
 }
 
+async function loadAll() {
+  setBadge('loading','Loading...');
+  try {
+    await Promise.all([loadJobs(), loadEngineers(), loadTomorrowSchedule()]);
+    setBadge('ok','Live');
+  } catch(e) {
+    setBadge('error','Error');
+    showToast('Error: ' + e.message);
+  }
+}
+
 async function loadJobs() {
-  const data = await api('/api/jobs');
+  const data = await api('/api/jobs/unassigned');
   jobs = data.jobs || [];
   renderJobs();
   updateMetrics();
@@ -214,19 +259,30 @@ async function loadJobs() {
 async function loadEngineers() {
   const data = await api('/api/engineers');
   engineers = data.engineers || [];
-  renderEngineers();
-  updateMetrics();
+  document.getElementById('m-eng').textContent = engineers.length;
+  renderEngList();
 }
 
+async function loadTomorrowSchedule() {
+  const data = await api('/api/schedule/tomorrow');
+  tomorrowSchedule  = data.byEngineer || {};
+  tomorrowUnassigned = data.unassigned || [];
+  document.getElementById('m-tomorrow').textContent =
+    Object.values(tomorrowSchedule).reduce((sum, arr) => sum + arr.length, 0);
+  renderEngList();
+}
+
+// ── ASSIGN TAB ──────────────────────────────────────────
+
 function filtered() {
-  if (filter==='all') return jobs;
-  if (filter==='breach') return jobs.filter(j=>j.priority==='breach');
-  if (filter==='urgent') return jobs.filter(j=>j.priority==='urgent');
-  return jobs.filter(j=>(j.type||'').toLowerCase().includes(filter.toLowerCase()));
+  if (jobFilter==='all') return jobs;
+  if (jobFilter==='breach') return jobs.filter(j=>j.priority==='breach');
+  if (jobFilter==='urgent') return jobs.filter(j=>j.priority==='urgent');
+  return jobs.filter(j=>(j.type||'').toLowerCase().includes(jobFilter.toLowerCase()));
 }
 
 function setFilter(f, btn) {
-  filter = f;
+  jobFilter = f;
   document.querySelectorAll('.filter-btn').forEach(b=>b.classList.remove('active'));
   btn.classList.add('active');
   renderJobs();
@@ -243,122 +299,320 @@ function slaChip(j) {
 
 function renderJobs() {
   const list = filtered();
-  const c = document.getElementById('jobs-container');
   document.getElementById('job-count').textContent = `${list.length} job${list.length!==1?'s':''}`;
+  const c = document.getElementById('jobs-container');
   if (!list.length) { c.innerHTML = `<div class="state-box"><p>No jobs match this filter</p></div>`; return; }
   c.innerHTML = list.map(j=>`
-    <div class="job-card ${j.priority}${selectedId===j.id?' selected':''}" onclick="selectJob('${j.id}')">
+    <div class="job-card ${j.priority}${selectedJobId===j.id?' selected':''}" onclick="selectJob('${j.id}')">
       <div class="job-top"><span class="job-ref">${j.ref}</span>${slaChip(j)}</div>
       <div class="job-desc">${j.desc}</div>
       <div class="job-client">${j.client}</div>
       <div class="job-footer">
         <span class="tag">${j.type}</span>
+        <span class="dur-tag">${j.durationMins}min</span>
         <span class="job-area">${j.area}</span>
       </div>
     </div>`).join('');
 }
 
-function renderEngineers() {
-  const c = document.getElementById('eng-container');
-  document.getElementById('eng-count').textContent = `${engineers.length} engineers`;
-  const avail = engineers.filter(e=>e.status==='available').length;
-  document.getElementById('m-avail').textContent = avail;
-  if (!engineers.length) { c.innerHTML = `<div style="font-size:12px;color:#aaa;padding:1rem 0;">No engineers loaded</div>`; return; }
-  const shown = engineers.slice(0, 10);
-  c.innerHTML = `<div class="eng-list">${shown.map((e,i)=>{
-    const pct = Math.min(100, Math.round((e.jobs/e.cap)*100));
-    const fill = pct>=90?'high':pct>=60?'mid':'low';
-    const col = avatarColors[i % avatarColors.length];
-    const ini = e.name.split(' ').filter(Boolean).slice(0,2).map(w=>w[0]).join('').toUpperCase();
-    return `<div class="eng-card">
-      <div class="eng-top">
-        <div class="avatar" style="background:${col}22;color:${col};">${ini}</div>
-        <div><div class="eng-name">${e.name}</div><div class="eng-sub">${e.region}</div></div>
-        <div class="status-dot ${e.status}" title="${e.status}"></div>
-      </div>
-      <div class="bar-wrap"><div class="bar-fill ${fill}" style="width:${pct}%"></div></div>
-      <div class="eng-detail">${e.jobs}/${e.cap} jobs · ${e.status}</div>
-    </div>`;
-  }).join('')}
-  ${engineers.length>10?`<div style="font-size:11px;color:#aaa;text-align:center;padding:4px;">+${engineers.length-10} more engineers</div>`:''}
-  </div>`;
-}
-
 function updateMetrics() {
   document.getElementById('m-unassigned').textContent = jobs.length;
-  document.getElementById('m-breach').textContent  = jobs.filter(j=>j.priority==='breach').length;
-  document.getElementById('m-urgent').textContent  = jobs.filter(j=>j.priority==='urgent').length;
-  document.getElementById('m-done').textContent    = assignedToday;
+  document.getElementById('m-breach').textContent = jobs.filter(j=>j.priority==='breach').length;
+  document.getElementById('m-urgent').textContent = jobs.filter(j=>j.priority==='urgent').length;
+  document.getElementById('m-done').textContent = assignedToday;
 }
 
 function selectJob(id) {
-  selectedId = id;
+  selectedJobId = id;
   renderJobs();
   const job = jobs.find(j=>j.id===id);
   if (!job) return;
-  document.getElementById('assign-title').textContent = `${job.ref}: ${job.desc}`;
-  document.getElementById('assign-sub').textContent   = `${job.client} · ${job.area}`;
-
-  const scored = engineers
-    .map((e,i) => {
-      let score = 100;
-      if (e.status==='travelling') score -= 10;
-      if (e.status==='busy')       score -= 25;
-      score -= Math.round((e.jobs/e.cap)*30);
-      if (job.priority==='breach' && e.status==='available') score += 10;
-      return { ...e, score: Math.max(10,Math.min(99,score)), colorIdx: i };
-    })
-    .sort((a,b)=>b.score-a.score)
-    .slice(0,3);
-
-  if (!scored.length) {
-    document.getElementById('assign-body').innerHTML = `<div class="assign-empty">No engineers available</div>`;
-    return;
-  }
-  document.getElementById('assign-body').innerHTML = `<div class="suggest-list">${scored.map((e,i)=>`
-    <div class="suggest-item${i===0?' top-pick':''}">
-      <div class="suggest-rank${i===0?' gold':''}">${i===0?'★':i+1}</div>
-      <div class="suggest-info">
-        <div class="suggest-name">${e.name}</div>
-        <div class="suggest-why">${e.region} · ${e.status} · ${e.jobs}/${e.cap} jobs</div>
-      </div>
-      <span class="score-badge ${e.score>=75?'score-high':'score-mid'}">${e.score}%</span>
-      <button class="btn-assign${i===0?' primary':''}" onclick="assignJob('${id}','${e.id}','${e.name.replace(/'/g,"\\'")}')">Assign</button>
-    </div>`).join('')}</div>`;
+  renderJobSuggestions(job);
 }
 
-async function assignJob(jobId, engId, engName) {
+function getGaps(engId, jobDuration) {
+  const engJobs = (tomorrowSchedule[engId] || []).filter(j => j.startTime && j.endTime);
+  const gaps = [];
+  const dayStart = DAY_START * 60;
+  const dayEnd   = DAY_END   * 60;
+
+  // Build occupied slots
+  const occupied = engJobs.map(j => {
+    const s = timeToMins(j.startTime);
+    const e = timeToMins(j.endTime);
+    return {start: s, end: e, label: j.client};
+  }).sort((a,b)=>a.start-b.start);
+
+  let cursor = dayStart;
+  for (const slot of occupied) {
+    if (slot.start > cursor + 15) {
+      const gapMins = slot.start - cursor;
+      if (gapMins >= jobDuration) {
+        gaps.push({ startMins: cursor, endMins: slot.start, gapMins,
+          label: minsToTime(cursor) + ' – ' + minsToTime(slot.start) });
+      }
+    }
+    cursor = Math.max(cursor, slot.end);
+  }
+  // Gap after last job
+  if (dayEnd > cursor + 15) {
+    const gapMins = dayEnd - cursor;
+    if (gapMins >= jobDuration) {
+      gaps.push({ startMins: cursor, endMins: dayEnd, gapMins,
+        label: minsToTime(cursor) + ' – ' + minsToTime(dayEnd) });
+    }
+  }
+  return gaps;
+}
+
+function renderJobSuggestions(job) {
+  const panel = document.getElementById('suggest-panel');
+  const results = engineers.map((e, i) => {
+    const gaps = getGaps(e.id, job.durationMins);
+    return { eng: e, gaps, colorIdx: i };
+  }).filter(r => r.gaps.length > 0)
+    .sort((a,b) => b.gaps.length - a.gaps.length);
+
+  if (!results.length) {
+    panel.innerHTML = `
+      <div class="suggest-job-info">
+        <h3>${job.ref}: ${job.desc}</h3>
+        <p>${job.client} · ${job.durationMins} min · ${job.area}</p>
+      </div>
+      <div class="suggest-empty"><p>No engineers have a suitable gap tomorrow<br>for a ${job.durationMins} minute job</p></div>`;
+    return;
+  }
+
+  panel.innerHTML = `
+    <div class="suggest-job-info">
+      <h3>${job.ref}: ${job.desc}</h3>
+      <p>${job.client} · ${job.durationMins} min · ${job.area}</p>
+    </div>
+    <div class="suggest-title">${results.length} engineer${results.length!==1?'s':''} with capacity tomorrow</div>
+    <div class="eng-suggest-list">
+      ${results.slice(0,8).map((r,i) => {
+        const col = avatarColors[r.colorIdx % avatarColors.length];
+        const ini = r.eng.name.split(' ').filter(Boolean).slice(0,2).map(w=>w[0]).join('').toUpperCase();
+        const scheduled = (tomorrowSchedule[r.eng.id]||[]).length;
+        return `
+        <div class="eng-suggest${i===0?' top':''}">
+          <div class="eng-suggest-top">
+            <div class="avatar" style="background:${col}22;color:${col};">${ini}</div>
+            <div>
+              <div class="eng-suggest-name">${r.eng.name}${r.eng.isTrainee?' <span style="font-size:10px;color:#854F0B;">(Trainee)</span>':''}</div>
+              <div class="eng-suggest-sub">${scheduled} job${scheduled!==1?'s':''} scheduled tomorrow · ${r.gaps.length} gap${r.gaps.length!==1?'s':''} available</div>
+            </div>
+          </div>
+          <div class="gap-list">
+            ${r.gaps.slice(0,3).map(g=>`
+              <div class="gap-item">
+                <span class="gap-time">${g.label}</span>
+                <span class="gap-duration">${g.gapMins} min free</span>
+                <button class="btn-assign-gap" onclick="assignToGap('${job.id}','${r.eng.id}','${g.startMins}','${r.eng.name}','${job.ref}')">Assign here</button>
+              </div>`).join('')}
+          </div>
+        </div>`;
+      }).join('')}
+    </div>`;
+}
+
+async function assignToGap(jobId, engId, startMins, engName, jobRef) {
+  const tomorrow = new Date(); tomorrow.setDate(tomorrow.getDate()+1);
+  const h = Math.floor(parseInt(startMins)/60);
+  const m = parseInt(startMins) % 60;
+  tomorrow.setHours(h, m, 0, 0);
+  const plannedStart = tomorrow.toISOString();
+
   showToast('Assigning...');
   try {
     await api(`/api/jobs/${jobId}/assign`, {
-      method: 'POST',
-      headers: {'Content-Type':'application/json'},
-      body: JSON.stringify({resourceId: engId})
+      method:'POST',
+      headers:{'Content-Type':'application/json'},
+      body: JSON.stringify({resourceId: engId, plannedStart})
     });
     jobs = jobs.filter(j=>j.id!==jobId);
     assignedToday++;
-    selectedId = null;
+    selectedJobId = null;
     updateMetrics();
     renderJobs();
-    document.getElementById('assign-title').textContent = 'No job selected';
-    document.getElementById('assign-sub').textContent   = 'Click a job to see suggestions';
-    document.getElementById('assign-body').innerHTML    = `<div class="assign-empty">Job assigned. Select another job to continue.</div>`;
-    showToast(`Assigned to ${engName}`);
-    loadEngineers();
+    document.getElementById('suggest-panel').innerHTML = `<div class="suggest-empty"><p>Job ${jobRef} assigned to ${engName}<br>at ${minsToTime(parseInt(startMins))} tomorrow</p></div>`;
+    showToast(`${jobRef} assigned to ${engName}`);
+    loadTomorrowSchedule();
   } catch(e) {
     showToast('Failed: ' + e.message);
   }
+}
+
+// ── SCHEDULE TAB ─────────────────────────────────────────
+
+function renderEngList() {
+  const c = document.getElementById('eng-list-container');
+  document.getElementById('eng-count').textContent = `${engineers.length} engineers`;
+  if (!engineers.length) { c.innerHTML = `<div style="padding:1rem;color:#aaa;font-size:12px;">Loading...</div>`; return; }
+
+  c.innerHTML = engineers.map((e,i) => {
+    const scheduled = (tomorrowSchedule[e.id]||[]).length;
+    const gaps = getGaps(e.id, 60).length; // gaps that fit at least 60min
+    const col = avatarColors[i % avatarColors.length];
+    const ini = e.name.split(' ').filter(Boolean).slice(0,2).map(w=>w[0]).join('').toUpperCase();
+    return `
+      <div class="eng-row${selectedEngId===e.id?' selected':''}" onclick="selectEngineer('${e.id}')">
+        <div class="avatar" style="background:${col}22;color:${col};width:28px;height:28px;font-size:10px;">${ini}</div>
+        <div class="eng-row-info">
+          <div class="eng-row-name">${e.name}</div>
+          <div class="eng-row-sub">${scheduled} job${scheduled!==1?'s':''} tomorrow</div>
+        </div>
+        ${e.isTrainee ? `<span class="trainee-badge">T</span>` : ''}
+        ${gaps > 0 ? `<span class="eng-job-count gaps">${gaps} gap${gaps!==1?'s':''}</span>` : `<span class="eng-job-count">${scheduled} jobs</span>`}
+      </div>`;
+  }).join('');
+}
+
+function selectEngineer(id) {
+  selectedEngId = id;
+  renderEngList();
+  renderTimeline(id);
+}
+
+function renderTimeline(engId) {
+  const eng = engineers.find(e=>e.id===engId);
+  if (!eng) return;
+  const engJobs = (tomorrowSchedule[engId]||[]).sort((a,b)=>(a.startTime||'')>(b.startTime||'')?1:-1);
+  const gaps = getGaps(engId, 30); // all gaps 30min+
+
+  const panel = document.getElementById('timeline-panel');
+
+  // Build timeline blocks
+  const blocks = engJobs.filter(j=>j.startTime&&j.endTime).map(j=>({
+    type:'scheduled',
+    startMins: timeToMins(j.startTime),
+    endMins:   timeToMins(j.endTime),
+    label:     j.client || j.desc,
+    ref:       j.ref,
+  }));
+
+  // Build gap blocks
+  const gapBlocks = gaps.map(g=>({
+    type:'gap',
+    startMins: g.startMins,
+    endMins:   g.endMins,
+    label:     `${g.gapMins}min free`,
+    gapMins:   g.gapMins,
+  }));
+
+  const allBlocks = [...blocks, ...gapBlocks];
+  const hours = [];
+  for (let h=DAY_START; h<=DAY_END; h++) hours.push(h);
+
+  function pct(mins) { return ((mins - DAY_START*60) / DAY_MINS * 100).toFixed(2) + '%'; }
+  function width(startMins, endMins) { return ((endMins - startMins) / DAY_MINS * 100).toFixed(2) + '%'; }
+
+  // Find fitting unassigned jobs for the gaps
+  const fittingJobs = gaps.length > 0 ? jobs.filter(j => gaps.some(g => g.gapMins >= j.durationMins)) : [];
+
+  panel.innerHTML = `
+    <div class="timeline-eng-header">
+      <div class="avatar" style="background:#185FA522;color:#185FA5;width:36px;height:36px;">
+        ${eng.name.split(' ').filter(Boolean).slice(0,2).map(w=>w[0]).join('').toUpperCase()}
+      </div>
+      <div>
+        <h2>${eng.name}${eng.isTrainee?' <span style="font-size:12px;color:#854F0B;font-weight:400;">(Trainee)</span>':''}</h2>
+        <div style="font-size:12px;color:#888;">${engJobs.length} jobs scheduled tomorrow · ${gaps.length} gap${gaps.length!==1?'s':''}</div>
+      </div>
+    </div>
+
+    <div class="timeline-wrap">
+      <div class="timeline-header">
+        ${hours.map(h=>`<div class="timeline-hour">${h === 12 ? '12pm' : h < 12 ? h+'am' : (h-12)+'pm'}</div>`).join('')}
+      </div>
+      <div class="timeline-body">
+        <div class="timeline-track">
+          ${allBlocks.map(b=>`
+            <div class="timeline-block ${b.type}${b.type==='gap'&&fittingJobs.length?' highlight':''}"
+              style="left:${pct(Math.max(b.startMins,DAY_START*60))};width:${width(Math.max(b.startMins,DAY_START*60),Math.min(b.endMins,DAY_END*60))}"
+              title="${b.label}">
+              <span class="timeline-block-label">${b.label}</span>
+            </div>`).join('')}
+        </div>
+      </div>
+    </div>
+
+    ${engJobs.length ? `
+    <div style="margin-bottom:1.25rem;">
+      <div class="suggest-title" style="margin-bottom:8px;">Scheduled jobs</div>
+      ${engJobs.map(j=>`
+        <div class="gap-card">
+          <div class="gap-card-time">${j.startTime ? formatTime(j.startTime) : 'TBC'}</div>
+          <div class="gap-card-info">
+            <div class="gap-card-title">${j.ref} — ${j.desc}</div>
+            <div class="gap-card-sub">${j.client} · ${j.area}</div>
+          </div>
+          <span class="gap-card-dur">${j.durationMins}min</span>
+        </div>`).join('')}
+    </div>` : ''}
+
+    ${fittingJobs.length ? `
+    <div class="gap-suggestions">
+      <h3>Unassigned jobs that fit in the gaps (${fittingJobs.length})</h3>
+      ${fittingJobs.slice(0,6).map(j=>{
+        const bestGap = gaps.find(g=>g.gapMins >= j.durationMins);
+        return `
+        <div class="gap-card">
+          <div class="gap-card-time" style="color:#185FA5;">Gap at ${minsToTime(bestGap.startMins)}</div>
+          <div class="gap-card-info">
+            <div class="gap-card-title">${j.ref} — ${j.desc}</div>
+            <div class="gap-card-sub">${j.client} · ${j.area}</div>
+          </div>
+          <span class="gap-card-dur">${j.durationMins}min</span>
+          <button class="btn-assign-small" onclick="assignToGap('${j.id}','${engId}','${bestGap.startMins}','${eng.name}','${j.ref}')">Assign</button>
+        </div>`;
+      }).join('')}
+    </div>` : gaps.length > 0 ? `<div style="font-size:12px;color:#aaa;padding:1rem 0;">No unassigned jobs fit the available gaps today</div>` : ''}
+  `;
+}
+
+// ── TAB SWITCHING ────────────────────────────────────────
+function switchTab(tab, btn) {
+  document.querySelectorAll('.tab-btn').forEach(b=>b.classList.remove('active'));
+  document.querySelectorAll('.tab-content').forEach(c=>c.classList.remove('active'));
+  btn.classList.add('active');
+  document.getElementById('tab-'+tab).classList.add('active');
+}
+
+// ── TIME HELPERS ─────────────────────────────────────────
+function timeToMins(timeStr) {
+  if (!timeStr) return 0;
+  try {
+    const d = new Date(timeStr);
+    if (!isNaN(d)) return d.getHours()*60 + d.getMinutes();
+    const parts = timeStr.split(':');
+    return parseInt(parts[0])*60 + parseInt(parts[1]||0);
+  } catch(e) { return 0; }
+}
+
+function minsToTime(mins) {
+  const h = Math.floor(mins/60);
+  const m = mins % 60;
+  return `${h}:${m.toString().padStart(2,'0')}`;
+}
+
+function formatTime(timeStr) {
+  try {
+    const d = new Date(timeStr);
+    if (!isNaN(d)) return d.toLocaleTimeString('en-GB',{hour:'2-digit',minute:'2-digit'});
+  } catch(e) {}
+  return timeStr;
 }
 
 function showToast(msg) {
   const t = document.getElementById('toast');
   t.textContent = msg; t.classList.add('show');
   clearTimeout(window._tt);
-  window._tt = setTimeout(()=>t.classList.remove('show'), 3000);
+  window._tt = setTimeout(()=>t.classList.remove('show'), 3500);
 }
 
 loadAll();
-setInterval(loadAll, 60000); // auto-refresh every 60 seconds
+setInterval(loadAll, 120000);
 </script>
 </body>
 </html>
