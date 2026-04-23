@@ -147,15 +147,10 @@ def get_engineers():
 @app.route('/api/jobs/unassigned')
 def get_unassigned_jobs():
     try:
-        # Fetch all non-completed jobs and filter by category
-        # The API requires a date range, so use StatusModifiedAt with a very wide window
-        # to catch everything that isn't completed
-        wide_from = '2020-01-01T00:00:00'
-        wide_to   = '2030-12-31T23:59:59'
-
+        # Fetch using CreatedAt wide window — catches all jobs regardless of status
         raw = fetch_paged({
-            'StatusModifiedAtFrom': wide_from,
-            'StatusModifiedAtTo':   wide_to,
+            'CreatedAtFrom': '2020-01-01T00:00:00',
+            'CreatedAtTo':   '2030-12-31T23:59:59',
         })
 
         print(f"[UNASSIGNED] Total fetched: {len(raw)}")
@@ -203,7 +198,15 @@ def get_tomorrow_schedule():
         for rid in by_engineer:
             by_engineer[rid].sort(key=lambda j: j['startTime'] or '99:99')
 
-        return jsonify({'byEngineer': by_engineer, 'date': tomorrow.strftime('%Y-%m-%d')})
+        # Build engineer name map from job data (resourceName is on each job)
+        eng_names = {}
+        for rid, eng_jobs in by_engineer.items():
+            for j in eng_jobs:
+                if j.get('resourceName'):
+                    eng_names[rid] = j['resourceName']
+                    break
+
+        return jsonify({'byEngineer': by_engineer, 'engNames': eng_names, 'date': tomorrow.strftime('%Y-%m-%d')})
     except Exception as e:
         print(f"[TOMORROW] ERROR: {e}")
         return jsonify({'error': str(e)}), 500
