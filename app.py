@@ -12,7 +12,7 @@ CLIENT_ID     = os.environ.get('BIGCHANGE_CLIENT_ID', '')
 CLIENT_SECRET = os.environ.get('BIGCHANGE_CLIENT_SECRET', '')
 CUSTOMER_ID   = os.environ.get('BIGCHANGE_CUSTOMER_ID', '1564')
 API_BASE      = 'https://api.bigchange.com/v1'
-TOKEN_URL     = 'https://auth.bigchange.com/oauth2/token'
+TOKEN_URL     = 'https://api.bigchange.com/auth/tokens'
 
 _token_cache = {'token': None, 'expires_at': 0}
 
