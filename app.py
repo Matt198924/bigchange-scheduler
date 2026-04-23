@@ -104,16 +104,25 @@ def status():
 @app.route('/api/jobs')
 def get_jobs():
     try:
-        today = datetime.now().strftime('%Y-%m-%d')
+        today = datetime.now().strftime("%Y-%m-%dT00:00:00")
+        tomorrow = (datetime.now().replace(hour=23, minute=59, second=59)).strftime("%Y-%m-%dT23:59:59")
         try:
-            data = bc_get('/jobs', {'status': 'unassigned', 'date': today, 'pageSize': 100})
+            data = bc_get('/jobs', {
+                'StartAtFrom': today,
+                'StartAtTo': tomorrow,
+                'pageSize': 100
+            })
         except Exception as e1:
-            print(f"[JOBS] First attempt failed: {e1}, trying without filters")
+            print(f"[JOBS] First attempt failed: {e1}, trying CreatedAt range")
             try:
-                data = bc_get('/jobs', {'date': today, 'pageSize': 100})
+                data = bc_get('/jobs', {
+                    'CreatedAtFrom': today,
+                    'CreatedAtTo': tomorrow,
+                    'pageSize': 100
+                })
             except Exception as e2:
-                print(f"[JOBS] Second attempt failed: {e2}, trying bare endpoint")
-                data = bc_get('/jobs')
+                print(f"[JOBS] Second attempt failed: {e2}")
+                raise
 
         raw = data if isinstance(data, list) else (
             data.get('items') or data.get('data') or data.get('jobs') or []
