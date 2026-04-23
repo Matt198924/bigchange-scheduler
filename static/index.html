@@ -8,133 +8,112 @@
 * { box-sizing: border-box; margin: 0; padding: 0; }
 body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; background: #f5f5f3; color: #1a1a1a; font-size: 14px; }
 
-.topbar { background: #fff; border-bottom: 1px solid #e5e5e3; padding: 0 1.5rem; height: 52px; display: flex; align-items: center; justify-content: space-between; position: sticky; top: 0; z-index: 100; }
-.logo { font-size: 15px; font-weight: 600; color: #185FA5; }
-.topbar-date { font-size: 12px; color: #888; margin-left: 12px; }
-.topbar-right { display: flex; align-items: center; gap: 10px; }
-.conn-badge { font-size: 11px; padding: 3px 10px; border-radius: 20px; background: #EAF3DE; color: #3B6D11; }
-.conn-badge.error { background: #FCEBEB; color: #A32D2D; }
-.conn-badge.loading { background: #FAEEDA; color: #854F0B; }
-.btn-sm { padding: 5px 12px; border: 1px solid #ddd; border-radius: 7px; background: #fff; font-size: 12px; cursor: pointer; }
-.btn-sm:hover { background: #f5f5f3; }
+/* Top bar */
+.topbar { background: #185FA5; padding: 0 1.5rem; height: 52px; display: flex; align-items: center; justify-content: space-between; }
+.logo { font-size: 15px; font-weight: 600; color: #fff; }
+.topbar-sub { font-size: 12px; color: rgba(255,255,255,0.7); margin-left: 12px; }
+.conn-badge { font-size: 11px; padding: 3px 10px; border-radius: 20px; background: rgba(255,255,255,0.2); color: #fff; }
+.conn-badge.error { background: #E24B4A; }
+.btn-refresh { padding: 5px 12px; border: 1px solid rgba(255,255,255,0.4); border-radius: 7px; background: transparent; color: #fff; font-size: 12px; cursor: pointer; }
+.btn-refresh:hover { background: rgba(255,255,255,0.1); }
 
-.metrics-bar { display: flex; gap: 10px; padding: 1rem 1.5rem; background: #fff; border-bottom: 1px solid #e5e5e3; overflow-x: auto; }
-.metric { background: #f5f5f3; border-radius: 8px; padding: 10px 16px; min-width: 120px; flex-shrink: 0; }
+/* Metrics */
+.metrics { display: flex; gap: 1px; background: #e5e5e3; border-bottom: 1px solid #e5e5e3; }
+.metric { flex: 1; background: #fff; padding: 12px 1rem; text-align: center; }
 .metric .m-label { font-size: 11px; color: #888; margin-bottom: 3px; }
-.metric .m-value { font-size: 20px; font-weight: 600; }
-.metric .m-value.red { color: #A32D2D; }
-.metric .m-value.amber { color: #854F0B; }
-.metric .m-value.green { color: #3B6D11; }
+.metric .m-value { font-size: 20px; font-weight: 600; color: #1a1a1a; }
 .metric .m-value.blue { color: #185FA5; }
-
-/* Tab nav */
-.tab-nav { display: flex; gap: 0; border-bottom: 1px solid #e5e5e3; background: #fff; padding: 0 1.5rem; }
-.tab-btn { padding: 10px 20px; font-size: 13px; border: none; background: none; cursor: pointer; color: #888; border-bottom: 2px solid transparent; margin-bottom: -1px; }
-.tab-btn.active { color: #185FA5; border-bottom-color: #185FA5; font-weight: 500; }
+.metric .m-value.green { color: #3B6D11; }
+.metric .m-value.red { color: #A32D2D; }
 
 /* Main layout */
-.tab-content { display: none; }
-.tab-content.active { display: block; }
+.layout { display: grid; grid-template-columns: 300px 1fr; height: calc(100vh - 108px); }
 
-/* ── ASSIGN TAB ── */
-.assign-layout { display: grid; grid-template-columns: 380px 1fr; min-height: calc(100vh - 160px); }
-.jobs-panel { border-right: 1px solid #e5e5e3; background: #fff; display: flex; flex-direction: column; }
-.panel-head { padding: 12px 16px; border-bottom: 1px solid #e5e5e3; display: flex; align-items: center; justify-content: space-between; flex-shrink: 0; }
-.panel-title { font-size: 13px; font-weight: 600; }
-.panel-count { font-size: 12px; color: #888; }
-.filter-bar { padding: 10px 16px; border-bottom: 1px solid #f0f0ee; display: flex; gap: 6px; flex-wrap: wrap; flex-shrink: 0; }
-.filter-btn { padding: 3px 10px; border-radius: 20px; border: 1px solid #ddd; background: #fff; font-size: 11px; cursor: pointer; }
-.filter-btn.active { background: #185FA5; color: #fff; border-color: #185FA5; }
-.jobs-list { flex: 1; overflow-y: auto; }
-.job-card { padding: 12px 16px; border-bottom: 1px solid #f0f0ee; cursor: pointer; border-left: 3px solid transparent; transition: background 0.1s; }
-.job-card:hover { background: #fafaf9; }
-.job-card.selected { background: #f0f6ff; border-left-color: #185FA5; }
-.job-card.breach { border-left-color: #E24B4A; }
-.job-card.urgent { border-left-color: #BA7517; }
-.job-card.ok { border-left-color: #639922; }
-.job-top { display: flex; align-items: center; justify-content: space-between; margin-bottom: 4px; }
-.job-ref { font-size: 11px; font-weight: 600; color: #185FA5; }
-.sla-chip { font-size: 10px; padding: 2px 7px; border-radius: 20px; font-weight: 500; }
-.sla-chip.breach { background: #FCEBEB; color: #A32D2D; }
-.sla-chip.urgent { background: #FAEEDA; color: #854F0B; }
-.sla-chip.ok { background: #EAF3DE; color: #3B6D11; }
+/* Left panel - unassigned jobs */
+.left { background: #fff; border-right: 1px solid #e5e5e3; display: flex; flex-direction: column; overflow: hidden; }
+.panel-head { padding: 10px 14px; border-bottom: 1px solid #e5e5e3; display: flex; align-items: center; justify-content: space-between; flex-shrink: 0; }
+.panel-title { font-size: 12px; font-weight: 600; color: #888; text-transform: uppercase; letter-spacing: 0.05em; }
+.panel-count { font-size: 12px; color: #aaa; }
+.jobs-scroll { flex: 1; overflow-y: auto; }
+.job-item { padding: 10px 14px; border-bottom: 1px solid #f0f0ee; cursor: pointer; transition: background 0.1s; }
+.job-item:hover { background: #fafaf9; }
+.job-item.selected { background: #EBF4FF; border-left: 3px solid #185FA5; }
+.job-ref { font-size: 11px; font-weight: 600; color: #185FA5; margin-bottom: 2px; }
 .job-desc { font-size: 12px; font-weight: 500; margin-bottom: 2px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-.job-client { font-size: 11px; color: #666; margin-bottom: 6px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-.job-footer { display: flex; align-items: center; gap: 6px; }
-.tag { font-size: 10px; padding: 2px 6px; border-radius: 4px; background: #f0f0ee; color: #555; }
-.dur-tag { font-size: 10px; padding: 2px 6px; border-radius: 4px; background: #E6F1FB; color: #185FA5; }
-.job-area { font-size: 10px; color: #aaa; margin-left: auto; }
+.job-client { font-size: 11px; color: #888; margin-bottom: 5px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.job-tags { display: flex; gap: 5px; align-items: center; }
+.tag { font-size: 10px; padding: 2px 6px; border-radius: 4px; }
+.tag-dur { background: #E6F1FB; color: #185FA5; }
+.tag-type { background: #f0f0ee; color: #666; }
+.tag-cat { background: #EAF3DE; color: #3B6D11; font-size: 10px; }
 
-/* Engineer suggestion panel */
-.suggest-panel { padding: 1.25rem; overflow-y: auto; }
-.suggest-empty { display: flex; flex-direction: column; align-items: center; justify-content: center; height: 300px; color: #aaa; font-size: 13px; text-align: center; line-height: 1.7; }
-.suggest-job-info { background: #fff; border: 1px solid #e5e5e3; border-radius: 10px; padding: 14px 16px; margin-bottom: 1rem; }
-.suggest-job-info h3 { font-size: 13px; font-weight: 600; margin-bottom: 4px; }
-.suggest-job-info p { font-size: 12px; color: #666; }
-.suggest-title { font-size: 12px; font-weight: 600; color: #888; text-transform: uppercase; letter-spacing: 0.05em; margin-bottom: 10px; }
-.eng-suggest-list { display: flex; flex-direction: column; gap: 8px; }
-.eng-suggest { background: #fff; border: 1px solid #e5e5e3; border-radius: 10px; padding: 14px 16px; }
-.eng-suggest.top { border-color: #185FA5; background: #f8fbff; }
-.eng-suggest-top { display: flex; align-items: center; gap: 10px; margin-bottom: 10px; }
-.avatar { width: 32px; height: 32px; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: 11px; font-weight: 600; flex-shrink: 0; }
-.eng-suggest-name { font-size: 13px; font-weight: 500; }
-.eng-suggest-sub { font-size: 11px; color: #888; }
-.gap-list { display: flex; flex-direction: column; gap: 5px; }
-.gap-item { display: flex; align-items: center; gap: 8px; padding: 7px 10px; border: 1px solid #e5e5e3; border-radius: 7px; background: #f9f9f7; }
-.gap-time { font-size: 12px; font-weight: 500; min-width: 110px; }
-.gap-duration { font-size: 11px; color: #3B6D11; background: #EAF3DE; padding: 2px 7px; border-radius: 20px; }
-.btn-assign-gap { margin-left: auto; padding: 4px 10px; border-radius: 6px; border: 1px solid #ddd; background: #fff; font-size: 11px; cursor: pointer; }
-.btn-assign-gap:hover { background: #185FA5; color: #fff; border-color: #185FA5; }
-.no-gaps { font-size: 11px; color: #aaa; padding: 6px 0; }
+/* Right panel - timeline */
+.right { display: flex; flex-direction: column; overflow: hidden; }
+.timeline-controls { padding: 10px 14px; background: #fff; border-bottom: 1px solid #e5e5e3; display: flex; align-items: center; gap: 12px; flex-shrink: 0; }
+.timeline-controls h2 { font-size: 13px; font-weight: 600; }
+.selected-job-pill { font-size: 11px; padding: 3px 10px; border-radius: 20px; background: #185FA5; color: #fff; }
+.hint { font-size: 11px; color: #aaa; margin-left: auto; }
 
-/* ── SCHEDULE TAB ── */
-.schedule-layout { display: grid; grid-template-columns: 300px 1fr; min-height: calc(100vh - 160px); }
-.eng-list-panel { border-right: 1px solid #e5e5e3; background: #fff; overflow-y: auto; }
-.eng-row { padding: 10px 14px; border-bottom: 1px solid #f0f0ee; cursor: pointer; display: flex; align-items: center; gap: 10px; }
+.timeline-scroll { flex: 1; overflow-y: auto; padding: 0; }
+
+/* Engineer timeline rows */
+.eng-row { display: grid; grid-template-columns: 160px 1fr; border-bottom: 1px solid #f0f0ee; min-height: 52px; }
 .eng-row:hover { background: #fafaf9; }
-.eng-row.selected { background: #f0f6ff; }
-.eng-row-info { flex: 1; min-width: 0; }
-.eng-row-name { font-size: 13px; font-weight: 500; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-.eng-row-sub { font-size: 11px; color: #888; }
-.eng-job-count { font-size: 11px; padding: 2px 8px; border-radius: 20px; background: #E6F1FB; color: #185FA5; flex-shrink: 0; }
-.eng-job-count.gaps { background: #EAF3DE; color: #3B6D11; }
-.trainee-badge { font-size: 10px; padding: 1px 6px; border-radius: 4px; background: #FAEEDA; color: #854F0B; flex-shrink: 0; }
+.eng-label { padding: 8px 10px; border-right: 1px solid #f0f0ee; display: flex; flex-direction: column; justify-content: center; background: #fff; position: sticky; left: 0; z-index: 2; }
+.eng-name { font-size: 12px; font-weight: 500; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.eng-meta { font-size: 10px; color: #aaa; margin-top: 1px; }
+.trainee-dot { display: inline-block; width: 6px; height: 6px; border-radius: 50%; background: #BA7517; margin-right: 4px; }
 
-/* Timeline */
-.timeline-panel { padding: 1.25rem; overflow-y: auto; background: #f9f9f7; }
-.timeline-empty { display: flex; align-items: center; justify-content: center; height: 300px; color: #aaa; font-size: 13px; }
-.timeline-eng-header { display: flex; align-items: center; gap: 10px; margin-bottom: 1rem; }
-.timeline-eng-header h2 { font-size: 15px; font-weight: 600; }
-.timeline-wrap { background: #fff; border: 1px solid #e5e5e3; border-radius: 10px; overflow: hidden; margin-bottom: 1.25rem; }
-.timeline-header { display: flex; border-bottom: 1px solid #e5e5e3; padding: 0 12px; background: #f9f9f7; }
-.timeline-hour { flex: 1; font-size: 10px; color: #aaa; padding: 6px 0; text-align: center; border-right: 1px solid #f0f0ee; }
-.timeline-hour:last-child { border-right: none; }
-.timeline-body { position: relative; height: 60px; padding: 8px 12px; }
-.timeline-track { position: absolute; left: 12px; right: 12px; top: 50%; transform: translateY(-50%); height: 28px; background: #f0f0ee; border-radius: 4px; overflow: hidden; }
-.timeline-block { position: absolute; top: 0; height: 100%; border-radius: 3px; display: flex; align-items: center; padding: 0 6px; overflow: hidden; cursor: pointer; transition: opacity 0.15s; }
-.timeline-block:hover { opacity: 0.85; }
-.timeline-block.scheduled { background: #B5D4F4; border: 1px solid #378ADD; }
-.timeline-block.gap { background: #C0DD97; border: 1px solid #639922; opacity: 0.7; cursor: default; }
-.timeline-block.gap.highlight { opacity: 1; border-color: #3B6D11; background: #9FE1CB; }
-.timeline-block-label { font-size: 10px; font-weight: 500; color: #0C447C; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-.timeline-block.gap .timeline-block-label { color: #27500A; }
+/* The actual timeline track */
+.track-wrap { position: relative; background: #f9f9f7; display: flex; align-items: center; padding: 0 8px; }
+.track { position: relative; width: 100%; height: 32px; background: #f0f0ee; border-radius: 4px; overflow: visible; }
 
-.gap-suggestions { margin-top: 1.25rem; }
-.gap-suggestions h3 { font-size: 12px; font-weight: 600; color: #888; text-transform: uppercase; letter-spacing: 0.05em; margin-bottom: 10px; }
-.gap-card { background: #fff; border: 1px solid #e5e5e3; border-radius: 8px; padding: 12px 14px; margin-bottom: 8px; display: flex; align-items: center; gap: 12px; }
-.gap-card-time { font-size: 12px; font-weight: 600; color: #3B6D11; min-width: 100px; }
-.gap-card-info { flex: 1; min-width: 0; }
-.gap-card-title { font-size: 12px; font-weight: 500; }
-.gap-card-sub { font-size: 11px; color: #888; margin-top: 2px; }
-.gap-card-dur { font-size: 11px; padding: 2px 7px; border-radius: 20px; background: #EAF3DE; color: #3B6D11; flex-shrink: 0; }
-.btn-assign-small { padding: 4px 10px; border-radius: 6px; border: 1px solid #185FA5; background: #fff; color: #185FA5; font-size: 11px; cursor: pointer; flex-shrink: 0; }
-.btn-assign-small:hover { background: #185FA5; color: #fff; }
+/* Hour markers */
+.hour-markers { display: grid; position: absolute; top: 0; left: 8px; right: 8px; height: 100%; pointer-events: none; }
+.hour-mark { border-right: 1px solid #e8e8e6; }
 
-.state-box { padding: 3rem 1rem; text-align: center; color: #aaa; }
-.spinner { width: 22px; height: 22px; border: 2px solid #e5e5e3; border-top-color: #185FA5; border-radius: 50%; animation: spin 0.8s linear infinite; margin: 0 auto 12px; }
+/* Job blocks on timeline */
+.job-block { position: absolute; top: 2px; height: 28px; border-radius: 3px; display: flex; align-items: center; padding: 0 5px; overflow: hidden; cursor: default; z-index: 1; }
+.job-block.scheduled { background: #B5D4F4; border: 1px solid #378ADD; }
+.job-block-label { font-size: 10px; font-weight: 500; color: #0C447C; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+
+/* Gap blocks - clickable */
+.gap-block { position: absolute; top: 2px; height: 28px; border-radius: 3px; cursor: pointer; z-index: 1; transition: all 0.15s; display: flex; align-items: center; justify-content: center; }
+.gap-block.empty { background: rgba(99,153,34,0.12); border: 1px dashed #639922; }
+.gap-block.empty:hover { background: rgba(99,153,34,0.25); border-color: #3B6D11; }
+.gap-block.fits { background: rgba(24,95,165,0.15); border: 2px solid #185FA5; }
+.gap-block.fits:hover { background: rgba(24,95,165,0.28); }
+.gap-block.no-fit { background: rgba(99,153,34,0.08); border: 1px dashed #ccc; }
+.gap-label { font-size: 9px; color: #3B6D11; font-weight: 500; white-space: nowrap; overflow: hidden; padding: 0 4px; }
+.gap-block.fits .gap-label { color: #185FA5; }
+
+/* Hour header */
+.hour-header { display: grid; background: #fff; border-bottom: 1px solid #e5e5e3; position: sticky; top: 0; z-index: 10; }
+.hour-header-inner { display: grid; grid-template-columns: 160px 1fr; }
+.hour-header-label { padding: 4px 10px; font-size: 10px; color: #aaa; border-right: 1px solid #f0f0ee; }
+.hour-ticks { display: flex; padding: 0 8px; }
+.hour-tick { flex: 1; font-size: 10px; color: #aaa; text-align: left; padding: 4px 0; border-left: 1px solid #f0f0ee; padding-left: 3px; }
+
+/* Gap popup */
+.gap-popup { position: fixed; background: #fff; border: 1px solid #e5e5e3; border-radius: 10px; box-shadow: 0 4px 20px rgba(0,0,0,0.12); padding: 16px; width: 320px; z-index: 1000; max-height: 400px; overflow-y: auto; }
+.gap-popup h3 { font-size: 13px; font-weight: 600; margin-bottom: 4px; }
+.gap-popup .sub { font-size: 12px; color: #888; margin-bottom: 12px; }
+.gap-popup-close { position: absolute; top: 10px; right: 12px; font-size: 16px; cursor: pointer; color: #aaa; border: none; background: none; }
+.fitting-job { padding: 8px 10px; border: 1px solid #e5e5e3; border-radius: 7px; margin-bottom: 6px; display: flex; align-items: center; gap: 8px; }
+.fitting-job-info { flex: 1; min-width: 0; }
+.fitting-job-ref { font-size: 11px; font-weight: 600; color: #185FA5; }
+.fitting-job-desc { font-size: 12px; font-weight: 500; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.fitting-job-sub { font-size: 11px; color: #888; }
+.fitting-job-dur { font-size: 11px; padding: 2px 7px; border-radius: 20px; background: #E6F1FB; color: #185FA5; flex-shrink: 0; }
+.btn-assign { padding: 4px 10px; border-radius: 6px; border: 1px solid #185FA5; background: #185FA5; color: #fff; font-size: 11px; cursor: pointer; flex-shrink: 0; }
+.btn-assign:hover { background: #0C447C; }
+.no-fitting { font-size: 12px; color: #aaa; text-align: center; padding: 12px 0; }
+
+.spinner { width: 20px; height: 20px; border: 2px solid #e5e5e3; border-top-color: #185FA5; border-radius: 50%; animation: spin 0.8s linear infinite; margin: 2rem auto; display: block; }
 @keyframes spin { to { transform: rotate(360deg); } }
+.empty-state { padding: 3rem 1rem; text-align: center; color: #aaa; font-size: 13px; line-height: 1.7; }
 
-#toast { position: fixed; bottom: 24px; left: 50%; transform: translateX(-50%); background: #1a1a1a; color: #fff; padding: 10px 20px; border-radius: 8px; font-size: 13px; opacity: 0; transition: opacity 0.3s; pointer-events: none; z-index: 1000; }
+#toast { position: fixed; bottom: 24px; left: 50%; transform: translateX(-50%); background: #1a1a1a; color: #fff; padding: 10px 20px; border-radius: 8px; font-size: 13px; opacity: 0; transition: opacity 0.3s; pointer-events: none; z-index: 2000; }
 #toast.show { opacity: 1; }
 </style>
 </head>
@@ -143,88 +122,77 @@ body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; b
 <div class="topbar">
   <div style="display:flex;align-items:center;">
     <span class="logo">BigChange Scheduler</span>
-    <span class="topbar-date" id="topbar-date"></span>
+    <span class="topbar-sub" id="topbar-date"></span>
   </div>
-  <div class="topbar-right">
-    <span class="conn-badge loading" id="conn-badge">Connecting...</span>
-    <button class="btn-sm" onclick="loadAll()">&#8635; Refresh</button>
+  <div style="display:flex;align-items:center;gap:10px;">
+    <span class="conn-badge" id="conn-badge">Connecting...</span>
+    <button class="btn-refresh" onclick="loadAll()">&#8635; Refresh</button>
   </div>
 </div>
 
-<div class="metrics-bar">
+<div class="metrics">
   <div class="metric"><div class="m-label">Unassigned jobs</div><div class="m-value red" id="m-unassigned">—</div></div>
-  <div class="metric"><div class="m-label">SLA breaching</div><div class="m-value red" id="m-breach">—</div></div>
-  <div class="metric"><div class="m-label">Due &lt; 2 hrs</div><div class="m-value amber" id="m-urgent">—</div></div>
-  <div class="metric"><div class="m-label">Engineers</div><div class="m-value green" id="m-eng">—</div></div>
-  <div class="metric"><div class="m-label">Scheduled tomorrow</div><div class="m-value blue" id="m-tomorrow">—</div></div>
+  <div class="metric"><div class="m-label">Engineers scheduled tomorrow</div><div class="m-value blue" id="m-engs">—</div></div>
+  <div class="metric"><div class="m-label">Jobs scheduled tomorrow</div><div class="m-value blue" id="m-tomorrow">—</div></div>
+  <div class="metric"><div class="m-label">Gaps available</div><div class="m-value green" id="m-gaps">—</div></div>
   <div class="metric"><div class="m-label">Assigned today</div><div class="m-value" id="m-done">0</div></div>
 </div>
 
-<div class="tab-nav">
-  <button class="tab-btn active" onclick="switchTab('assign', this)">Assign jobs</button>
-  <button class="tab-btn" onclick="switchTab('schedule', this)">Tomorrow's schedule</button>
-</div>
-
-<!-- ── ASSIGN TAB ── -->
-<div class="tab-content active" id="tab-assign">
-  <div class="assign-layout">
-    <div class="jobs-panel">
-      <div class="panel-head">
-        <span class="panel-title">Unassigned jobs</span>
-        <span class="panel-count" id="job-count"></span>
-      </div>
-      <div class="filter-bar">
-        <button class="filter-btn active" onclick="setFilter('all',this)">All</button>
-        <button class="filter-btn" onclick="setFilter('breach',this)">SLA breach</button>
-        <button class="filter-btn" onclick="setFilter('urgent',this)">Urgent</button>
-        <button class="filter-btn" onclick="setFilter('Reactive',this)">Reactive</button>
-        <button class="filter-btn" onclick="setFilter('PPM',this)">PPM</button>
-      </div>
-      <div class="jobs-list" id="jobs-container">
-        <div class="state-box"><div class="spinner"></div><p>Loading jobs...</p></div>
-      </div>
+<div class="layout">
+  <!-- Left: unassigned jobs -->
+  <div class="left">
+    <div class="panel-head">
+      <span class="panel-title">Unassigned jobs</span>
+      <span class="panel-count" id="job-count"></span>
     </div>
-    <div class="suggest-panel" id="suggest-panel">
-      <div class="suggest-empty">
-        <p>Select an unassigned job<br>to see which engineers have<br>capacity tomorrow</p>
-      </div>
+    <div class="jobs-scroll" id="jobs-list">
+      <div class="empty-state"><div class="spinner"></div></div>
+    </div>
+  </div>
+
+  <!-- Right: timeline -->
+  <div class="right">
+    <div class="timeline-controls">
+      <h2 id="timeline-title">Tomorrow's schedule — Friday 25 April</h2>
+      <span class="selected-job-pill" id="selected-pill" style="display:none;"></span>
+      <span class="hint" id="timeline-hint">Select a job on the left, then click a gap to assign</span>
+    </div>
+
+    <div class="timeline-scroll" id="timeline-scroll">
+      <div class="empty-state"><div class="spinner"></div></div>
     </div>
   </div>
 </div>
 
-<!-- ── SCHEDULE TAB ── -->
-<div class="tab-content" id="tab-schedule">
-  <div class="schedule-layout">
-    <div class="eng-list-panel">
-      <div class="panel-head">
-        <span class="panel-title">Engineers</span>
-        <span class="panel-count" id="eng-count"></span>
-      </div>
-      <div id="eng-list-container">
-        <div class="state-box"><div class="spinner"></div></div>
-      </div>
-    </div>
-    <div class="timeline-panel" id="timeline-panel">
-      <div class="timeline-empty">Select an engineer to view their schedule</div>
-    </div>
-  </div>
+<!-- Gap popup -->
+<div class="gap-popup" id="gap-popup" style="display:none;">
+  <button class="gap-popup-close" onclick="closePopup()">✕</button>
+  <h3 id="popup-title"></h3>
+  <div class="sub" id="popup-sub"></div>
+  <div id="popup-body"></div>
 </div>
 
 <div id="toast"></div>
 
 <script>
-const DAY_START = 5;  // 5am
-const DAY_END   = 17; // 5pm
+const DAY_START = 5;
+const DAY_END   = 17;
 const DAY_MINS  = (DAY_END - DAY_START) * 60;
-const avatarColors = ['#185FA5','#0F6E56','#534AB7','#993C1D','#854F0B','#3B6D11','#993556','#5F5E5A','#0F6E56','#185FA5'];
+const HOURS     = Array.from({length: DAY_END - DAY_START + 1}, (_, i) => DAY_START + i);
 
-let jobs = [], engineers = [], tomorrowSchedule = {}, tomorrowUnassigned = [];
-let selectedJobId = null, selectedEngId = null, jobFilter = 'all', assignedToday = 0;
+let jobs = [], engineers = [], schedule = {};
+let selectedJob = null;
+let assignedToday = 0;
 
-const tomorrow = new Date(); tomorrow.setDate(tomorrow.getDate() + 1);
+const tomorrow = new Date();
+tomorrow.setDate(tomorrow.getDate() + 1);
+
 document.getElementById('topbar-date').textContent =
-  'Today: ' + new Date().toLocaleDateString('en-GB', {weekday:'long',day:'numeric',month:'long'}) +
-  '  |  Tomorrow: ' + tomorrow.toLocaleDateString('en-GB', {weekday:'long',day:'numeric',month:'long'});
+  'Today: ' + new Date().toLocaleDateString('en-GB', {weekday:'short', day:'numeric', month:'short'}) +
+  '  |  Tomorrow: ' + tomorrow.toLocaleDateString('en-GB', {weekday:'long', day:'numeric', month:'long'});
+
+document.getElementById('timeline-title').textContent =
+  "Tomorrow's schedule — " + tomorrow.toLocaleDateString('en-GB', {weekday:'long', day:'numeric', month:'long'});
 
 async function api(path, opts={}) {
   const r = await fetch(path, opts);
@@ -235,16 +203,16 @@ async function api(path, opts={}) {
 function setBadge(state, text) {
   const b = document.getElementById('conn-badge');
   b.textContent = text;
-  b.className = 'conn-badge' + (state==='error'?' error':state==='loading'?' loading':'');
+  b.className = 'conn-badge' + (state==='error'?' error':'');
 }
 
 async function loadAll() {
-  setBadge('loading','Loading...');
+  setBadge('loading', 'Loading...');
   try {
-    await Promise.all([loadJobs(), loadEngineers(), loadTomorrowSchedule()]);
-    setBadge('ok','Live');
+    await Promise.all([loadJobs(), loadEngineers(), loadSchedule()]);
+    setBadge('ok', 'Live');
   } catch(e) {
-    setBadge('error','Error');
+    setBadge('error', 'Error');
     showToast('Error: ' + e.message);
   }
 }
@@ -252,363 +220,285 @@ async function loadAll() {
 async function loadJobs() {
   const data = await api('/api/jobs/unassigned');
   jobs = data.jobs || [];
-  renderJobs();
-  updateMetrics();
+  document.getElementById('m-unassigned').textContent = jobs.length;
+  document.getElementById('job-count').textContent = jobs.length + ' jobs';
+  renderJobList();
 }
 
 async function loadEngineers() {
   const data = await api('/api/engineers');
   engineers = data.engineers || [];
-  document.getElementById('m-eng').textContent = engineers.length;
-  renderEngList();
 }
 
-async function loadTomorrowSchedule() {
+async function loadSchedule() {
   const data = await api('/api/schedule/tomorrow');
-  tomorrowSchedule  = data.byEngineer || {};
-  tomorrowUnassigned = data.unassigned || [];
-  document.getElementById('m-tomorrow').textContent =
-    Object.values(tomorrowSchedule).reduce((sum, arr) => sum + arr.length, 0);
-  renderEngList();
+  schedule = data.byEngineer || {};
+  const totalJobs = Object.values(schedule).reduce((s, arr) => s + arr.length, 0);
+  const engCount  = Object.keys(schedule).length;
+  document.getElementById('m-engs').textContent    = engCount;
+  document.getElementById('m-tomorrow').textContent = totalJobs;
+  renderTimeline();
 }
 
-// ── ASSIGN TAB ──────────────────────────────────────────
+// ── JOB LIST ────────────────────────────────────────────
 
-function filtered() {
-  if (jobFilter==='all') return jobs;
-  if (jobFilter==='breach') return jobs.filter(j=>j.priority==='breach');
-  if (jobFilter==='urgent') return jobs.filter(j=>j.priority==='urgent');
-  return jobs.filter(j=>(j.type||'').toLowerCase().includes(jobFilter.toLowerCase()));
-}
-
-function setFilter(f, btn) {
-  jobFilter = f;
-  document.querySelectorAll('.filter-btn').forEach(b=>b.classList.remove('active'));
-  btn.classList.add('active');
-  renderJobs();
-}
-
-function slaChip(j) {
-  if (!j.sla) return '';
-  const hrs = (new Date(j.sla) - Date.now()) / 3600000;
-  if (hrs < 0)  return `<span class="sla-chip breach">SLA breached</span>`;
-  if (hrs < 2)  return `<span class="sla-chip urgent">${Math.round(hrs*60)}min left</span>`;
-  if (hrs < 8)  return `<span class="sla-chip urgent">${Math.round(hrs)}hr left</span>`;
-  return `<span class="sla-chip ok">${Math.round(hrs)}hr SLA</span>`;
-}
-
-function renderJobs() {
-  const list = filtered();
-  document.getElementById('job-count').textContent = `${list.length} job${list.length!==1?'s':''}`;
-  const c = document.getElementById('jobs-container');
-  if (!list.length) { c.innerHTML = `<div class="state-box"><p>No jobs match this filter</p></div>`; return; }
-  c.innerHTML = list.map(j=>`
-    <div class="job-card ${j.priority}${selectedJobId===j.id?' selected':''}" onclick="selectJob('${j.id}')">
-      <div class="job-top"><span class="job-ref">${j.ref}</span>${slaChip(j)}</div>
+function renderJobList() {
+  const c = document.getElementById('jobs-list');
+  if (!jobs.length) {
+    c.innerHTML = '<div class="empty-state">No unassigned jobs found</div>';
+    return;
+  }
+  c.innerHTML = jobs.map(j => `
+    <div class="job-item${selectedJob && selectedJob.id===j.id?' selected':''}" onclick="selectJob('${j.id}')">
+      <div class="job-ref">${j.ref}</div>
       <div class="job-desc">${j.desc}</div>
       <div class="job-client">${j.client}</div>
-      <div class="job-footer">
-        <span class="tag">${j.type}</span>
-        <span class="dur-tag">${j.durationMins}min</span>
-        <span class="job-area">${j.area}</span>
+      <div class="job-tags">
+        <span class="tag tag-dur">${j.durationMins} min</span>
+        <span class="tag tag-type">${j.type}</span>
       </div>
     </div>`).join('');
 }
 
-function updateMetrics() {
-  document.getElementById('m-unassigned').textContent = jobs.length;
-  document.getElementById('m-breach').textContent = jobs.filter(j=>j.priority==='breach').length;
-  document.getElementById('m-urgent').textContent = jobs.filter(j=>j.priority==='urgent').length;
-  document.getElementById('m-done').textContent = assignedToday;
-}
-
 function selectJob(id) {
-  selectedJobId = id;
-  renderJobs();
-  const job = jobs.find(j=>j.id===id);
-  if (!job) return;
-  renderJobSuggestions(job);
+  selectedJob = jobs.find(j => j.id === id) || null;
+  renderJobList();
+  const pill = document.getElementById('selected-pill');
+  const hint = document.getElementById('timeline-hint');
+  if (selectedJob) {
+    pill.textContent = selectedJob.ref + ' — ' + selectedJob.durationMins + ' min';
+    pill.style.display = 'inline-block';
+    hint.textContent = 'Click a green gap to assign this job';
+  } else {
+    pill.style.display = 'none';
+    hint.textContent = 'Select a job on the left, then click a gap to assign';
+  }
+  renderTimeline();
 }
 
-function getGaps(engId, jobDuration) {
-  const engJobs = (tomorrowSchedule[engId] || []).filter(j => j.startTime && j.endTime);
+// ── TIMELINE ────────────────────────────────────────────
+
+function timeToMins(t) {
+  if (!t) return -1;
+  try {
+    const d = new Date(t);
+    if (!isNaN(d)) return d.getHours() * 60 + d.getMinutes();
+    const p = t.split(':');
+    return parseInt(p[0]) * 60 + parseInt(p[1] || 0);
+  } catch(e) { return -1; }
+}
+
+function pct(mins) {
+  return ((mins - DAY_START * 60) / DAY_MINS * 100).toFixed(3) + '%';
+}
+
+function widthPct(startMins, endMins) {
+  return ((endMins - startMins) / DAY_MINS * 100).toFixed(3) + '%';
+}
+
+function minsToLabel(mins) {
+  const h = Math.floor(mins / 60);
+  const m = mins % 60;
+  const suffix = h >= 12 ? 'pm' : 'am';
+  const h12 = h > 12 ? h - 12 : h;
+  return m === 0 ? `${h12}${suffix}` : `${h12}:${String(m).padStart(2,'0')}${suffix}`;
+}
+
+function getGaps(engId) {
+  const engJobs = (schedule[engId] || [])
+    .map(j => ({ start: timeToMins(j.startTime), end: timeToMins(j.endTime), label: j.client || j.desc }))
+    .filter(j => j.start >= 0 && j.end > j.start)
+    .sort((a, b) => a.start - b.start);
+
   const gaps = [];
-  const dayStart = DAY_START * 60;
-  const dayEnd   = DAY_END   * 60;
+  let cursor = DAY_START * 60;
 
-  // Build occupied slots
-  const occupied = engJobs.map(j => {
-    const s = timeToMins(j.startTime);
-    const e = timeToMins(j.endTime);
-    return {start: s, end: e, label: j.client};
-  }).sort((a,b)=>a.start-b.start);
-
-  let cursor = dayStart;
-  for (const slot of occupied) {
-    if (slot.start > cursor + 15) {
-      const gapMins = slot.start - cursor;
-      if (gapMins >= jobDuration) {
-        gaps.push({ startMins: cursor, endMins: slot.start, gapMins,
-          label: minsToTime(cursor) + ' – ' + minsToTime(slot.start) });
-      }
+  for (const slot of engJobs) {
+    if (slot.start > cursor + 10) {
+      gaps.push({ startMins: cursor, endMins: slot.start, gapMins: slot.start - cursor });
     }
     cursor = Math.max(cursor, slot.end);
   }
-  // Gap after last job
-  if (dayEnd > cursor + 15) {
-    const gapMins = dayEnd - cursor;
-    if (gapMins >= jobDuration) {
-      gaps.push({ startMins: cursor, endMins: dayEnd, gapMins,
-        label: minsToTime(cursor) + ' – ' + minsToTime(dayEnd) });
-    }
+  if (DAY_END * 60 > cursor + 10) {
+    gaps.push({ startMins: cursor, endMins: DAY_END * 60, gapMins: DAY_END * 60 - cursor });
   }
   return gaps;
 }
 
-function renderJobSuggestions(job) {
-  const panel = document.getElementById('suggest-panel');
-  const results = engineers.map((e, i) => {
-    const gaps = getGaps(e.id, job.durationMins);
-    return { eng: e, gaps, colorIdx: i };
-  }).filter(r => r.gaps.length > 0)
-    .sort((a,b) => b.gaps.length - a.gaps.length);
+function renderTimeline() {
+  const container = document.getElementById('timeline-scroll');
 
-  if (!results.length) {
-    panel.innerHTML = `
-      <div class="suggest-job-info">
-        <h3>${job.ref}: ${job.desc}</h3>
-        <p>${job.client} · ${job.durationMins} min · ${job.area}</p>
-      </div>
-      <div class="suggest-empty"><p>No engineers have a suitable gap tomorrow<br>for a ${job.durationMins} minute job</p></div>`;
+  const engIds = Object.keys(schedule);
+  if (!engIds.length) {
+    container.innerHTML = '<div class="empty-state">No engineers scheduled for tomorrow yet</div>';
+    document.getElementById('m-gaps').textContent = '—';
     return;
   }
 
-  panel.innerHTML = `
-    <div class="suggest-job-info">
-      <h3>${job.ref}: ${job.desc}</h3>
-      <p>${job.client} · ${job.durationMins} min · ${job.area}</p>
+  // Build hour ticks header
+  const ticksHtml = HOURS.map(h => {
+    const label = h === 12 ? '12pm' : h < 12 ? h + 'am' : (h - 12) + 'pm';
+    return `<div class="hour-tick">${label}</div>`;
+  }).join('');
+
+  // Count total gaps that fit the selected job
+  let totalGaps = 0;
+
+  const rowsHtml = engIds.map(engId => {
+    const eng = engineers.find(e => e.id === engId) || { name: 'Engineer ' + engId, isTrainee: false };
+    const engJobs = schedule[engId] || [];
+    const gaps = getGaps(engId);
+
+    totalGaps += gaps.length;
+
+    // Job blocks
+    const jobBlocks = engJobs.map(j => {
+      const s = timeToMins(j.startTime);
+      const e = timeToMins(j.endTime);
+      if (s < 0 || e <= s) return '';
+      const clampedS = Math.max(s, DAY_START * 60);
+      const clampedE = Math.min(e, DAY_END * 60);
+      if (clampedE <= clampedS) return '';
+      return `<div class="job-block scheduled" style="left:${pct(clampedS)};width:${widthPct(clampedS, clampedE)};" title="${j.client} (${j.durationMins}min)">
+        <span class="job-block-label">${j.client || j.desc}</span>
+      </div>`;
+    }).join('');
+
+    // Gap blocks
+    const gapBlocks = gaps.map(g => {
+      const fits = selectedJob && g.gapMins >= selectedJob.durationMins;
+      const noJob = !selectedJob;
+      const cls = noJob ? 'empty' : fits ? 'fits' : 'no-fit';
+      const label = noJob
+        ? (g.gapMins >= 30 ? minsToLabel(g.startMins) + '–' + minsToLabel(g.endMins) : '')
+        : fits ? `✓ ${g.gapMins}min free` : '';
+      return `<div class="gap-block ${cls}" 
+        style="left:${pct(g.startMins)};width:${widthPct(g.startMins, g.endMins)};"
+        title="${minsToLabel(g.startMins)}–${minsToLabel(g.endMins)} (${g.gapMins} min free)"
+        onclick="clickGap('${engId}','${eng.name}',${g.startMins},${g.endMins},${g.gapMins},event)">
+        <span class="gap-label">${label}</span>
+      </div>`;
+    }).join('');
+
+    const jobCount = engJobs.length;
+    const gapCount = gaps.length;
+
+    return `
+      <div class="eng-row">
+        <div class="eng-label">
+          <div class="eng-name">${eng.isTrainee ? '<span class="trainee-dot"></span>' : ''}${eng.name}</div>
+          <div class="eng-meta">${jobCount} job${jobCount!==1?'s':''} · ${gapCount} gap${gapCount!==1?'s':''}</div>
+        </div>
+        <div class="track-wrap">
+          <div class="track">
+            ${jobBlocks}
+            ${gapBlocks}
+          </div>
+        </div>
+      </div>`;
+  }).join('');
+
+  document.getElementById('m-gaps').textContent = totalGaps;
+
+  container.innerHTML = `
+    <div class="hour-header">
+      <div class="hour-header-inner">
+        <div class="hour-header-label">Engineer</div>
+        <div class="hour-ticks">${ticksHtml}</div>
+      </div>
     </div>
-    <div class="suggest-title">${results.length} engineer${results.length!==1?'s':''} with capacity tomorrow</div>
-    <div class="eng-suggest-list">
-      ${results.slice(0,8).map((r,i) => {
-        const col = avatarColors[r.colorIdx % avatarColors.length];
-        const ini = r.eng.name.split(' ').filter(Boolean).slice(0,2).map(w=>w[0]).join('').toUpperCase();
-        const scheduled = (tomorrowSchedule[r.eng.id]||[]).length;
-        return `
-        <div class="eng-suggest${i===0?' top':''}">
-          <div class="eng-suggest-top">
-            <div class="avatar" style="background:${col}22;color:${col};">${ini}</div>
-            <div>
-              <div class="eng-suggest-name">${r.eng.name}${r.eng.isTrainee?' <span style="font-size:10px;color:#854F0B;">(Trainee)</span>':''}</div>
-              <div class="eng-suggest-sub">${scheduled} job${scheduled!==1?'s':''} scheduled tomorrow · ${r.gaps.length} gap${r.gaps.length!==1?'s':''} available</div>
-            </div>
-          </div>
-          <div class="gap-list">
-            ${r.gaps.slice(0,3).map(g=>`
-              <div class="gap-item">
-                <span class="gap-time">${g.label}</span>
-                <span class="gap-duration">${g.gapMins} min free</span>
-                <button class="btn-assign-gap" onclick="assignToGap('${job.id}','${r.eng.id}','${g.startMins}','${r.eng.name}','${job.ref}')">Assign here</button>
-              </div>`).join('')}
-          </div>
-        </div>`;
-      }).join('')}
-    </div>`;
+    ${rowsHtml}`;
 }
 
-async function assignToGap(jobId, engId, startMins, engName, jobRef) {
-  const tomorrow = new Date(); tomorrow.setDate(tomorrow.getDate()+1);
-  const h = Math.floor(parseInt(startMins)/60);
-  const m = parseInt(startMins) % 60;
-  tomorrow.setHours(h, m, 0, 0);
-  const plannedStart = tomorrow.toISOString();
+// ── GAP CLICK ────────────────────────────────────────────
 
-  showToast('Assigning...');
+function clickGap(engId, engName, startMins, endMins, gapMins, event) {
+  event.stopPropagation();
+
+  const fittingJobs = jobs.filter(j => j.durationMins <= gapMins);
+
+  const popup = document.getElementById('gap-popup');
+  document.getElementById('popup-title').textContent =
+    engName + ' — ' + minsToLabel(startMins) + ' to ' + minsToLabel(endMins);
+  document.getElementById('popup-sub').textContent =
+    gapMins + ' minute gap · ' + (fittingJobs.length ? fittingJobs.length + ' job' + (fittingJobs.length!==1?'s':'') + ' will fit' : 'No unassigned jobs fit this gap');
+
+  if (!fittingJobs.length) {
+    document.getElementById('popup-body').innerHTML =
+      `<div class="no-fitting">No unassigned jobs are short enough to fit in this ${gapMins} minute gap</div>`;
+  } else {
+    document.getElementById('popup-body').innerHTML = fittingJobs.slice(0, 10).map(j => `
+      <div class="fitting-job">
+        <div class="fitting-job-info">
+          <div class="fitting-job-ref">${j.ref}</div>
+          <div class="fitting-job-desc">${j.desc}</div>
+          <div class="fitting-job-sub">${j.client}</div>
+        </div>
+        <span class="fitting-job-dur">${j.durationMins}min</span>
+        <button class="btn-assign" onclick="assignJob('${j.id}','${engId}',${startMins},'${j.ref}','${engName.replace(/'/g,"\\'")}')">Assign</button>
+      </div>`).join('');
+  }
+
+  // Position popup near click
+  const x = Math.min(event.clientX, window.innerWidth - 340);
+  const y = Math.min(event.clientY + 10, window.innerHeight - 420);
+  popup.style.left = x + 'px';
+  popup.style.top  = y + 'px';
+  popup.style.display = 'block';
+}
+
+function closePopup() {
+  document.getElementById('gap-popup').style.display = 'none';
+}
+
+document.addEventListener('click', e => {
+  const popup = document.getElementById('gap-popup');
+  if (popup.style.display !== 'none' && !popup.contains(e.target)) {
+    closePopup();
+  }
+});
+
+// ── ASSIGN ───────────────────────────────────────────────
+
+async function assignJob(jobId, engId, startMins, jobRef, engName) {
+  const d = new Date(tomorrow);
+  d.setHours(Math.floor(startMins / 60), startMins % 60, 0, 0);
+  const plannedStart = d.toISOString();
+
+  closePopup();
+  showToast('Assigning ' + jobRef + '...');
+
   try {
     await api(`/api/jobs/${jobId}/assign`, {
-      method:'POST',
-      headers:{'Content-Type':'application/json'},
+      method: 'POST',
+      headers: {'Content-Type': 'application/json'},
       body: JSON.stringify({resourceId: engId, plannedStart})
     });
-    jobs = jobs.filter(j=>j.id!==jobId);
+
+    jobs = jobs.filter(j => j.id !== jobId);
     assignedToday++;
-    selectedJobId = null;
-    updateMetrics();
-    renderJobs();
-    document.getElementById('suggest-panel').innerHTML = `<div class="suggest-empty"><p>Job ${jobRef} assigned to ${engName}<br>at ${minsToTime(parseInt(startMins))} tomorrow</p></div>`;
-    showToast(`${jobRef} assigned to ${engName}`);
-    loadTomorrowSchedule();
+    selectedJob = null;
+
+    document.getElementById('m-unassigned').textContent = jobs.length;
+    document.getElementById('job-count').textContent = jobs.length + ' jobs';
+    document.getElementById('m-done').textContent = assignedToday;
+    document.getElementById('selected-pill').style.display = 'none';
+    document.getElementById('timeline-hint').textContent = 'Select a job on the left, then click a gap to assign';
+
+    renderJobList();
+    showToast(jobRef + ' assigned to ' + engName);
+    loadSchedule();
   } catch(e) {
     showToast('Failed: ' + e.message);
   }
 }
 
-// ── SCHEDULE TAB ─────────────────────────────────────────
-
-function renderEngList() {
-  const c = document.getElementById('eng-list-container');
-  document.getElementById('eng-count').textContent = `${engineers.length} engineers`;
-  if (!engineers.length) { c.innerHTML = `<div style="padding:1rem;color:#aaa;font-size:12px;">Loading...</div>`; return; }
-
-  c.innerHTML = engineers.map((e,i) => {
-    const scheduled = (tomorrowSchedule[e.id]||[]).length;
-    const gaps = getGaps(e.id, 60).length; // gaps that fit at least 60min
-    const col = avatarColors[i % avatarColors.length];
-    const ini = e.name.split(' ').filter(Boolean).slice(0,2).map(w=>w[0]).join('').toUpperCase();
-    return `
-      <div class="eng-row${selectedEngId===e.id?' selected':''}" onclick="selectEngineer('${e.id}')">
-        <div class="avatar" style="background:${col}22;color:${col};width:28px;height:28px;font-size:10px;">${ini}</div>
-        <div class="eng-row-info">
-          <div class="eng-row-name">${e.name}</div>
-          <div class="eng-row-sub">${scheduled} job${scheduled!==1?'s':''} tomorrow</div>
-        </div>
-        ${e.isTrainee ? `<span class="trainee-badge">T</span>` : ''}
-        ${gaps > 0 ? `<span class="eng-job-count gaps">${gaps} gap${gaps!==1?'s':''}</span>` : `<span class="eng-job-count">${scheduled} jobs</span>`}
-      </div>`;
-  }).join('');
-}
-
-function selectEngineer(id) {
-  selectedEngId = id;
-  renderEngList();
-  renderTimeline(id);
-}
-
-function renderTimeline(engId) {
-  const eng = engineers.find(e=>e.id===engId);
-  if (!eng) return;
-  const engJobs = (tomorrowSchedule[engId]||[]).sort((a,b)=>(a.startTime||'')>(b.startTime||'')?1:-1);
-  const gaps = getGaps(engId, 30); // all gaps 30min+
-
-  const panel = document.getElementById('timeline-panel');
-
-  // Build timeline blocks
-  const blocks = engJobs.filter(j=>j.startTime&&j.endTime).map(j=>({
-    type:'scheduled',
-    startMins: timeToMins(j.startTime),
-    endMins:   timeToMins(j.endTime),
-    label:     j.client || j.desc,
-    ref:       j.ref,
-  }));
-
-  // Build gap blocks
-  const gapBlocks = gaps.map(g=>({
-    type:'gap',
-    startMins: g.startMins,
-    endMins:   g.endMins,
-    label:     `${g.gapMins}min free`,
-    gapMins:   g.gapMins,
-  }));
-
-  const allBlocks = [...blocks, ...gapBlocks];
-  const hours = [];
-  for (let h=DAY_START; h<=DAY_END; h++) hours.push(h);
-
-  function pct(mins) { return ((mins - DAY_START*60) / DAY_MINS * 100).toFixed(2) + '%'; }
-  function width(startMins, endMins) { return ((endMins - startMins) / DAY_MINS * 100).toFixed(2) + '%'; }
-
-  // Find fitting unassigned jobs for the gaps
-  const fittingJobs = gaps.length > 0 ? jobs.filter(j => gaps.some(g => g.gapMins >= j.durationMins)) : [];
-
-  panel.innerHTML = `
-    <div class="timeline-eng-header">
-      <div class="avatar" style="background:#185FA522;color:#185FA5;width:36px;height:36px;">
-        ${eng.name.split(' ').filter(Boolean).slice(0,2).map(w=>w[0]).join('').toUpperCase()}
-      </div>
-      <div>
-        <h2>${eng.name}${eng.isTrainee?' <span style="font-size:12px;color:#854F0B;font-weight:400;">(Trainee)</span>':''}</h2>
-        <div style="font-size:12px;color:#888;">${engJobs.length} jobs scheduled tomorrow · ${gaps.length} gap${gaps.length!==1?'s':''}</div>
-      </div>
-    </div>
-
-    <div class="timeline-wrap">
-      <div class="timeline-header">
-        ${hours.map(h=>`<div class="timeline-hour">${h === 12 ? '12pm' : h < 12 ? h+'am' : (h-12)+'pm'}</div>`).join('')}
-      </div>
-      <div class="timeline-body">
-        <div class="timeline-track">
-          ${allBlocks.map(b=>`
-            <div class="timeline-block ${b.type}${b.type==='gap'&&fittingJobs.length?' highlight':''}"
-              style="left:${pct(Math.max(b.startMins,DAY_START*60))};width:${width(Math.max(b.startMins,DAY_START*60),Math.min(b.endMins,DAY_END*60))}"
-              title="${b.label}">
-              <span class="timeline-block-label">${b.label}</span>
-            </div>`).join('')}
-        </div>
-      </div>
-    </div>
-
-    ${engJobs.length ? `
-    <div style="margin-bottom:1.25rem;">
-      <div class="suggest-title" style="margin-bottom:8px;">Scheduled jobs</div>
-      ${engJobs.map(j=>`
-        <div class="gap-card">
-          <div class="gap-card-time">${j.startTime ? formatTime(j.startTime) : 'TBC'}</div>
-          <div class="gap-card-info">
-            <div class="gap-card-title">${j.ref} — ${j.desc}</div>
-            <div class="gap-card-sub">${j.client} · ${j.area}</div>
-          </div>
-          <span class="gap-card-dur">${j.durationMins}min</span>
-        </div>`).join('')}
-    </div>` : ''}
-
-    ${fittingJobs.length ? `
-    <div class="gap-suggestions">
-      <h3>Unassigned jobs that fit in the gaps (${fittingJobs.length})</h3>
-      ${fittingJobs.slice(0,6).map(j=>{
-        const bestGap = gaps.find(g=>g.gapMins >= j.durationMins);
-        return `
-        <div class="gap-card">
-          <div class="gap-card-time" style="color:#185FA5;">Gap at ${minsToTime(bestGap.startMins)}</div>
-          <div class="gap-card-info">
-            <div class="gap-card-title">${j.ref} — ${j.desc}</div>
-            <div class="gap-card-sub">${j.client} · ${j.area}</div>
-          </div>
-          <span class="gap-card-dur">${j.durationMins}min</span>
-          <button class="btn-assign-small" onclick="assignToGap('${j.id}','${engId}','${bestGap.startMins}','${eng.name}','${j.ref}')">Assign</button>
-        </div>`;
-      }).join('')}
-    </div>` : gaps.length > 0 ? `<div style="font-size:12px;color:#aaa;padding:1rem 0;">No unassigned jobs fit the available gaps today</div>` : ''}
-  `;
-}
-
-// ── TAB SWITCHING ────────────────────────────────────────
-function switchTab(tab, btn) {
-  document.querySelectorAll('.tab-btn').forEach(b=>b.classList.remove('active'));
-  document.querySelectorAll('.tab-content').forEach(c=>c.classList.remove('active'));
-  btn.classList.add('active');
-  document.getElementById('tab-'+tab).classList.add('active');
-}
-
-// ── TIME HELPERS ─────────────────────────────────────────
-function timeToMins(timeStr) {
-  if (!timeStr) return 0;
-  try {
-    const d = new Date(timeStr);
-    if (!isNaN(d)) return d.getHours()*60 + d.getMinutes();
-    const parts = timeStr.split(':');
-    return parseInt(parts[0])*60 + parseInt(parts[1]||0);
-  } catch(e) { return 0; }
-}
-
-function minsToTime(mins) {
-  const h = Math.floor(mins/60);
-  const m = mins % 60;
-  return `${h}:${m.toString().padStart(2,'0')}`;
-}
-
-function formatTime(timeStr) {
-  try {
-    const d = new Date(timeStr);
-    if (!isNaN(d)) return d.toLocaleTimeString('en-GB',{hour:'2-digit',minute:'2-digit'});
-  } catch(e) {}
-  return timeStr;
-}
-
 function showToast(msg) {
   const t = document.getElementById('toast');
-  t.textContent = msg; t.classList.add('show');
+  t.textContent = msg;
+  t.classList.add('show');
   clearTimeout(window._tt);
-  window._tt = setTimeout(()=>t.classList.remove('show'), 3500);
+  window._tt = setTimeout(() => t.classList.remove('show'), 3500);
 }
 
 loadAll();
