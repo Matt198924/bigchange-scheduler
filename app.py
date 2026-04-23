@@ -15,12 +15,7 @@ CUSTOMER_ID   = os.environ.get('BIGCHANGE_CUSTOMER_ID', '1564')
 API_BASE      = 'https://api.bigchange.com/v1'
 TOKEN_URL     = 'https://api.bigchange.com/auth/tokens'
 
-# Category keywords — if categoryName contains any of these it's valid
-VALID_CATEGORY_KEYWORDS = [
-    'new jobs',
-    'allocations',
-]
-
+VALID_CATEGORY_KEYWORDS = ['new jobs', 'allocations']
 COMPLETED_STATUSES = {'completedok', 'completedwithissues', 'cancelled'}
 
 _token_cache = {'token': None, 'expires_at': 0}
@@ -55,17 +50,14 @@ def bc_get(path, params=None):
 
 def bc_post(path, body):
     token = get_token()
-    url = f'{API_BASE}{path}'
-    resp = requests.post(url, headers={
+    resp = requests.post(f'{API_BASE}{path}', headers={
         'Authorization': f'Bearer {token}',
         'Content-Type': 'application/json',
         'customer-id': CUSTOMER_ID,
     }, json=body, timeout=15)
     resp.raise_for_status()
-    try:
-        return resp.json()
-    except Exception:
-        return {}
+    try: return resp.json()
+    except: return {}
 
 def is_group_entry(name):
     return bool(re.match(r'^\(\d+\)', name.strip()))
@@ -73,28 +65,28 @@ def is_group_entry(name):
 def is_valid_category(job):
     cat = (job.get('categoryName') or '').lower().strip()
     if not cat:
-        return True  # include if no category set
+        return True
     return any(kw in cat for kw in VALID_CATEGORY_KEYWORDS)
 
-def get_sla_from_custom_fields(job):
+def get_sla(job):
     for cf in (job.get('customFields') or []):
         caption = ((cf.get('definition') or {}).get('caption') or '').lower()
         val = cf.get('value')
         if 'sla' in caption and val:
             return val
-    return None
+    return job.get('dueAt')
 
 def get_priority(job):
-    deadline = get_sla_from_custom_fields(job) or job.get('dueAt') or job.get('dueDate')
+    deadline = get_sla(job)
     if not deadline:
         return 'ok'
     try:
         dt = datetime.fromisoformat(str(deadline).replace('Z', '+00:00'))
-        hours_left = (dt - datetime.now(timezone.utc)).total_seconds() / 3600
-        if hours_left < 0: return 'breach'
-        if hours_left < 2: return 'urgent'
+        hrs = (dt - datetime.now(timezone.utc)).total_seconds() / 3600
+        if hrs < 0: return 'breach'
+        if hrs < 2: return 'urgent'
         return 'ok'
-    except Exception:
+    except:
         return 'ok'
 
 def get_duration_minutes(job):
@@ -104,37 +96,48 @@ def get_duration_minutes(job):
             try:
                 v = float(val)
                 return int(v) if v > 24 else int(v * 60)
-            except Exception:
-                pass
+            except: pass
     return 60
 
 def format_job(j):
-    planned_start = j.get('plannedStartAt') or j.get('startAt')
-    actual_start  = j.get('actualStartAt')
-    planned_end   = j.get('plannedEndAt') or j.get('endAt')
-    actual_end    = j.get('actualEndAt')
     loc = j.get('contactLocation') or {}
-
     return {
         'id':           str(j.get('id', '')),
         'ref':          str(j.get('reference') or j.get('id', '')),
         'desc':         (j.get('description') or 'Job')[:120],
         'client':       j.get('contactName') or j.get('customerName') or '—',
         'area':         j.get('contactAddress') or '—',
-        'type':         j.get('typeName') or j.get('jobType') or 'Reactive',
+        'type':         j.get('typeName') or 'Reactive',
         'status':       j.get('status') or '',
         'category':     j.get('categoryName') or '',
-        'sla':          get_sla_from_custom_fields(j),
+        'sla':          get_sla(j),
         'priority':     get_priority(j),
         'resourceId':   str(j.get('resourceId') or ''),
         'resourceName': j.get('resourceName') or '',
-        'plannedStart': planned_start,
-        'startTime':    actual_start or planned_start,
-        'endTime':      actual_end or planned_end,
+        'startTime':    j.get('actualStartAt') or j.get('plannedStartAt'),
+        'endTime':      j.get('actualEndAt') or j.get('plannedEndAt'),
         'durationMins': get_duration_minutes(j),
         'lat':          loc.get('latitude'),
         'lng':          loc.get('longitude'),
     }
+
+def fetch_jobs_paged(params):
+    """Fetch all pages of jobs"""
+    all_jobs = []
+    page = 1
+    while True:
+        p = {**params, 'pageNumber': page, 'pageSize': 1000}
+        data = bc_get('/jobs', p)
+        raw = data if isinstance(data, list) else (data.get('items') or [])
+        all_jobs.extend(raw)
+        page_count = data.get('pageItemCount', len(raw)) if isinstance(data, dict) else len(raw)
+        print(f"[PAGED] Page {page}: {len(raw)} items")
+        if len(raw) < 1000:
+            break
+        page += 1
+        if page > 10:
+            break
+    return all_jobs
 
 @app.route('/')
 def index():
@@ -156,61 +159,51 @@ def get_engineers():
         engineers = []
         for i, e in enumerate(raw):
             name = e.get('name') or f"{e.get('firstName','')} {e.get('lastName','')}".strip() or 'Engineer'
-            if is_group_entry(name):
-                continue
-            if e.get('type', '').lower() in ['vehicle', 'asset']:
-                continue
+            if is_group_entry(name): continue
+            if e.get('type', '').lower() in ['vehicle', 'asset']: continue
             is_trainee = '(T)' in name or '(TS)' in name
-            clean_name = name.replace('(T)', '').replace('(TS)', '').strip()
             engineers.append({
                 'id':        str(e.get('id') or i),
-                'name':      clean_name,
+                'name':      name.replace('(T)', '').replace('(TS)', '').strip(),
                 'isTrainee': is_trainee,
                 'region':    e.get('region') or e.get('homePostcode') or '—',
                 'status':    'available',
             })
-        print(f"[ENG] {len(engineers)} engineers")
         return jsonify({'engineers': engineers, 'total': len(engineers)})
     except Exception as e:
-        print(f"[ENG] ERROR: {e}")
         return jsonify({'error': str(e)}), 500
 
 @app.route('/api/jobs/unassigned')
 def get_unassigned_jobs():
     try:
-        # Pull a wide window — jobs created recently that are unassigned
-        # Use CreatedAt range as a fallback to catch all pending jobs
-        two_weeks_ago = (datetime.now() - timedelta(days=14)).strftime('%Y-%m-%dT00:00:00')
-        tomorrow_end  = (datetime.now() + timedelta(days=7)).strftime('%Y-%m-%dT23:59:59')
+        # Use StatusModifiedAt to find recently changed unassigned jobs
+        # Also use a long CreatedAt window
+        ninety_days_ago = (datetime.now() - timedelta(days=90)).strftime('%Y-%m-%dT00:00:00')
+        now_str = datetime.now().strftime('%Y-%m-%dT23:59:59')
 
-        data = bc_get('/jobs', {
-            'CreatedAtFrom': two_weeks_ago,
-            'CreatedAtTo':   tomorrow_end,
-            'pageSize':      1000,
+        raw = fetch_jobs_paged({
+            'StatusModifiedAtFrom': ninety_days_ago,
+            'StatusModifiedAtTo':   now_str,
         })
 
-        raw = data if isinstance(data, list) else (data.get('items') or [])
-        print(f"[UNASSIGNED] Got {len(raw)} raw jobs")
-
-        # Log unique categories for debugging
-        cats = set(j.get('categoryName','') for j in raw)
-        print(f"[UNASSIGNED] Categories found: {cats}")
+        print(f"[UNASSIGNED] Got {len(raw)} total jobs via StatusModifiedAt")
+        cats = {}
+        for j in raw:
+            c = j.get('categoryName') or 'none'
+            cats[c] = cats.get(c, 0) + 1
+        print(f"[UNASSIGNED] Categories: {cats}")
 
         jobs = []
         for j in raw:
             status = (j.get('status') or '').lower()
-            if status in COMPLETED_STATUSES:
-                continue
-            if j.get('resourceId'):
-                continue
-            if not is_valid_category(j):
-                print(f"[UNASSIGNED] Skipping category: {j.get('categoryName')}")
-                continue
+            if status in COMPLETED_STATUSES: continue
+            if j.get('resourceId'): continue
+            if not is_valid_category(j): continue
             jobs.append(format_job(j))
 
         order = {'breach': 0, 'urgent': 1, 'ok': 2}
         jobs.sort(key=lambda j: (order.get(j['priority'], 2), j['sla'] or '9999'))
-        print(f"[UNASSIGNED] Returning {len(jobs)} jobs")
+        print(f"[UNASSIGNED] Returning {len(jobs)} unassigned allocation jobs")
         return jsonify({'jobs': jobs, 'total': len(jobs)})
 
     except Exception as e:
@@ -220,18 +213,23 @@ def get_unassigned_jobs():
 @app.route('/api/jobs/sample')
 def get_sample_job():
     try:
-        two_weeks_ago = (datetime.now() - timedelta(days=14)).strftime('%Y-%m-%dT00:00:00')
-        today_end     = datetime.now().strftime('%Y-%m-%dT23:59:59')
+        ninety_days_ago = (datetime.now() - timedelta(days=90)).strftime('%Y-%m-%dT00:00:00')
+        now_str = datetime.now().strftime('%Y-%m-%dT23:59:59')
         data = bc_get('/jobs', {
-            'CreatedAtFrom': two_weeks_ago,
-            'CreatedAtTo':   today_end,
-            'pageSize':      5,
+            'StatusModifiedAtFrom': ninety_days_ago,
+            'StatusModifiedAtTo':   now_str,
+            'pageSize': 100,
         })
         raw = data if isinstance(data, list) else (data.get('items') or [])
-        # Return categories and sample
-        cats = list(set(j.get('categoryName','none') for j in raw))
+        cats = {}
+        for j in raw: cats[j.get('categoryName','none')] = cats.get(j.get('categoryName','none'),0)+1
         unassigned = [j for j in raw if not j.get('resourceId') and (j.get('status') or '').lower() not in COMPLETED_STATUSES]
-        return jsonify({'categories': cats, 'unassigned_count': len(unassigned), 'sample': raw[:2]})
+        return jsonify({
+            'total_fetched': len(raw),
+            'categories': cats,
+            'unassigned_count': len(unassigned),
+            'unassigned_sample': [{'id':j.get('id'),'status':j.get('status'),'category':j.get('categoryName'),'resourceId':j.get('resourceId')} for j in unassigned[:10]]
+        })
     except Exception as e:
         return jsonify({'error': str(e)}), 500
 
@@ -239,31 +237,20 @@ def get_sample_job():
 def get_tomorrow_schedule():
     try:
         tomorrow = datetime.now() + timedelta(days=1)
-        tomorrow_start = tomorrow.strftime('%Y-%m-%dT00:00:00')
-        tomorrow_end   = tomorrow.strftime('%Y-%m-%dT23:59:59')
-
-        data = bc_get('/jobs', {
-            'plannedAtFrom': tomorrow_start,
-            'plannedAtTo':   tomorrow_end,
-            'pageSize':      1000,
+        raw = fetch_jobs_paged({
+            'plannedAtFrom': tomorrow.strftime('%Y-%m-%dT00:00:00'),
+            'plannedAtTo':   tomorrow.strftime('%Y-%m-%dT23:59:59'),
         })
-
-        raw = data if isinstance(data, list) else (data.get('items') or [])
-        print(f"[TOMORROW] Got {len(raw)} raw jobs")
+        print(f"[TOMORROW] Got {len(raw)} jobs")
 
         by_engineer = {}
         unassigned_tomorrow = []
-
         for j in raw:
-            status = (j.get('status') or '').lower()
-            if status in COMPLETED_STATUSES:
-                continue
+            if (j.get('status') or '').lower() in COMPLETED_STATUSES: continue
             job = format_job(j)
             rid = job['resourceId']
             if rid:
-                if rid not in by_engineer:
-                    by_engineer[rid] = []
-                by_engineer[rid].append(job)
+                by_engineer.setdefault(rid, []).append(job)
             else:
                 unassigned_tomorrow.append(job)
 
@@ -275,7 +262,6 @@ def get_tomorrow_schedule():
             'unassigned': unassigned_tomorrow,
             'date': tomorrow.strftime('%Y-%m-%d')
         })
-
     except Exception as e:
         print(f"[TOMORROW] ERROR: {e}")
         return jsonify({'error': str(e)}), 500
@@ -284,7 +270,7 @@ def get_tomorrow_schedule():
 def assign_job(job_id):
     try:
         body = request.get_json()
-        resource_id   = body.get('resourceId')
+        resource_id = body.get('resourceId')
         planned_start = body.get('plannedStart')
         if not resource_id:
             return jsonify({'error': 'resourceId required'}), 400
@@ -294,7 +280,6 @@ def assign_job(job_id):
         result = bc_post(f'/jobs/{job_id}/assign', payload)
         return jsonify({'success': True, 'result': result})
     except Exception as e:
-        print(f"[ASSIGN] ERROR: {e}")
         return jsonify({'error': str(e)}), 500
 
 if __name__ == '__main__':
