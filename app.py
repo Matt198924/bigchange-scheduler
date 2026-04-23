@@ -147,15 +147,18 @@ def get_engineers():
 @app.route('/api/jobs/unassigned')
 def get_unassigned_jobs():
     try:
-        ninety_days_ago = (datetime.now() - timedelta(days=90)).strftime('%Y-%m-%dT00:00:00')
-        now_str = (datetime.now() + timedelta(days=30)).strftime('%Y-%m-%dT23:59:59')
+        # Fetch all non-completed jobs and filter by category
+        # The API requires a date range, so use StatusModifiedAt with a very wide window
+        # to catch everything that isn't completed
+        wide_from = '2020-01-01T00:00:00'
+        wide_to   = '2030-12-31T23:59:59'
 
         raw = fetch_paged({
-            'StatusModifiedAtFrom': ninety_days_ago,
-            'StatusModifiedAtTo':   now_str,
+            'StatusModifiedAtFrom': wide_from,
+            'StatusModifiedAtTo':   wide_to,
         })
 
-        print(f"[UNASSIGNED] Total: {len(raw)}")
+        print(f"[UNASSIGNED] Total fetched: {len(raw)}")
         cats = {}
         for j in raw:
             c = j.get('categoryName') or 'none'
@@ -166,6 +169,7 @@ def get_unassigned_jobs():
         for j in raw:
             status = (j.get('status') or '').lower()
             if status in COMPLETED_STATUSES: continue
+            if status == 'cancelled': continue
             if j.get('resourceId'): continue
             if not is_valid_category(j): continue
             jobs.append(format_job(j))
