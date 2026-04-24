@@ -231,6 +231,9 @@ async function loadAll() {
   setBadge('loading', 'Loading...');
   try {
     await Promise.all([loadJobs(), loadEngineers(), loadSchedule(), loadTodaySchedule()]);
+    // Re-render timelines now all data is loaded so gap blocks reflect job availability
+    renderTimeline();
+    renderTodayTimeline();
     setBadge('ok', 'Live');
   } catch(e) {
     setBadge('error', 'Error');
