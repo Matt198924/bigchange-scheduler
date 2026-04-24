@@ -132,12 +132,31 @@ body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; b
 
 <div class="metrics">
   <div class="metric"><div class="m-label">Unassigned jobs</div><div class="m-value red" id="m-unassigned">—</div></div>
+  <div class="metric"><div class="m-label">Engineers working today</div><div class="m-value blue" id="m-today-engs">—</div></div>
   <div class="metric"><div class="m-label">Engineers scheduled tomorrow</div><div class="m-value blue" id="m-engs">—</div></div>
   <div class="metric"><div class="m-label">Jobs scheduled tomorrow</div><div class="m-value blue" id="m-tomorrow">—</div></div>
   <div class="metric"><div class="m-label">Gaps available</div><div class="m-value green" id="m-gaps">—</div></div>
   <div class="metric"><div class="m-label">Assigned today</div><div class="m-value" id="m-done">0</div></div>
 </div>
 
+<div style="display:flex;gap:0;border-bottom:1px solid #e5e5e3;background:#fff;padding:0 1.5rem;">
+  <button id="tab-today-btn" onclick="switchView('today')" style="padding:10px 20px;font-size:13px;border:none;background:none;cursor:pointer;color:#888;border-bottom:2px solid transparent;margin-bottom:-1px;">Today's live schedule</button>
+  <button id="tab-tomorrow-btn" onclick="switchView('tomorrow')" style="padding:10px 20px;font-size:13px;border:none;background:none;cursor:pointer;color:#185FA5;border-bottom:2px solid #185FA5;font-weight:500;margin-bottom:-1px;">Tomorrow — assign jobs</button>
+</div>
+
+<div id="view-today" style="display:none;">
+  <div style="display:grid;grid-template-columns:160px 1fr;height:calc(100vh - 152px);">
+    <div style="background:#fff;border-right:1px solid #e5e5e3;overflow-y:auto;">
+      <div style="padding:10px 14px;border-bottom:1px solid #e5e5e3;font-size:12px;font-weight:600;color:#888;text-transform:uppercase;letter-spacing:0.05em;">Engineers</div>
+      <div id="today-eng-list"></div>
+    </div>
+    <div style="overflow-y:auto;background:#f9f9f7;" id="today-timeline">
+      <div style="padding:3rem;text-align:center;color:#aaa;font-size:13px;">Loading today's schedule...</div>
+    </div>
+  </div>
+</div>
+
+<div id="view-tomorrow" style="display:block;">
 <div class="layout">
   <!-- Left: unassigned jobs -->
   <div class="left">
@@ -163,6 +182,8 @@ body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; b
     </div>
   </div>
 </div>
+
+</div><!-- end view-tomorrow -->
 
 <!-- Gap popup -->
 <div class="gap-popup" id="gap-popup" style="display:none;">
@@ -209,7 +230,7 @@ function setBadge(state, text) {
 async function loadAll() {
   setBadge('loading', 'Loading...');
   try {
-    await Promise.all([loadJobs(), loadEngineers(), loadSchedule()]);
+    await Promise.all([loadJobs(), loadEngineers(), loadSchedule(), loadTodaySchedule()]);
     setBadge('ok', 'Live');
   } catch(e) {
     setBadge('error', 'Error');
@@ -549,6 +570,105 @@ async function assignJob(jobId, engId, startMins, jobRef, engName) {
   } catch(e) {
     showToast('Failed: ' + e.message);
   }
+}
+
+// ── VIEW SWITCHING ──────────────────────────────────────
+let currentView = 'tomorrow';
+let todaySchedule = {}, todayEngNames = {};
+
+function switchView(view) {
+  currentView = view;
+  document.getElementById('view-today').style.display = view === 'today' ? 'block' : 'none';
+  document.getElementById('view-tomorrow').style.display = view === 'tomorrow' ? 'block' : 'none';
+  document.getElementById('tab-today-btn').style.cssText = view === 'today'
+    ? 'padding:10px 20px;font-size:13px;border:none;background:none;cursor:pointer;color:#185FA5;border-bottom:2px solid #185FA5;font-weight:500;margin-bottom:-1px;'
+    : 'padding:10px 20px;font-size:13px;border:none;background:none;cursor:pointer;color:#888;border-bottom:2px solid transparent;margin-bottom:-1px;';
+  document.getElementById('tab-tomorrow-btn').style.cssText = view === 'tomorrow'
+    ? 'padding:10px 20px;font-size:13px;border:none;background:none;cursor:pointer;color:#185FA5;border-bottom:2px solid #185FA5;font-weight:500;margin-bottom:-1px;'
+    : 'padding:10px 20px;font-size:13px;border:none;background:none;cursor:pointer;color:#888;border-bottom:2px solid transparent;margin-bottom:-1px;';
+}
+
+async function loadTodaySchedule() {
+  const data = await api('/api/schedule/today');
+  todaySchedule = data.byEngineer || {};
+  todayEngNames = data.engNames || {};
+  const engCount = Object.keys(todaySchedule).length;
+  document.getElementById('m-today-engs').textContent = engCount;
+  renderTodayTimeline();
+}
+
+function renderTodayTimeline() {
+  const engIds = Object.keys(todaySchedule)
+    .filter(id => (todaySchedule[id]||[]).length > 0)
+    .sort((a,b) => (todayEngNames[a]||'').localeCompare(todayEngNames[b]||''));
+
+  if (!engIds.length) {
+    document.getElementById('today-timeline').innerHTML = '<div style="padding:3rem;text-align:center;color:#aaa;">No jobs scheduled today</div>';
+    return;
+  }
+
+  const now = new Date();
+  const nowMins = now.getHours() * 60 + now.getMinutes();
+  const nowPct = ((nowMins - DAY_START * 60) / DAY_MINS * 100).toFixed(2);
+
+  const ticksHtml = HOURS.map(h => {
+    const label = h === 12 ? '12pm' : h < 12 ? h + 'am' : (h-12) + 'pm';
+    return `<div class="hour-tick">${label}</div>`;
+  }).join('');
+
+  // Eng list
+  document.getElementById('today-eng-list').innerHTML = engIds.map(id => {
+    const name = todayEngNames[id] || ('Eng ' + id);
+    const jobs = todaySchedule[id] || [];
+    const done = jobs.filter(j => ['completedok','completedwithissues'].includes((j.status||'').toLowerCase())).length;
+    return `<div style="padding:8px 10px;border-bottom:1px solid #f0f0ee;font-size:12px;">
+      <div style="font-weight:500;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">${name}</div>
+      <div style="font-size:10px;color:#aaa;">${done}/${jobs.length} done</div>
+    </div>`;
+  }).join('');
+
+  const rowsHtml = engIds.map(engId => {
+    const name = todayEngNames[engId] || ('Eng ' + engId);
+    const engJobs = (todaySchedule[engId] || []).sort((a,b) => (a.startTime||'') > (b.startTime||'') ? 1 : -1);
+
+    const blocks = engJobs.map(j => {
+      const s = timeToMins(j.startTime);
+      const e = timeToMins(j.endTime);
+      if (s < 0 || e <= s) return '';
+      const cs = Math.max(s, DAY_START*60);
+      const ce = Math.min(e, DAY_END*60);
+      if (ce <= cs) return '';
+      const status = (j.status||'').toLowerCase();
+      const isDone = status === 'completedok' || status === 'completedwithissues';
+      const isActive = status === 'started' || status === 'ontheway';
+      const bg = isDone ? '#C0DD97' : isActive ? '#FFD080' : '#B5D4F4';
+      const border = isDone ? '#639922' : isActive ? '#BA7517' : '#378ADD';
+      return `<div class="job-block" style="left:${pct(cs)};width:${widthPct(cs,ce)};background:${bg};border:1px solid ${border};" title="${j.client} — ${j.status}">
+        <span class="job-block-label" style="color:#1a1a1a;">${j.client||j.desc}</span>
+      </div>`;
+    }).join('');
+
+    return `<div class="eng-row">
+      <div class="eng-label" style="font-size:11px;">
+        <div class="eng-name" style="font-size:11px;">${name}</div>
+      </div>
+      <div class="track-wrap">
+        <div class="track">
+          ${blocks}
+          <div style="position:absolute;top:0;bottom:0;left:${nowPct}%;width:2px;background:#E24B4A;z-index:5;" title="Now"></div>
+        </div>
+      </div>
+    </div>`;
+  }).join('');
+
+  document.getElementById('today-timeline').innerHTML = `
+    <div class="hour-header">
+      <div class="hour-header-inner">
+        <div class="hour-header-label">Engineer</div>
+        <div class="hour-ticks">${ticksHtml}</div>
+      </div>
+    </div>
+    ${rowsHtml}`;
 }
 
 function showToast(msg) {
