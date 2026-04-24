@@ -91,11 +91,13 @@ def format_job(j):
         'category':     j.get('categoryName') or '',
         'resourceId':   str(j.get('resourceId') or ''),
         'resourceName': j.get('resourceName') or '',
-        'startTime':    j.get('actualStartAt') or j.get('plannedStartAt'),
-        'endTime':      j.get('actualEndAt') or j.get('plannedEndAt'),
-        'durationMins': get_duration_minutes(j),
-        'lat':          loc.get('latitude'),
-        'lng':          loc.get('longitude'),
+        'startTime':       j.get('actualStartAt') or j.get('plannedStartAt'),
+        'endTime':         j.get('actualEndAt') or j.get('plannedEndAt'),
+        'actualStart':     j.get('actualStartAt'),
+        'statusModifiedAt': j.get('statusModifiedAt'),
+        'durationMins':    get_duration_minutes(j),
+        'lat':             loc.get('latitude'),
+        'lng':             loc.get('longitude'),
     }
 
 def fetch_paged(params):
