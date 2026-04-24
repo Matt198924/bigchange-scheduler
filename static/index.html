@@ -284,18 +284,84 @@ function renderJobList() {
 
 function selectJob(id) {
   selectedJob = jobs.find(j => j.id === id) || null;
+  selectedJobConstraints = [];
   renderJobList();
   const pill = document.getElementById('selected-pill');
   const hint = document.getElementById('timeline-hint');
   if (selectedJob) {
     pill.textContent = selectedJob.ref + ' — ' + selectedJob.durationMins + ' min';
     pill.style.display = 'inline-block';
-    hint.textContent = 'Click a green gap to assign this job';
+    hint.textContent = 'Fetching constraints...';
+    // Fetch constraints then re-render
+    fetchConstraints(id).then(constraints => {
+      selectedJobConstraints = constraints;
+      const labels = describeConstraints(constraints);
+      hint.textContent = labels.length
+        ? 'Constraints: ' + labels.join(' · ')
+        : 'Click a green gap to assign this job';
+      renderTimeline();
+      if (currentView === 'today') renderTodayTimeline();
+    });
   } else {
     pill.style.display = 'none';
     hint.textContent = 'Select a job on the left, then click a gap to assign';
+    renderTimeline();
+    if (currentView === 'today') renderTodayTimeline();
   }
-  renderTimeline();
+}
+
+async function fetchConstraints(jobId) {
+  try {
+    const data = await api(`/api/jobs/${jobId}/constraints`);
+    return data.constraints || [];
+  } catch(e) {
+    console.error('Failed to fetch constraints:', e);
+    return [];
+  }
+}
+
+function describeConstraints(constraints) {
+  return constraints.map(c => {
+    const t = c.type || '';
+    const at = c.constraintAt ? formatConstraintTime(c.constraintAt) : '';
+    if (t === 'jobMustStartAfter')   return `Start after ${at}`;
+    if (t === 'jobMustStartBefore')  return `Start before ${at}`;
+    if (t === 'jobMustCompleteBefore') return `Complete before ${at}`;
+    if (t === 'jobResource')         return `Specific engineer required`;
+    if (t === 'jobResourceGroup')    return `Specific group required`;
+    if (t === 'jobRequiresResourceSkill') return `Skill required`;
+    return t;
+  }).filter(Boolean);
+}
+
+function formatConstraintTime(dt) {
+  try {
+    const d = new Date(dt);
+    return d.toLocaleTimeString('en-GB', {hour:'2-digit', minute:'2-digit'});
+  } catch(e) { return dt; }
+}
+
+function gapPassesConstraints(gapStartMins, gapEndMins, durationMins, constraints) {
+  for (const c of constraints) {
+    const t = c.type || '';
+    if (!c.constraintAt) continue;
+    const constraintMins = timeToMins(c.constraintAt);
+    if (constraintMins < 0) continue;
+
+    if (t === 'jobMustStartAfter') {
+      // Job must start AFTER constraintAt — gap must start after this time
+      if (gapStartMins < constraintMins) return false;
+    }
+    if (t === 'jobMustStartBefore') {
+      // Job must start BEFORE constraintAt
+      if (gapStartMins >= constraintMins) return false;
+    }
+    if (t === 'jobMustCompleteBefore') {
+      // Job must complete before constraintAt — start + duration must be before this
+      if (gapStartMins + durationMins > constraintMins) return false;
+    }
+  }
+  return true;
 }
 
 // ── TIMELINE ────────────────────────────────────────────
@@ -330,7 +396,7 @@ function haversineKm(lat1, lng1, lat2, lng2) {
   if (!lat1 || !lng1 || !lat2 || !lng2) return null;
   const R = 6371;
   const dLat = (lat2 - lat1) * Math.PI / 180;
-  const dLng = (lat2 - lng1) * Math.PI / 180; // fix: was lng2-lng1
+  const dLng = (lng2 - lng1) * Math.PI / 180;
   const a = Math.sin(dLat/2)**2 + Math.cos(lat1*Math.PI/180) * Math.cos(lat2*Math.PI/180) * Math.sin(dLng/2)**2;
   return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a));
 }
@@ -493,7 +559,10 @@ function clickGap(engId, engName, startMins, endMins, gapMins, travelMins, event
   const gap = { startMins, endMins, gapMins, travelMins, day };
   event.stopPropagation();
 
-  const fittingJobs = jobs.filter(j => j.durationMins <= gapMins);
+  const fittingJobs = jobs.filter(j =>
+    j.durationMins <= gapMins &&
+    gapPassesConstraints(startMins, endMins, j.durationMins, selectedJobConstraints)
+  );
 
   const popup = document.getElementById('gap-popup');
   document.getElementById('popup-title').textContent =
@@ -509,7 +578,7 @@ function clickGap(engId, engName, startMins, endMins, gapMins, travelMins, event
     document.getElementById('popup-body').innerHTML = fittingJobs.slice(0, 10).map(j => `
       <div class="fitting-job">
         <div class="fitting-job-info">
-          <div class="fitting-job-ref">${j.ref}</div>
+          <div class="fitting-job-ref">${j.ref}${j.id === (selectedJob||{}).id ? ' ★' : ''}</div>
           <div class="fitting-job-desc">${j.desc}</div>
           <div class="fitting-job-sub">${j.client}</div>
         </div>
