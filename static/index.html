@@ -463,10 +463,32 @@ document.addEventListener('click', function(e) {
 });
 
 function showGapPopup(engId, engName, g, day, e) {
-  const fittingJobs = jobs.filter(j =>
-    j.durationMins <= g.gapMins &&
-    constraintPasses(g.startMins, g.endMins, j.durationMins, selectedConstraints)
-  );
+  // Get surrounding job locations for proximity check
+  const sched = day === 'today' ? todaySchedule : schedule;
+  const engJobs = (sched[engId] || [])
+    .map(j => ({ start: timeToMins(j.startTime), end: timeToMins(j.endTime), lat: j.lat, lng: j.lng }))
+    .filter(j => j.start >= 0)
+    .sort((a,b) => a.start - b.start);
+
+  // Find the job before and after the gap
+  const prevJob = engJobs.filter(j => j.end <= g.startMins).pop() || null;
+  const nextJob = engJobs.find(j => j.start >= g.endMins) || null;
+
+  const MAX_TRAVEL = 45; // minutes
+
+  const fittingJobs = jobs.filter(j => {
+    if (j.durationMins > g.gapMins) return false;
+    if (!constraintPasses(g.startMins, g.endMins, j.durationMins, selectedConstraints)) return false;
+    // Check proximity to surrounding jobs — must be within 45 min drive of at least one
+    if (!j.lat || !j.lng) return true; // no coords, include anyway
+    const travelFromPrev = prevJob && prevJob.lat ? estTravelMins(prevJob.lat, prevJob.lng, j.lat, j.lng) : null;
+    const travelToNext   = nextJob && nextJob.lat ? estTravelMins(j.lat, j.lng, nextJob.lat, nextJob.lng) : null;
+    // If we have at least one reference point, check it's within 45 mins
+    if (travelFromPrev !== null && travelToNext !== null) return travelFromPrev <= MAX_TRAVEL && travelToNext <= MAX_TRAVEL;
+    if (travelFromPrev !== null) return travelFromPrev <= MAX_TRAVEL;
+    if (travelToNext   !== null) return travelToNext   <= MAX_TRAVEL;
+    return true; // no surrounding jobs to compare, include
+  });
 
   document.getElementById('popup-title').textContent = escHtml(engName) + ' — ' + fmtMins(g.startMins) + ' to ' + fmtMins(g.endMins);
   document.getElementById('popup-sub').textContent = g.gapMins + ' min usable' + (g.travelMins > 0 ? ' (incl. ~' + g.travelMins + 'min travel)' : '') + ' · ' + fittingJobs.length + ' job' + (fittingJobs.length!==1?'s':'') + ' fit';
@@ -485,17 +507,20 @@ function showGapPopup(engId, engName, g, day, e) {
       if (selectedJob && b.id===selectedJob.id) return 1;
       return b.durationMins - a.durationMins;
     });
-    document.getElementById('popup-body').innerHTML = sorted.slice(0,10).map(j =>
-      '<div class="fitting-job' + (selectedJob&&j.id===selectedJob.id?' selected-job':'') + '">'
-      + '<div class="fitting-job-info">'
-      + '<div class="fitting-job-ref">' + escHtml(j.ref) + '</div>'
-      + '<div class="fitting-job-desc">' + escHtml(j.desc) + '</div>'
-      + '<div class="fitting-job-sub">' + escHtml(j.client) + '</div>'
-      + '</div>'
-      + '<span class="fitting-job-dur">' + j.durationMins + 'min</span>'
-      + '<button class="btn-assign" data-jobid="' + j.id + '" data-jobref="' + escHtml(j.ref) + '" data-engid="' + engId + '" data-engname="' + escHtml(engName) + '" data-start="' + g.startMins + '" data-day="' + day + '">Assign</button>'
-      + '</div>'
-    ).join('');
+    document.getElementById('popup-body').innerHTML = sorted.slice(0,10).map(j => {
+      const travelFrom = prevJob && prevJob.lat && j.lat ? estTravelMins(prevJob.lat, prevJob.lng, j.lat, j.lng) : null;
+      const travelTo   = nextJob && nextJob.lat && j.lat ? estTravelMins(j.lat, j.lng, nextJob.lat, nextJob.lng) : null;
+      const travelInfo = travelFrom !== null ? '~' + travelFrom + 'min from prev' + (travelTo !== null ? ', ~' + travelTo + 'min to next' : '') : '';
+      return '<div class="fitting-job' + (selectedJob&&j.id===selectedJob.id?' selected-job':'') + '">'
+        + '<div class="fitting-job-info">'
+        + '<div class="fitting-job-ref">' + escHtml(j.ref) + '</div>'
+        + '<div class="fitting-job-desc">' + escHtml(j.desc) + '</div>'
+        + '<div class="fitting-job-sub">' + escHtml(j.client) + (travelInfo ? ' · <span style="color:#854F0B;">&#128664; ' + travelInfo + '</span>' : '') + '</div>'
+        + '</div>'
+        + '<span class="fitting-job-dur">' + j.durationMins + 'min</span>'
+        + '<button class="btn-assign" data-jobid="' + j.id + '" data-jobref="' + escHtml(j.ref) + '" data-engid="' + engId + '" data-engname="' + escHtml(engName) + '" data-start="' + g.startMins + '" data-day="' + day + '">Assign</button>'
+        + '</div>';
+    }).join('');
   }
 
   const x = Math.min(e.clientX + 10, window.innerWidth - 360);
