@@ -8,16 +8,13 @@
 * { box-sizing: border-box; margin: 0; padding: 0; }
 body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; background: #f5f5f3; color: #1a1a1a; font-size: 14px; }
 
-/* Top bar */
 .topbar { background: #185FA5; padding: 0 1.5rem; height: 52px; display: flex; align-items: center; justify-content: space-between; }
 .logo { font-size: 15px; font-weight: 600; color: #fff; }
 .topbar-sub { font-size: 12px; color: rgba(255,255,255,0.7); margin-left: 12px; }
 .conn-badge { font-size: 11px; padding: 3px 10px; border-radius: 20px; background: rgba(255,255,255,0.2); color: #fff; }
 .conn-badge.error { background: #E24B4A; }
 .btn-refresh { padding: 5px 12px; border: 1px solid rgba(255,255,255,0.4); border-radius: 7px; background: transparent; color: #fff; font-size: 12px; cursor: pointer; }
-.btn-refresh:hover { background: rgba(255,255,255,0.1); }
 
-/* Metrics */
 .metrics { display: flex; gap: 1px; background: #e5e5e3; border-bottom: 1px solid #e5e5e3; }
 .metric { flex: 1; background: #fff; padding: 12px 1rem; text-align: center; }
 .metric .m-label { font-size: 11px; color: #888; margin-bottom: 3px; }
@@ -26,80 +23,65 @@ body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; b
 .metric .m-value.green { color: #3B6D11; }
 .metric .m-value.red { color: #A32D2D; }
 
-/* Main layout */
-.layout { display: grid; grid-template-columns: 300px 1fr; height: calc(100vh - 108px); }
+.tabs { display: flex; background: #fff; border-bottom: 1px solid #e5e5e3; padding: 0 1rem; }
+.tab { padding: 10px 16px; font-size: 13px; border: none; background: none; cursor: pointer; color: #888; border-bottom: 2px solid transparent; margin-bottom: -1px; }
+.tab.active { color: #185FA5; border-bottom-color: #185FA5; font-weight: 500; }
 
-/* Left panel - unassigned jobs */
+.layout { display: grid; grid-template-columns: 280px 1fr; height: calc(100vh - 140px); }
 .left { background: #fff; border-right: 1px solid #e5e5e3; display: flex; flex-direction: column; overflow: hidden; }
 .panel-head { padding: 10px 14px; border-bottom: 1px solid #e5e5e3; display: flex; align-items: center; justify-content: space-between; flex-shrink: 0; }
 .panel-title { font-size: 12px; font-weight: 600; color: #888; text-transform: uppercase; letter-spacing: 0.05em; }
 .panel-count { font-size: 12px; color: #aaa; }
 .jobs-scroll { flex: 1; overflow-y: auto; }
-.job-item { padding: 10px 14px; border-bottom: 1px solid #f0f0ee; cursor: pointer; transition: background 0.1s; }
+.job-item { padding: 10px 14px; border-bottom: 1px solid #f0f0ee; cursor: pointer; border-left: 3px solid transparent; }
 .job-item:hover { background: #fafaf9; }
-.job-item.selected { background: #EBF4FF; border-left: 3px solid #185FA5; }
+.job-item.selected { background: #EBF4FF; border-left-color: #185FA5; }
 .job-ref { font-size: 11px; font-weight: 600; color: #185FA5; margin-bottom: 2px; }
 .job-desc { font-size: 12px; font-weight: 500; margin-bottom: 2px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .job-client { font-size: 11px; color: #888; margin-bottom: 5px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .job-tags { display: flex; gap: 5px; align-items: center; }
-.tag { font-size: 10px; padding: 2px 6px; border-radius: 4px; }
-.tag-dur { background: #E6F1FB; color: #185FA5; }
-.tag-type { background: #f0f0ee; color: #666; }
-.tag-cat { background: #EAF3DE; color: #3B6D11; font-size: 10px; }
+.tag-dur { font-size: 10px; padding: 2px 6px; border-radius: 4px; background: #E6F1FB; color: #185FA5; }
+.tag-type { font-size: 10px; padding: 2px 6px; border-radius: 4px; background: #f0f0ee; color: #666; }
 
-/* Right panel - timeline */
 .right { display: flex; flex-direction: column; overflow: hidden; }
-.timeline-controls { padding: 10px 14px; background: #fff; border-bottom: 1px solid #e5e5e3; display: flex; align-items: center; gap: 12px; flex-shrink: 0; }
-.timeline-controls h2 { font-size: 13px; font-weight: 600; }
-.selected-job-pill { font-size: 11px; padding: 3px 10px; border-radius: 20px; background: #185FA5; color: #fff; }
+.timeline-controls { padding: 8px 14px; background: #fff; border-bottom: 1px solid #e5e5e3; display: flex; align-items: center; gap: 10px; flex-shrink: 0; min-height: 40px; }
+.selected-pill { font-size: 11px; padding: 3px 10px; border-radius: 20px; background: #185FA5; color: #fff; }
 .hint { font-size: 11px; color: #aaa; margin-left: auto; }
 
-.timeline-scroll { flex: 1; overflow-y: auto; padding: 0; }
+.timeline-scroll { flex: 1; overflow-y: auto; overflow-x: hidden; }
 
-/* Engineer timeline rows */
-.eng-row { display: grid; grid-template-columns: 160px 1fr; border-bottom: 1px solid #f0f0ee; min-height: 52px; }
-.eng-row:hover { background: #fafaf9; }
-.eng-label { padding: 8px 10px; border-right: 1px solid #f0f0ee; display: flex; flex-direction: column; justify-content: center; background: #fff; position: sticky; left: 0; z-index: 2; }
-.eng-name { font-size: 12px; font-weight: 500; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-.eng-meta { font-size: 10px; color: #aaa; margin-top: 1px; }
-.trainee-dot { display: inline-block; width: 6px; height: 6px; border-radius: 50%; background: #BA7517; margin-right: 4px; }
-
-/* The actual timeline track */
-.track-wrap { position: relative; background: #f9f9f7; display: flex; align-items: center; padding: 0 8px; }
-.track { position: relative; width: 100%; height: 32px; background: #f0f0ee; border-radius: 4px; overflow: visible; }
-
-/* Hour markers */
-.hour-markers { display: grid; position: absolute; top: 0; left: 8px; right: 8px; height: 100%; pointer-events: none; }
-.hour-mark { border-right: 1px solid #e8e8e6; }
-
-/* Job blocks on timeline */
-.job-block { position: absolute; top: 2px; height: 28px; border-radius: 3px; display: flex; align-items: center; padding: 0 5px; overflow: hidden; cursor: default; z-index: 1; }
-.job-block.scheduled { background: #B5D4F4; border: 1px solid #378ADD; }
-.job-block-label { font-size: 10px; font-weight: 500; color: #0C447C; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-
-/* Gap blocks - clickable */
-.gap-block { position: absolute; top: 2px; height: 28px; border-radius: 3px; cursor: pointer; z-index: 1; transition: all 0.15s; display: flex; align-items: center; justify-content: center; }
-.gap-block.empty { background: rgba(99,153,34,0.12); border: 1px dashed #639922; }
-.gap-block.empty:hover { background: rgba(99,153,34,0.25); border-color: #3B6D11; }
-.gap-block.fits { background: rgba(24,95,165,0.15); border: 2px solid #185FA5; }
-.gap-block.fits:hover { background: rgba(24,95,165,0.28); }
-.gap-block.no-fit { background: rgba(99,153,34,0.08); border: 1px dashed #ccc; }
-.gap-label { font-size: 9px; color: #3B6D11; font-weight: 500; white-space: nowrap; overflow: hidden; padding: 0 4px; }
-.gap-block.fits .gap-label { color: #185FA5; }
-
-/* Hour header */
-.hour-header { display: grid; background: #fff; border-bottom: 1px solid #e5e5e3; position: sticky; top: 0; z-index: 10; }
-.hour-header-inner { display: grid; grid-template-columns: 160px 1fr; }
+.hour-header { display: grid; grid-template-columns: 160px 1fr; background: #fff; border-bottom: 1px solid #e5e5e3; position: sticky; top: 0; z-index: 10; }
 .hour-header-label { padding: 4px 10px; font-size: 10px; color: #aaa; border-right: 1px solid #f0f0ee; }
-.hour-ticks { display: flex; padding: 0 8px; }
-.hour-tick { flex: 1; font-size: 10px; color: #aaa; text-align: left; padding: 4px 0; border-left: 1px solid #f0f0ee; padding-left: 3px; }
+.hour-ticks { display: flex; }
+.hour-tick { flex: 1; font-size: 10px; color: #aaa; padding: 4px 0 4px 3px; border-left: 1px solid #f0f0ee; }
 
-/* Gap popup */
-.gap-popup { position: fixed; background: #fff; border: 1px solid #e5e5e3; border-radius: 10px; box-shadow: 0 4px 20px rgba(0,0,0,0.12); padding: 16px; width: 320px; z-index: 1000; max-height: 400px; overflow-y: auto; }
+.eng-row { display: grid; grid-template-columns: 160px 1fr; border-bottom: 1px solid #f0f0ee; min-height: 50px; }
+.eng-label { padding: 8px 10px; border-right: 1px solid #f0f0ee; background: #fff; display: flex; flex-direction: column; justify-content: center; }
+.eng-name { font-size: 12px; font-weight: 500; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.eng-meta { font-size: 10px; color: #aaa; margin-top: 2px; }
+
+.track-wrap { position: relative; background: #f9f9f7; display: flex; align-items: center; padding: 0 8px; }
+.track { position: relative; width: 100%; height: 32px; background: #f0f0ee; border-radius: 4px; }
+
+.job-block { position: absolute; top: 2px; height: 28px; border-radius: 3px; display: flex; align-items: center; padding: 0 5px; overflow: hidden; z-index: 2; }
+.job-block-label { font-size: 10px; font-weight: 500; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+
+.gap-block { position: absolute; top: 2px; height: 28px; border-radius: 3px; z-index: 1; display: flex; align-items: center; justify-content: center; cursor: pointer; }
+.gap-block:hover { opacity: 0.8; }
+.gap-empty { background: rgba(99,153,34,0.15); border: 1px dashed #639922; }
+.gap-fits { background: rgba(24,95,165,0.2); border: 2px solid #185FA5; }
+.gap-nofit { background: rgba(200,200,200,0.1); border: 1px dashed #ccc; }
+.gap-label { font-size: 9px; font-weight: 500; white-space: nowrap; overflow: hidden; padding: 0 4px; color: #3B6D11; }
+.gap-fits .gap-label { color: #185FA5; }
+
+.now-line { position: absolute; top: 0; bottom: 0; width: 2px; background: #E24B4A; z-index: 5; pointer-events: none; }
+
+.gap-popup { position: fixed; background: #fff; border: 1px solid #e5e5e3; border-radius: 10px; box-shadow: 0 4px 20px rgba(0,0,0,0.15); padding: 16px; width: 340px; z-index: 1000; max-height: 420px; overflow-y: auto; }
 .gap-popup h3 { font-size: 13px; font-weight: 600; margin-bottom: 4px; }
-.gap-popup .sub { font-size: 12px; color: #888; margin-bottom: 12px; }
-.gap-popup-close { position: absolute; top: 10px; right: 12px; font-size: 16px; cursor: pointer; color: #aaa; border: none; background: none; }
+.gap-popup-sub { font-size: 12px; color: #888; margin-bottom: 12px; }
+.gap-popup-close { position: absolute; top: 10px; right: 12px; font-size: 18px; cursor: pointer; color: #aaa; border: none; background: none; line-height: 1; }
 .fitting-job { padding: 8px 10px; border: 1px solid #e5e5e3; border-radius: 7px; margin-bottom: 6px; display: flex; align-items: center; gap: 8px; }
+.fitting-job.selected-job { border-color: #185FA5; background: #f0f6ff; }
 .fitting-job-info { flex: 1; min-width: 0; }
 .fitting-job-ref { font-size: 11px; font-weight: 600; color: #185FA5; }
 .fitting-job-desc { font-size: 12px; font-weight: 500; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
@@ -107,11 +89,12 @@ body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; b
 .fitting-job-dur { font-size: 11px; padding: 2px 7px; border-radius: 20px; background: #E6F1FB; color: #185FA5; flex-shrink: 0; }
 .btn-assign { padding: 4px 10px; border-radius: 6px; border: 1px solid #185FA5; background: #185FA5; color: #fff; font-size: 11px; cursor: pointer; flex-shrink: 0; }
 .btn-assign:hover { background: #0C447C; }
-.no-fitting { font-size: 12px; color: #aaa; text-align: center; padding: 12px 0; }
+.no-fitting { font-size: 12px; color: #aaa; text-align: center; padding: 16px 0; }
+.constraint-info { font-size: 11px; color: #854F0B; background: #FAEEDA; padding: 4px 8px; border-radius: 4px; margin-bottom: 8px; }
 
 .spinner { width: 20px; height: 20px; border: 2px solid #e5e5e3; border-top-color: #185FA5; border-radius: 50%; animation: spin 0.8s linear infinite; margin: 2rem auto; display: block; }
 @keyframes spin { to { transform: rotate(360deg); } }
-.empty-state { padding: 3rem 1rem; text-align: center; color: #aaa; font-size: 13px; line-height: 1.7; }
+.empty-msg { padding: 2rem; text-align: center; color: #aaa; font-size: 13px; }
 
 #toast { position: fixed; bottom: 24px; left: 50%; transform: translateX(-50%); background: #1a1a1a; color: #fff; padding: 10px 20px; border-radius: 8px; font-size: 13px; opacity: 0; transition: opacity 0.3s; pointer-events: none; z-index: 2000; }
 #toast.show { opacity: 1; }
@@ -132,64 +115,44 @@ body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; b
 
 <div class="metrics">
   <div class="metric"><div class="m-label">Unassigned jobs</div><div class="m-value red" id="m-unassigned">—</div></div>
-  <div class="metric"><div class="m-label">Engineers working today</div><div class="m-value blue" id="m-today-engs">—</div></div>
-  <div class="metric"><div class="m-label">Engineers scheduled tomorrow</div><div class="m-value blue" id="m-engs">—</div></div>
-  <div class="metric"><div class="m-label">Jobs scheduled tomorrow</div><div class="m-value blue" id="m-tomorrow">—</div></div>
-  <div class="metric"><div class="m-label">Gaps available</div><div class="m-value green" id="m-gaps">—</div></div>
-  <div class="metric"><div class="m-label">Assigned today</div><div class="m-value" id="m-done">0</div></div>
+  <div class="metric"><div class="m-label">Engineers today</div><div class="m-value blue" id="m-today-engs">—</div></div>
+  <div class="metric"><div class="m-label">Engineers tomorrow</div><div class="m-value blue" id="m-engs">—</div></div>
+  <div class="metric"><div class="m-label">Jobs tomorrow</div><div class="m-value blue" id="m-tomorrow">—</div></div>
+  <div class="metric"><div class="m-label">Assigned today</div><div class="m-value green" id="m-done">0</div></div>
 </div>
 
-<div style="display:flex;gap:0;border-bottom:1px solid #e5e5e3;background:#fff;padding:0 1.5rem;">
-  <button id="tab-today-btn" onclick="switchView('today')" style="padding:10px 20px;font-size:13px;border:none;background:none;cursor:pointer;color:#888;border-bottom:2px solid transparent;margin-bottom:-1px;">Today's live schedule</button>
-  <button id="tab-tomorrow-btn" onclick="switchView('tomorrow')" style="padding:10px 20px;font-size:13px;border:none;background:none;cursor:pointer;color:#185FA5;border-bottom:2px solid #185FA5;font-weight:500;margin-bottom:-1px;">Tomorrow — assign jobs</button>
+<div class="tabs">
+  <button class="tab active" id="tab-today-btn" onclick="switchTab('today')">Today's live schedule</button>
+  <button class="tab" id="tab-tomorrow-btn" onclick="switchTab('tomorrow')">Tomorrow — assign jobs</button>
 </div>
 
-<div id="view-today" style="display:none;">
-  <div style="display:grid;grid-template-columns:160px 1fr;height:calc(100vh - 152px);">
-    <div style="background:#fff;border-right:1px solid #e5e5e3;overflow-y:auto;">
-      <div style="padding:10px 14px;border-bottom:1px solid #e5e5e3;font-size:12px;font-weight:600;color:#888;text-transform:uppercase;letter-spacing:0.05em;">Engineers</div>
-      <div id="today-eng-list"></div>
-    </div>
-    <div style="overflow-y:auto;background:#f9f9f7;" id="today-timeline">
-      <div style="padding:3rem;text-align:center;color:#aaa;font-size:13px;">Loading today's schedule...</div>
-    </div>
-  </div>
-</div>
-
-<div id="view-tomorrow" style="display:block;">
 <div class="layout">
-  <!-- Left: unassigned jobs -->
   <div class="left">
     <div class="panel-head">
       <span class="panel-title">Unassigned jobs</span>
-      <span class="panel-count" id="job-count"></span>
+      <span class="panel-count" id="job-count">—</span>
     </div>
     <div class="jobs-scroll" id="jobs-list">
-      <div class="empty-state"><div class="spinner"></div></div>
+      <div class="spinner"></div>
     </div>
   </div>
-
-  <!-- Right: timeline -->
   <div class="right">
     <div class="timeline-controls">
-      <h2 id="timeline-title">Tomorrow's schedule — Friday 25 April</h2>
-      <span class="selected-job-pill" id="selected-pill" style="display:none;"></span>
-      <span class="hint" id="timeline-hint">Select a job on the left, then click a gap to assign</span>
+      <span id="timeline-title" style="font-size:13px;font-weight:600;"></span>
+      <span class="selected-pill" id="selected-pill" style="display:none;"></span>
+      <span class="hint" id="timeline-hint">Select a job then click a gap</span>
     </div>
-
-    <div class="timeline-scroll" id="timeline-scroll">
-      <div class="empty-state"><div class="spinner"></div></div>
+    <div class="timeline-scroll" id="timeline-container">
+      <div class="spinner"></div>
     </div>
   </div>
 </div>
 
-</div><!-- end view-tomorrow -->
-
-<!-- Gap popup -->
 <div class="gap-popup" id="gap-popup" style="display:none;">
-  <button class="gap-popup-close" onclick="closePopup()">✕</button>
+  <button class="gap-popup-close" onclick="closePopup()">&#10005;</button>
   <h3 id="popup-title"></h3>
-  <div class="sub" id="popup-sub"></div>
+  <div class="gap-popup-sub" id="popup-sub"></div>
+  <div id="popup-constraints"></div>
   <div id="popup-body"></div>
 </div>
 
@@ -197,25 +160,22 @@ body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; b
 
 <script>
 const DAY_START = 5;
-const DAY_END   = 17;
-const DAY_MINS  = (DAY_END - DAY_START) * 60;
-const HOURS     = Array.from({length: DAY_END - DAY_START + 1}, (_, i) => DAY_START + i);
+const DAY_END = 17;
+const DAY_MINS = (DAY_END - DAY_START) * 60;
+const HOURS = Array.from({length: DAY_END - DAY_START + 1}, (_, i) => DAY_START + i);
 
-let jobs = [], engineers = [], schedule = {}, engNames = {};
-let selectedJob = null;
-let assignedToday = 0;
+let jobs = [], engineers = [], schedule = {}, engNames = {}, todaySchedule = {}, todayEngNames = {};
+let selectedJob = null, selectedConstraints = [], currentTab = 'today', assignedToday = 0;
 
-const tomorrow = new Date();
-tomorrow.setDate(tomorrow.getDate() + 1);
-
+// Set up dates
+const todayDate = new Date();
+const tomorrowDate = new Date(); tomorrowDate.setDate(tomorrowDate.getDate() + 1);
 document.getElementById('topbar-date').textContent =
-  'Today: ' + new Date().toLocaleDateString('en-GB', {weekday:'short', day:'numeric', month:'short'}) +
-  '  |  Tomorrow: ' + tomorrow.toLocaleDateString('en-GB', {weekday:'long', day:'numeric', month:'long'});
+  'Today: ' + todayDate.toLocaleDateString('en-GB', {weekday:'short',day:'numeric',month:'short'}) +
+  '  |  Tomorrow: ' + tomorrowDate.toLocaleDateString('en-GB', {weekday:'long',day:'numeric',month:'long'});
 
-document.getElementById('timeline-title').textContent =
-  "Tomorrow's schedule — " + tomorrow.toLocaleDateString('en-GB', {weekday:'long', day:'numeric', month:'long'});
-
-async function api(path, opts={}) {
+// ── API ──────────────────────────────────────────────────
+async function api(path, opts) {
   const r = await fetch(path, opts);
   if (!r.ok) { const e = await r.json().catch(()=>({error:r.statusText})); throw new Error(e.error||r.statusText); }
   return r.json();
@@ -228,15 +188,13 @@ function setBadge(state, text) {
 }
 
 async function loadAll() {
-  setBadge('loading', 'Loading...');
+  setBadge('loading','Loading...');
   try {
-    await Promise.all([loadJobs(), loadEngineers(), loadSchedule(), loadTodaySchedule()]);
-    // Re-render timelines now all data is loaded so gap blocks reflect job availability
-    renderTimeline();
-    renderTodayTimeline();
-    setBadge('ok', 'Live');
+    await Promise.all([loadJobs(), loadEngineers(), loadSchedule('today'), loadSchedule('tomorrow')]);
+    renderAll();
+    setBadge('ok','Live');
   } catch(e) {
-    setBadge('error', 'Error');
+    setBadge('error','Error');
     showToast('Error: ' + e.message);
   }
 }
@@ -246,7 +204,6 @@ async function loadJobs() {
   jobs = data.jobs || [];
   document.getElementById('m-unassigned').textContent = jobs.length;
   document.getElementById('job-count').textContent = jobs.length + ' jobs';
-  renderJobList();
 }
 
 async function loadEngineers() {
@@ -254,578 +211,386 @@ async function loadEngineers() {
   engineers = data.engineers || [];
 }
 
-async function loadSchedule() {
-  const data = await api('/api/schedule/tomorrow');
-  schedule = data.byEngineer || {};
-  engNames = data.engNames || {};
-  const totalJobs = Object.values(schedule).reduce((s, arr) => s + arr.length, 0);
-  const engCount  = Object.keys(schedule).length;
-  document.getElementById('m-engs').textContent    = engCount;
-  document.getElementById('m-tomorrow').textContent = totalJobs;
+async function loadSchedule(day) {
+  const endpoint = day === 'today' ? '/api/schedule/today' : '/api/schedule/tomorrow';
+  const data = await api(endpoint);
+  if (day === 'today') {
+    todaySchedule = data.byEngineer || {};
+    todayEngNames = data.engNames || {};
+    document.getElementById('m-today-engs').textContent = Object.keys(todaySchedule).length;
+  } else {
+    schedule = data.byEngineer || {};
+    engNames = data.engNames || {};
+    const total = Object.values(schedule).reduce((s,a)=>s+a.length,0);
+    document.getElementById('m-engs').textContent = Object.keys(schedule).length;
+    document.getElementById('m-tomorrow').textContent = total;
+  }
+}
+
+function renderAll() {
+  renderJobList();
   renderTimeline();
 }
 
-// ── JOB LIST ────────────────────────────────────────────
+// ── TABS ─────────────────────────────────────────────────
+function switchTab(tab) {
+  currentTab = tab;
+  document.getElementById('tab-today-btn').className = 'tab' + (tab==='today'?' active':'');
+  document.getElementById('tab-tomorrow-btn').className = 'tab' + (tab==='tomorrow'?' active':'');
+  renderTimeline();
+}
 
+// ── JOB LIST ─────────────────────────────────────────────
 function renderJobList() {
   const c = document.getElementById('jobs-list');
-  if (!jobs.length) {
-    c.innerHTML = '<div class="empty-state">No unassigned jobs found</div>';
-    return;
-  }
+  if (!jobs.length) { c.innerHTML = '<div class="empty-msg">No unassigned jobs found</div>'; return; }
   c.innerHTML = jobs.map(j => `
-    <div class="job-item${selectedJob && selectedJob.id===j.id?' selected':''}" onclick="selectJob('${j.id}')">
-      <div class="job-ref">${j.ref}</div>
-      <div class="job-desc">${j.desc}</div>
-      <div class="job-client">${j.client}</div>
+    <div class="job-item${selectedJob&&selectedJob.id===j.id?' selected':''}" onclick="selectJob('${j.id}')">
+      <div class="job-ref">${escHtml(j.ref)}</div>
+      <div class="job-desc">${escHtml(j.desc)}</div>
+      <div class="job-client">${escHtml(j.client)}</div>
       <div class="job-tags">
-        <span class="tag tag-dur">${j.durationMins} min</span>
-        <span class="tag tag-type">${j.type}</span>
+        <span class="tag-dur">${j.durationMins} min</span>
+        <span class="tag-type">${escHtml(j.type)}</span>
       </div>
     </div>`).join('');
 }
 
 function selectJob(id) {
   selectedJob = jobs.find(j => j.id === id) || null;
-  selectedJobConstraints = [];
+  selectedConstraints = [];
   renderJobList();
   const pill = document.getElementById('selected-pill');
   const hint = document.getElementById('timeline-hint');
   if (selectedJob) {
-    pill.textContent = selectedJob.ref + ' — ' + selectedJob.durationMins + ' min';
+    pill.textContent = selectedJob.ref + ' — ' + selectedJob.durationMins + 'min';
     pill.style.display = 'inline-block';
     hint.textContent = 'Fetching constraints...';
-    // Fetch constraints then re-render
-    fetchConstraints(id).then(constraints => {
-      selectedJobConstraints = constraints;
-      const labels = describeConstraints(constraints);
-      hint.textContent = labels.length
-        ? 'Constraints: ' + labels.join(' · ')
-        : 'Click a green gap to assign this job';
+    fetchConstraints(selectedJob.id).then(c => {
+      selectedConstraints = c;
+      const labels = c.map(describeConstraint).filter(Boolean);
+      hint.textContent = labels.length ? labels.join(' · ') : 'Click a gap to assign this job';
       renderTimeline();
-      if (currentView === 'today') renderTodayTimeline();
     });
   } else {
     pill.style.display = 'none';
-    hint.textContent = 'Select a job on the left, then click a gap to assign';
+    hint.textContent = 'Select a job then click a gap';
     renderTimeline();
-    if (currentView === 'today') renderTodayTimeline();
   }
 }
 
 async function fetchConstraints(jobId) {
   try {
-    const data = await api(`/api/jobs/${jobId}/constraints`);
+    const data = await api('/api/jobs/' + jobId + '/constraints');
     return data.constraints || [];
-  } catch(e) {
-    console.error('Failed to fetch constraints:', e);
-    return [];
-  }
+  } catch(e) { return []; }
 }
 
-function describeConstraints(constraints) {
-  return constraints.map(c => {
-    const t = c.type || '';
-    const at = c.constraintAt ? formatConstraintTime(c.constraintAt) : '';
-    if (t === 'jobMustStartAfter')   return `Start after ${at}`;
-    if (t === 'jobMustStartBefore')  return `Start before ${at}`;
-    if (t === 'jobMustCompleteBefore') return `Complete before ${at}`;
-    if (t === 'jobResource')         return `Specific engineer required`;
-    if (t === 'jobResourceGroup')    return `Specific group required`;
-    if (t === 'jobRequiresResourceSkill') return `Skill required`;
-    return t;
-  }).filter(Boolean);
+function describeConstraint(c) {
+  const at = c.constraintAt ? fmtTime(c.constraintAt) : '';
+  if (c.type === 'jobMustStartAfter')    return 'Start after ' + at;
+  if (c.type === 'jobMustStartBefore')   return 'Start before ' + at;
+  if (c.type === 'jobMustCompleteBefore') return 'Complete before ' + at;
+  if (c.type === 'jobResource')          return 'Specific engineer required';
+  if (c.type === 'jobRequiresResourceSkill') return 'Skill required';
+  return '';
 }
 
-function formatConstraintTime(dt) {
-  try {
-    const d = new Date(dt);
-    return d.toLocaleTimeString('en-GB', {hour:'2-digit', minute:'2-digit'});
-  } catch(e) { return dt; }
-}
-
-function gapPassesConstraints(gapStartMins, gapEndMins, durationMins, constraints) {
+function constraintPasses(gapStart, gapEnd, durMins, constraints) {
   for (const c of constraints) {
-    const t = c.type || '';
     if (!c.constraintAt) continue;
-    const constraintMins = timeToMins(c.constraintAt);
-    if (constraintMins < 0) continue;
-
-    if (t === 'jobMustStartAfter') {
-      // Job must start AFTER constraintAt — gap must start after this time
-      if (gapStartMins < constraintMins) return false;
-    }
-    if (t === 'jobMustStartBefore') {
-      // Job must start BEFORE constraintAt
-      if (gapStartMins >= constraintMins) return false;
-    }
-    if (t === 'jobMustCompleteBefore') {
-      // Job must complete before constraintAt — start + duration must be before this
-      if (gapStartMins + durationMins > constraintMins) return false;
-    }
+    const mins = timeToMins(c.constraintAt);
+    if (mins < 0) continue;
+    if (c.type === 'jobMustStartAfter'    && gapStart < mins)            return false;
+    if (c.type === 'jobMustStartBefore'   && gapStart >= mins)           return false;
+    if (c.type === 'jobMustCompleteBefore' && gapStart + durMins > mins) return false;
   }
   return true;
 }
 
-// ── TIMELINE ────────────────────────────────────────────
-
-function timeToMins(t) {
-  if (!t) return -1;
-  try {
-    const d = new Date(t);
-    if (!isNaN(d)) return d.getHours() * 60 + d.getMinutes();
-    const p = t.split(':');
-    return parseInt(p[0]) * 60 + parseInt(p[1] || 0);
-  } catch(e) { return -1; }
-}
-
-function pct(mins) {
-  return ((mins - DAY_START * 60) / DAY_MINS * 100).toFixed(3) + '%';
-}
-
-function widthPct(startMins, endMins) {
-  return ((endMins - startMins) / DAY_MINS * 100).toFixed(3) + '%';
-}
-
-function minsToLabel(mins) {
-  const h = Math.floor(mins / 60);
-  const m = mins % 60;
-  const suffix = h >= 12 ? 'pm' : 'am';
-  const h12 = h > 12 ? h - 12 : h;
-  return m === 0 ? `${h12}${suffix}` : `${h12}:${String(m).padStart(2,'0')}${suffix}`;
-}
-
-function haversineKm(lat1, lng1, lat2, lng2) {
-  if (!lat1 || !lng1 || !lat2 || !lng2) return null;
-  const R = 6371;
-  const dLat = (lat2 - lat1) * Math.PI / 180;
-  const dLng = (lng2 - lng1) * Math.PI / 180;
-  const a = Math.sin(dLat/2)**2 + Math.cos(lat1*Math.PI/180) * Math.cos(lat2*Math.PI/180) * Math.sin(dLng/2)**2;
-  return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a));
-}
-
-function travelMins(lat1, lng1, lat2, lng2) {
-  const km = haversineKm(lat1, lng1, lat2, lng2);
-  if (km === null) return 30; // default 30 min if no coords
-  const avgSpeedKmh = 64; // ~40mph
-  return Math.round((km / avgSpeedKmh) * 60) + 10; // +10 min buffer for parking/access
-}
-
-function getGaps(engId) {
-  const engJobs = (schedule[engId] || [])
-    .map(j => ({
-      start: timeToMins(j.startTime),
-      end:   timeToMins(j.endTime),
-      label: j.client || j.desc,
-      lat:   j.lat,
-      lng:   j.lng,
-    }))
-    .filter(j => j.start >= 0 && j.end > j.start)
-    .sort((a, b) => a.start - b.start);
-
-  const gaps = [];
-  let cursor = DAY_START * 60;
-  let prevJob = null;
-
-  for (const slot of engJobs) {
-    if (slot.start > cursor + 10) {
-      // Travel time from previous job location to next job location
-      const travelBefore = prevJob ? travelMins(prevJob.lat, prevJob.lng, slot.lat, slot.lng) : 0;
-      const usableStart = cursor + travelBefore;
-      const usableEnd   = slot.start;
-      const usableMins  = usableEnd - usableStart;
-      if (usableMins >= 30) {
-        gaps.push({
-          startMins:  usableStart,
-          endMins:    usableEnd,
-          gapMins:    usableMins,
-          rawStart:   cursor,
-          travelMins: travelBefore,
-          nextLat:    slot.lat,
-          nextLng:    slot.lng,
-        });
-      }
-    }
-    cursor  = Math.max(cursor, slot.end);
-    prevJob = slot;
-  }
-
-  // Gap after last job — travel back is not needed so just use remaining time
-  if (DAY_END * 60 > cursor + 30) {
-    gaps.push({
-      startMins:  cursor,
-      endMins:    DAY_END * 60,
-      gapMins:    DAY_END * 60 - cursor,
-      rawStart:   cursor,
-      travelMins: 0,
-    });
-  }
-  return gaps;
-}
-
+// ── TIMELINE ─────────────────────────────────────────────
 function renderTimeline() {
-  const container = document.getElementById('timeline-scroll');
+  const sched = currentTab === 'today' ? todaySchedule : schedule;
+  const names = currentTab === 'today' ? todayEngNames : engNames;
+  const dateObj = currentTab === 'today' ? todayDate : tomorrowDate;
+  const container = document.getElementById('timeline-container');
 
-  // Only engineers with at least 1 job tomorrow
-  const engIds = Object.keys(schedule)
-    .filter(id => (schedule[id] || []).length > 0)
-    .sort((a, b) => {
-      const nameA = (engineers.find(e => e.id === a) || {}).name || '';
-      const nameB = (engineers.find(e => e.id === b) || {}).name || '';
-      return nameA.localeCompare(nameB);
-    });
+  document.getElementById('timeline-title').textContent = currentTab === 'today'
+    ? "Today's live schedule — " + todayDate.toLocaleDateString('en-GB', {weekday:'long',day:'numeric',month:'long'})
+    : "Tomorrow's schedule — " + tomorrowDate.toLocaleDateString('en-GB', {weekday:'long',day:'numeric',month:'long'});
+
+  const engIds = Object.keys(sched)
+    .filter(id => (sched[id]||[]).length > 0)
+    .sort((a,b) => (names[a]||'').localeCompare(names[b]||''));
+
   if (!engIds.length) {
-    container.innerHTML = '<div class="empty-state">No engineers scheduled for tomorrow yet</div>';
-    document.getElementById('m-gaps').textContent = '—';
+    container.innerHTML = '<div class="empty-msg">No engineers scheduled</div>';
     return;
   }
 
-  // Build hour ticks header
+  const now = new Date();
+  const nowMins = now.getHours()*60 + now.getMinutes();
+
   const ticksHtml = HOURS.map(h => {
-    const label = h === 12 ? '12pm' : h < 12 ? h + 'am' : (h - 12) + 'pm';
-    return `<div class="hour-tick">${label}</div>`;
+    const lbl = h===12?'12pm':h<12?h+'am':(h-12)+'pm';
+    return '<div class="hour-tick">' + lbl + '</div>';
   }).join('');
 
-  // Count total gaps that fit the selected job
-  let totalGaps = 0;
-
-  const rowsHtml = engIds.map(engId => {
-    const eng = engineers.find(e => e.id === engId) || { name: engNames[engId] || ('Engineer ' + engId), isTrainee: false };
-    const engJobs = schedule[engId] || [];
-    const gaps = getGaps(engId);
-
-    totalGaps += gaps.length;
+  const rows = engIds.map(engId => {
+    const name = names[engId] || ('Engineer ' + engId);
+    const engJobs = (sched[engId]||[]).slice().sort((a,b)=>(a.startTime||'')>(b.startTime||'')?1:-1);
+    const gaps = calcGaps(engId, sched, currentTab === 'today' ? nowMins : DAY_START*60);
+    const done = engJobs.filter(j=>['completedok','completedwithissues'].includes((j.status||'').toLowerCase())).length;
 
     // Job blocks
-    const jobBlocks = engJobs.map(j => {
-      const s = timeToMins(j.startTime);
-      const e = timeToMins(j.endTime);
-      if (s < 0 || e <= s) return '';
-      const clampedS = Math.max(s, DAY_START * 60);
-      const clampedE = Math.min(e, DAY_END * 60);
-      if (clampedE <= clampedS) return '';
-      return `<div class="job-block scheduled" style="left:${pct(clampedS)};width:${widthPct(clampedS, clampedE)};" title="${j.client} (${j.durationMins}min)">
-        <span class="job-block-label">${j.client || j.desc}</span>
-      </div>`;
+    const jobBlocksHtml = engJobs.map(j => {
+      const s = timeToMins(j.startTime), e = timeToMins(j.endTime);
+      if (s<0||e<=s) return '';
+      const cs = Math.max(s, DAY_START*60), ce = Math.min(e, DAY_END*60);
+      if (ce<=cs) return '';
+      const st = (j.status||'').toLowerCase();
+      const bg = st==='completedok'||st==='completedwithissues' ? '#C0DD97'
+               : st==='started'||st==='ontheway' ? '#FFD080' : '#B5D4F4';
+      const br = st==='completedok'||st==='completedwithissues' ? '#639922'
+               : st==='started'||st==='ontheway' ? '#BA7517' : '#378ADD';
+      return '<div class="job-block" style="left:' + pct(cs) + ';width:' + wpct(cs,ce) + ';background:' + bg + ';border:1px solid ' + br + ';" title="' + escHtml(j.client||j.desc) + '">'
+           + '<span class="job-block-label" style="color:#1a1a1a;">' + escHtml((j.client||j.desc).substring(0,30)) + '</span></div>';
     }).join('');
 
     // Gap blocks
-    const gapBlocks = gaps.map(g => {
-      const fits = selectedJob && g.gapMins >= selectedJob.durationMins;
-      const noJob = !selectedJob;
-      const cls = noJob ? 'empty' : fits ? 'fits' : 'no-fit';
-      const travelLabel = g.travelMins > 0 ? ` (${g.travelMins}min travel)` : '';
-      const label = noJob
-        ? (g.gapMins >= 30 ? minsToLabel(g.startMins) + '–' + minsToLabel(g.endMins) + travelLabel : '')
-        : fits ? `✓ ${g.gapMins}min free${travelLabel}` : '';
-      return `<div class="gap-block clickable-gap ${cls}" 
-        style="left:${pct(g.startMins)};width:${widthPct(g.startMins, g.endMins)};"
-        title="${minsToLabel(g.startMins)}–${minsToLabel(g.endMins)} (${g.gapMins} min free)"
-        onclick="clickGap('${engId}','${eng.name}',${g.startMins},${g.endMins},${g.gapMins},${g.travelMins||0},event)">
-        <span class="gap-label">${label}</span>
-      </div>`;
+    const gapBlocksHtml = gaps.map((g, gi) => {
+      const fits = selectedJob && g.gapMins >= selectedJob.durationMins
+                   && constraintPasses(g.startMins, g.endMins, selectedJob.durationMins, selectedConstraints);
+      const cls = !selectedJob ? 'gap-empty' : fits ? 'gap-fits' : 'gap-nofit';
+      const lbl = !selectedJob ? (g.gapMins>=30 ? fmtMins(g.startMins)+'-'+fmtMins(g.endMins) : '')
+                               : fits ? '✓ '+g.gapMins+'min' : '';
+      // Use data attributes - no inline JS strings with dynamic values
+      return '<div class="gap-block ' + cls + '" '
+           + 'style="left:' + pct(g.startMins) + ';width:' + wpct(g.startMins,g.endMins) + ';" '
+           + 'data-engid="' + engId + '" '
+           + 'data-gi="' + gi + '" '
+           + 'data-day="' + currentTab + '" '
+           + 'title="' + fmtMins(g.startMins) + '-' + fmtMins(g.endMins) + ' (' + g.gapMins + 'min)">'
+           + '<span class="gap-label">' + lbl + '</span></div>';
     }).join('');
 
-    const jobCount = engJobs.length;
-    const gapCount = gaps.length;
+    // Now line for today
+    const nowLineHtml = currentTab==='today'
+      ? '<div class="now-line" style="left:' + pct(nowMins) + ';"></div>' : '';
 
-    return `
-      <div class="eng-row">
-        <div class="eng-label">
-          <div class="eng-name">${eng.isTrainee ? '<span class="trainee-dot"></span>' : ''}${eng.name}</div>
-          <div class="eng-meta">${jobCount} job${jobCount!==1?'s':''} · ${gapCount} gap${gapCount!==1?'s':''}</div>
-        </div>
-        <div class="track-wrap">
-          <div class="track">
-            ${jobBlocks}
-            ${gapBlocks}
-          </div>
-        </div>
-      </div>`;
+    return '<div class="eng-row">'
+         + '<div class="eng-label"><div class="eng-name">' + escHtml(name) + '</div>'
+         + '<div class="eng-meta">' + (currentTab==='today' ? done+'/'+engJobs.length+' done' : engJobs.length+' jobs') + ' · ' + gaps.length + ' gaps</div></div>'
+         + '<div class="track-wrap"><div class="track">' + jobBlocksHtml + gapBlocksHtml + nowLineHtml + '</div></div>'
+         + '</div>';
   }).join('');
 
-  document.getElementById('m-gaps').textContent = totalGaps;
-
-  container.innerHTML = `
-    <div class="hour-header">
-      <div class="hour-header-inner">
-        <div class="hour-header-label">Engineer</div>
-        <div class="hour-ticks">${ticksHtml}</div>
-      </div>
-    </div>
-    ${rowsHtml}`;
+  container.innerHTML = '<div class="hour-header"><div class="hour-header-label">Engineer</div><div class="hour-ticks">' + ticksHtml + '</div></div>' + rows;
 }
 
-// ── GAP CLICK ────────────────────────────────────────────
+// Store gap data separately so click handler can look it up
+const gapStore = {};
 
-function clickGap(engId, engName, startMins, endMins, gapMins, travelMins, event, day='tomorrow') {
-  const gap = { startMins, endMins, gapMins, travelMins, day };
-  event.stopPropagation();
+function calcGaps(engId, sched, fromMins) {
+  const engJobs = (sched[engId]||[])
+    .map(j => ({ start: timeToMins(j.startTime), end: timeToMins(j.endTime), lat: j.lat, lng: j.lng, client: j.client }))
+    .filter(j => j.start>=0 && j.end>j.start)
+    .sort((a,b) => a.start-b.start);
 
-  const fittingJobs = jobs.filter(j =>
-    j.durationMins <= gapMins &&
-    gapPassesConstraints(startMins, endMins, j.durationMins, selectedJobConstraints)
-  );
+  const gaps = [];
+  let cursor = Math.max(fromMins, DAY_START*60);
+  let prevJob = engJobs.filter(j => j.end <= fromMins).pop() || null;
 
-  const popup = document.getElementById('gap-popup');
-  document.getElementById('popup-title').textContent =
-    engName + ' — ' + minsToLabel(startMins) + ' to ' + minsToLabel(endMins);
-  const travelNote = gap && gap.travelMins > 0 ? ` · ${gap.travelMins}min travel included` : '';
-  document.getElementById('popup-sub').textContent =
-    gapMins + ' minutes usable' + travelNote + ' · ' + (fittingJobs.length ? fittingJobs.length + ' job' + (fittingJobs.length!==1?'s':'') + ' will fit' : 'No unassigned jobs fit this gap');
-
-  if (!fittingJobs.length) {
-    document.getElementById('popup-body').innerHTML =
-      `<div class="no-fitting">No unassigned jobs are short enough to fit in this ${gapMins} minute gap</div>`;
-  } else {
-    document.getElementById('popup-body').innerHTML = fittingJobs.slice(0, 10).map(j => `
-      <div class="fitting-job">
-        <div class="fitting-job-info">
-          <div class="fitting-job-ref">${j.ref}${j.id === (selectedJob||{}).id ? ' ★' : ''}</div>
-          <div class="fitting-job-desc">${j.desc}</div>
-          <div class="fitting-job-sub">${j.client}</div>
-        </div>
-        <span class="fitting-job-dur">${j.durationMins}min</span>
-        <button class="btn-assign" onclick="assignJob('${j.id}','${engId}',${startMins},'${j.ref}','${engName.replace(/'/g,"\\'")}'  ,'${gap.day||'tomorrow'}')">Assign</button>
-      </div>`).join('');
+  for (const slot of engJobs) {
+    if (slot.end <= fromMins) continue;
+    if (slot.start > cursor + 10) {
+      const travel = prevJob ? estTravelMins(prevJob.lat, prevJob.lng, slot.lat, slot.lng) : 0;
+      const usableStart = Math.min(cursor + travel, slot.start - 15);
+      const usableMins = slot.start - usableStart;
+      if (usableMins >= 20) {
+        gaps.push({ startMins: usableStart, endMins: slot.start, gapMins: usableMins, travelMins: travel });
+      }
+    }
+    cursor = Math.max(cursor, slot.end);
+    prevJob = slot;
+  }
+  if (DAY_END*60 > cursor + 20) {
+    gaps.push({ startMins: cursor, endMins: DAY_END*60, gapMins: DAY_END*60 - cursor, travelMins: 0 });
   }
 
-  // Position popup near click
-  const x = Math.min(event.clientX, window.innerWidth - 340);
-  const y = Math.min(event.clientY + 10, window.innerHeight - 420);
+  // Store for click handler
+  gapStore[engId + '_' + (fromMins < DAY_START*60+60 ? 'tomorrow' : 'today')] = gaps;
+  gapStore[engId + '_today'] = gaps;
+  gapStore[engId + '_tomorrow'] = gaps;
+
+  return gaps;
+}
+
+function estTravelMins(lat1, lng1, lat2, lng2) {
+  if (!lat1||!lng1||!lat2||!lng2) return 30;
+  const R = 6371;
+  const dLat = (lat2-lat1)*Math.PI/180;
+  const dLng = (lng2-lng1)*Math.PI/180;
+  const a = Math.sin(dLat/2)**2 + Math.cos(lat1*Math.PI/180)*Math.cos(lat2*Math.PI/180)*Math.sin(dLng/2)**2;
+  const km = R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a));
+  return Math.round(km / 64 * 60) + 10;
+}
+
+// ── GAP CLICK via event delegation ───────────────────────
+document.addEventListener('click', function(e) {
+  const gapEl = e.target.closest('.gap-block');
+  if (gapEl) {
+    e.stopPropagation();
+    const engId = gapEl.dataset.engid;
+    const gi    = parseInt(gapEl.dataset.gi);
+    const day   = gapEl.dataset.day;
+    const key   = engId + '_' + day;
+    const gaps  = gapStore[key] || [];
+    const g     = gaps[gi];
+    if (!g) { showToast('Gap data not found — please refresh'); return; }
+    const sched = day === 'today' ? todaySchedule : schedule;
+    const names = day === 'today' ? todayEngNames : engNames;
+    const engName = names[engId] || ('Engineer ' + engId);
+    showGapPopup(engId, engName, g, day, e);
+    return;
+  }
+
+  // Close popup if clicking outside
+  const popup = document.getElementById('gap-popup');
+  if (popup.style.display !== 'none' && !popup.contains(e.target)) {
+    closePopup();
+  }
+});
+
+function showGapPopup(engId, engName, g, day, e) {
+  const fittingJobs = jobs.filter(j =>
+    j.durationMins <= g.gapMins &&
+    constraintPasses(g.startMins, g.endMins, j.durationMins, selectedConstraints)
+  );
+
+  document.getElementById('popup-title').textContent = escHtml(engName) + ' — ' + fmtMins(g.startMins) + ' to ' + fmtMins(g.endMins);
+  document.getElementById('popup-sub').textContent = g.gapMins + ' min usable' + (g.travelMins > 0 ? ' (incl. ~' + g.travelMins + 'min travel)' : '') + ' · ' + fittingJobs.length + ' job' + (fittingJobs.length!==1?'s':'') + ' fit';
+
+  // Constraints info
+  const cLabels = selectedConstraints.map(describeConstraint).filter(Boolean);
+  document.getElementById('popup-constraints').innerHTML = cLabels.length
+    ? '<div class="constraint-info">⚠ ' + cLabels.join(' · ') + '</div>' : '';
+
+  if (!fittingJobs.length) {
+    document.getElementById('popup-body').innerHTML = '<div class="no-fitting">No unassigned jobs fit this ' + g.gapMins + ' min gap</div>';
+  } else {
+    // Put selected job first
+    const sorted = [...fittingJobs].sort((a,b) => {
+      if (selectedJob && a.id===selectedJob.id) return -1;
+      if (selectedJob && b.id===selectedJob.id) return 1;
+      return b.durationMins - a.durationMins;
+    });
+    document.getElementById('popup-body').innerHTML = sorted.slice(0,10).map(j =>
+      '<div class="fitting-job' + (selectedJob&&j.id===selectedJob.id?' selected-job':'') + '">'
+      + '<div class="fitting-job-info">'
+      + '<div class="fitting-job-ref">' + escHtml(j.ref) + '</div>'
+      + '<div class="fitting-job-desc">' + escHtml(j.desc) + '</div>'
+      + '<div class="fitting-job-sub">' + escHtml(j.client) + '</div>'
+      + '</div>'
+      + '<span class="fitting-job-dur">' + j.durationMins + 'min</span>'
+      + '<button class="btn-assign" data-jobid="' + j.id + '" data-jobref="' + escHtml(j.ref) + '" data-engid="' + engId + '" data-engname="' + escHtml(engName) + '" data-start="' + g.startMins + '" data-day="' + day + '">Assign</button>'
+      + '</div>'
+    ).join('');
+  }
+
+  const x = Math.min(e.clientX + 10, window.innerWidth - 360);
+  const y = Math.min(e.clientY + 10, window.innerHeight - 440);
+  const popup = document.getElementById('gap-popup');
   popup.style.left = x + 'px';
   popup.style.top  = y + 'px';
   popup.style.display = 'block';
 }
 
+// Assign button clicks via delegation
+document.getElementById('gap-popup').addEventListener('click', function(e) {
+  const btn = e.target.closest('.btn-assign');
+  if (!btn) return;
+  const jobId   = btn.dataset.jobid;
+  const jobRef  = btn.dataset.jobref;
+  const engId   = btn.dataset.engid;
+  const engName = btn.dataset.engname;
+  const startMins = parseInt(btn.dataset.start);
+  const day     = btn.dataset.day;
+  assignJob(jobId, jobRef, engId, engName, startMins, day);
+});
+
 function closePopup() {
   document.getElementById('gap-popup').style.display = 'none';
 }
 
-// popup close handled in delegated listener above
-
-// ── ASSIGN ───────────────────────────────────────────────
-
-async function assignJob(jobId, engId, startMins, jobRef, engName, day='tomorrow') {
-  const d = day === 'today' ? new Date() : new Date(tomorrow);
-  d.setHours(Math.floor(startMins / 60), startMins % 60, 0, 0);
-  const plannedStart = d.toISOString();
-
+async function assignJob(jobId, jobRef, engId, engName, startMins, day) {
+  const d = day === 'today' ? new Date(todayDate) : new Date(tomorrowDate);
+  d.setHours(Math.floor(startMins/60), startMins%60, 0, 0);
   closePopup();
   showToast('Assigning ' + jobRef + '...');
-
   try {
-    await api(`/api/jobs/${jobId}/assign`, {
+    await api('/api/jobs/' + jobId + '/assign', {
       method: 'POST',
-      headers: {'Content-Type': 'application/json'},
-      body: JSON.stringify({resourceId: engId, plannedStart})
+      headers: {'Content-Type':'application/json'},
+      body: JSON.stringify({resourceId: engId, plannedStart: d.toISOString()})
     });
-
     jobs = jobs.filter(j => j.id !== jobId);
+    if (selectedJob && selectedJob.id === jobId) { selectedJob = null; selectedConstraints = []; }
     assignedToday++;
-    selectedJob = null;
-
     document.getElementById('m-unassigned').textContent = jobs.length;
     document.getElementById('job-count').textContent = jobs.length + ' jobs';
     document.getElementById('m-done').textContent = assignedToday;
     document.getElementById('selected-pill').style.display = 'none';
-    document.getElementById('timeline-hint').textContent = 'Select a job on the left, then click a gap to assign';
-
-    renderJobList();
+    document.getElementById('timeline-hint').textContent = 'Select a job then click a gap';
     showToast(jobRef + ' assigned to ' + engName);
-    if (day === 'today') { loadTodaySchedule(); } else { loadSchedule(); }
-  } catch(e) {
-    showToast('Failed: ' + e.message);
+    renderJobList();
+    await loadSchedule(day);
+    renderTimeline();
+  } catch(err) {
+    showToast('Failed: ' + err.message);
   }
 }
 
-// ── VIEW SWITCHING ──────────────────────────────────────
-let currentView = 'tomorrow';
-let todaySchedule = {}, todayEngNames = {};
-
-function switchView(view) {
-  currentView = view;
-  document.getElementById('view-today').style.display = view === 'today' ? 'block' : 'none';
-  document.getElementById('view-tomorrow').style.display = view === 'tomorrow' ? 'block' : 'none';
-  document.getElementById('tab-today-btn').style.cssText = view === 'today'
-    ? 'padding:10px 20px;font-size:13px;border:none;background:none;cursor:pointer;color:#185FA5;border-bottom:2px solid #185FA5;font-weight:500;margin-bottom:-1px;'
-    : 'padding:10px 20px;font-size:13px;border:none;background:none;cursor:pointer;color:#888;border-bottom:2px solid transparent;margin-bottom:-1px;';
-  document.getElementById('tab-tomorrow-btn').style.cssText = view === 'tomorrow'
-    ? 'padding:10px 20px;font-size:13px;border:none;background:none;cursor:pointer;color:#185FA5;border-bottom:2px solid #185FA5;font-weight:500;margin-bottom:-1px;'
-    : 'padding:10px 20px;font-size:13px;border:none;background:none;cursor:pointer;color:#888;border-bottom:2px solid transparent;margin-bottom:-1px;';
+// ── HELPERS ──────────────────────────────────────────────
+function timeToMins(t) {
+  if (!t) return -1;
+  try {
+    const d = new Date(t);
+    if (!isNaN(d)) return d.getHours()*60 + d.getMinutes();
+    const p = t.split(':');
+    return parseInt(p[0])*60 + parseInt(p[1]||0);
+  } catch(e) { return -1; }
 }
 
-async function loadTodaySchedule() {
-  const data = await api('/api/schedule/today');
-  todaySchedule = data.byEngineer || {};
-  todayEngNames = data.engNames || {};
-  const engCount = Object.keys(todaySchedule).length;
-  document.getElementById('m-today-engs').textContent = engCount;
-  renderTodayTimeline();
+function pct(mins) {
+  return ((mins - DAY_START*60) / DAY_MINS * 100).toFixed(3) + '%';
 }
 
-function renderTodayTimeline() {
-  const engIds = Object.keys(todaySchedule)
-    .filter(id => (todaySchedule[id]||[]).length > 0)
-    .sort((a,b) => (todayEngNames[a]||'').localeCompare(todayEngNames[b]||''));
-
-  if (!engIds.length) {
-    document.getElementById('today-timeline').innerHTML = '<div style="padding:3rem;text-align:center;color:#aaa;">No jobs scheduled today</div>';
-    return;
-  }
-
-  const now = new Date();
-  const nowMins = now.getHours() * 60 + now.getMinutes();
-  const nowPct = ((nowMins - DAY_START * 60) / DAY_MINS * 100).toFixed(2);
-
-  const ticksHtml = HOURS.map(h => {
-    const label = h === 12 ? '12pm' : h < 12 ? h + 'am' : (h-12) + 'pm';
-    return `<div class="hour-tick">${label}</div>`;
-  }).join('');
-
-  // Eng list
-  document.getElementById('today-eng-list').innerHTML = engIds.map(id => {
-    const name = todayEngNames[id] || ('Eng ' + id);
-    const engJobs = todaySchedule[id] || [];
-    const done = engJobs.filter(j => ['completedok','completedwithissues'].includes((j.status||'').toLowerCase())).length;
-    const gaps = getTodayGaps(id, nowMins);
-    return `<div style="padding:8px 10px;border-bottom:1px solid #f0f0ee;font-size:12px;">
-      <div style="font-weight:500;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">${name}</div>
-      <div style="font-size:10px;color:#aaa;">${done}/${engJobs.length} done · ${gaps.length} gap${gaps.length!==1?'s':''}</div>
-    </div>`;
-  }).join('');
-
-  const rowsHtml = engIds.map(engId => {
-    const name = todayEngNames[engId] || ('Eng ' + engId);
-    const engJobs = (todaySchedule[engId] || []).sort((a,b) => (a.startTime||'') > (b.startTime||'') ? 1 : -1);
-    const gaps = getTodayGaps(engId, nowMins);
-
-    const blocks = engJobs.map(j => {
-      const s = timeToMins(j.startTime);
-      const e = timeToMins(j.endTime);
-      if (s < 0 || e <= s) return '';
-      const cs = Math.max(s, DAY_START*60);
-      const ce = Math.min(e, DAY_END*60);
-      if (ce <= cs) return '';
-      const status = (j.status||'').toLowerCase();
-      const isDone = status === 'completedok' || status === 'completedwithissues';
-      const isActive = status === 'started' || status === 'ontheway';
-      const bg = isDone ? '#C0DD97' : isActive ? '#FFD080' : '#B5D4F4';
-      const border = isDone ? '#639922' : isActive ? '#BA7517' : '#378ADD';
-      return `<div class="job-block" style="left:${pct(cs)};width:${widthPct(cs,ce)};background:${bg};border:1px solid ${border};" title="${j.client} — ${j.status}">
-        <span class="job-block-label" style="color:#1a1a1a;">${j.client||j.desc}</span>
-      </div>`;
-    }).join('');
-
-    const gapBlocks = gaps.map(g => {
-      const fits = selectedJob && g.gapMins >= selectedJob.durationMins;
-      const noJob = !selectedJob;
-      const cls = noJob ? 'empty' : fits ? 'fits' : 'no-fit';
-      const travelLabel = g.travelMins > 0 ? ` (${g.travelMins}min travel)` : '';
-      const label = noJob
-        ? (g.gapMins >= 30 ? minsToLabel(g.startMins) + '–' + minsToLabel(g.endMins) : '')
-        : fits ? `✓ ${g.gapMins}min free${travelLabel}` : '';
-      return `<div class="gap-block clickable-gap ${cls}"
-        style="left:${pct(g.startMins)};width:${widthPct(g.startMins, g.endMins)};"
-        title="${minsToLabel(g.startMins)}–${minsToLabel(g.endMins)} (${g.gapMins}min usable)"
-        onclick="clickGap('${engId}','${name.replace(/'/g,"\'")}',${g.startMins},${g.endMins},${g.gapMins},${g.travelMins||0},event,'today')">
-        <span class="gap-label">${label}</span>
-      </div>`;
-    }).join('');
-
-    return `<div class="eng-row">
-      <div class="eng-label" style="font-size:11px;">
-        <div class="eng-name" style="font-size:11px;">${name}</div>
-        <div style="font-size:10px;color:#aaa;">${engJobs.length} jobs · ${gaps.length} gaps</div>
-      </div>
-      <div class="track-wrap">
-        <div class="track">
-          ${blocks}
-          ${gapBlocks}
-          <div style="position:absolute;top:0;bottom:0;left:${nowPct}%;width:2px;background:#E24B4A;z-index:5;" title="Now"></div>
-        </div>
-      </div>
-    </div>`;
-  }).join('');
-
-  document.getElementById('today-timeline').innerHTML = `
-    <div class="hour-header">
-      <div class="hour-header-inner">
-        <div class="hour-header-label">Engineer</div>
-        <div class="hour-ticks">${ticksHtml}</div>
-      </div>
-    </div>
-    ${rowsHtml}`;
+function wpct(s, e) {
+  return ((e-s) / DAY_MINS * 100).toFixed(3) + '%';
 }
 
-function getTodayGaps(engId, nowMins) {
-  // Only show gaps from NOW onwards — no point showing past gaps
-  const engJobs = (todaySchedule[engId] || [])
-    .map(j => ({
-      start: timeToMins(j.startTime),
-      end:   timeToMins(j.endTime),
-      label: j.client || j.desc,
-      lat:   j.lat,
-      lng:   j.lng,
-    }))
-    .filter(j => j.start >= 0 && j.end > j.start)
-    .sort((a, b) => a.start - b.start);
+function fmtMins(mins) {
+  const h = Math.floor(mins/60), m = mins%60;
+  const suffix = h>=12?'pm':'am', h12 = h>12?h-12:h===0?12:h;
+  return h12 + (m?':'+String(m).padStart(2,'0'):'') + suffix;
+}
 
-  const gaps = [];
-  // Start from now, not from 5am
-  let cursor = Math.max(nowMins, DAY_START * 60);
-  let prevJob = engJobs.filter(j => j.end <= nowMins).pop() || null;
+function fmtTime(dt) {
+  try { return new Date(dt).toLocaleTimeString('en-GB',{hour:'2-digit',minute:'2-digit'}); }
+  catch(e) { return dt; }
+}
 
-  for (const slot of engJobs) {
-    if (slot.end <= nowMins) continue; // skip past jobs
-    if (slot.start > cursor + 10) {
-      const travelTime = prevJob ? travelMins(prevJob.lat, prevJob.lng, slot.lat, slot.lng) : 0;
-      const usableStart = cursor + travelTime;
-      const usableMins  = slot.start - usableStart;
-      if (usableMins >= 30) {
-        gaps.push({ startMins: usableStart, endMins: slot.start, gapMins: usableMins, travelMins: travelTime });
-      }
-    }
-    cursor  = Math.max(cursor, slot.end);
-    prevJob = slot;
-  }
-
-  // Gap after last job until end of day
-  if (DAY_END * 60 > cursor + 30) {
-    gaps.push({ startMins: cursor, endMins: DAY_END * 60, gapMins: DAY_END * 60 - cursor, travelMins: 0 });
-  }
-  return gaps;
+function escHtml(s) {
+  return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
 }
 
 function showToast(msg) {
   const t = document.getElementById('toast');
-  t.textContent = msg;
-  t.classList.add('show');
+  t.textContent = msg; t.classList.add('show');
   clearTimeout(window._tt);
   window._tt = setTimeout(() => t.classList.remove('show'), 3500);
 }
-
-// Single delegated event listener for ALL gap clicks - avoids inline onclick issues
-document.addEventListener('click', function(e) {
-  const gap = e.target.closest('.clickable-gap');
-  if (gap) {
-    e.stopPropagation();
-    const engId   = gap.dataset.engid;
-    const engName = gap.dataset.engname;
-    const startMins = parseInt(gap.dataset.start);
-    const endMins   = parseInt(gap.dataset.end);
-    const gapMins   = parseInt(gap.dataset.gap);
-    const travelMins = parseInt(gap.dataset.travel || 0);
-    const day       = gap.dataset.day || 'tomorrow';
-    clickGap(engId, engName, startMins, endMins, gapMins, travelMins, e, day);
-    return;
-  }
-  // Close popup if clicking outside
-  const popup = document.getElementById('gap-popup');
-  if (popup && popup.style.display !== 'none' && !popup.contains(e.target)) {
-    closePopup();
-  }
-});
 
 loadAll();
 setInterval(loadAll, 120000);
