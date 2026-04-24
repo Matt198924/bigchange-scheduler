@@ -381,7 +381,7 @@ function renderTimeline() {
     return '<div class="eng-row">'
          + '<div class="eng-label"><div class="eng-name">' + escHtml(name) + '</div>'
          + '<div class="eng-meta">' + (currentTab==='today' ? done+'/'+engJobs.length+' done' : engJobs.length+' jobs') + ' · ' + gaps.length + ' gaps</div></div>'
-         + '<div class="track-wrap"><div class="track">' + jobBlocksHtml + gapBlocksHtml + nowLineHtml + dayStartHtml + '</div></div>'
+         + '<div class="track-wrap"><div class="track">' + jobBlocksHtml + gapBlocksHtml + nowLineHtml + '</div></div>'
          + '</div>';
   }).join('');
 
@@ -391,61 +391,18 @@ function renderTimeline() {
 // Store gap data separately so click handler can look it up
 const gapStore = {};
 
-function getEffectiveDayStart(engId, sched) {
-  const engJobs = (sched[engId]||[])
-    .filter(j => j.startTime)
-    .sort((a,b) => (a.startTime||'') > (b.startTime||'') ? 1 : -1);
-
-  if (!engJobs.length) return DAY_START * 60;
-  const firstJob = engJobs[0];
-  const status = (firstJob.status||'').toLowerCase();
-
-  // onTheWay status — statusModifiedAt is when they left
-  if (status === 'ontheway' && firstJob.statusModifiedAt) {
-    const m = timeToMins(firstJob.statusModifiedAt);
-    if (m > 0) return m;
-  }
-
-  // Has actual start — work back by estimated travel
-  if (firstJob.actualStart) {
-    const arrivalMins = timeToMins(firstJob.actualStart);
-    const travel = firstJob.lat ? 30 : 30; // default 30min travel
-    return Math.max(arrivalMins - travel, DAY_START * 60);
-  }
-
-  // Use planned start minus estimated travel
-  const plannedMins = timeToMins(firstJob.startTime);
-  if (plannedMins > 0) {
-    return Math.max(plannedMins - 30, DAY_START * 60);
-  }
-
-  return DAY_START * 60;
-}
-
 function calcGaps(engId, sched, fromMins) {
-  const isToday = fromMins > DAY_START * 60;
-
   const engJobs = (sched[engId]||[])
-    .map(j => ({
-      start: timeToMins(j.startTime),
-      end: timeToMins(j.endTime),
-      lat: j.lat, lng: j.lng, client: j.client,
-      status: j.status, actualStart: j.actualStart,
-      statusModifiedAt: j.statusModifiedAt,
-    }))
-    .filter(j => j.start >= 0 && j.end > j.start)
-    .sort((a,b) => a.start - b.start);
-
-  // Effective start: for today use current time, for tomorrow use estimated departure
-  const effectiveStart = isToday ? fromMins : getEffectiveDayStart(engId, sched);
-  const cursor0 = Math.max(effectiveStart, DAY_START * 60);
+    .map(j => ({ start: timeToMins(j.startTime), end: timeToMins(j.endTime), lat: j.lat, lng: j.lng, client: j.client }))
+    .filter(j => j.start>=0 && j.end>j.start)
+    .sort((a,b) => a.start-b.start);
 
   const gaps = [];
-  let cursor = cursor0;
-  let prevJob = engJobs.filter(j => j.end <= effectiveStart).pop() || null;
+  let cursor = Math.max(fromMins, DAY_START*60);
+  let prevJob = engJobs.filter(j => j.end <= fromMins).pop() || null;
 
   for (const slot of engJobs) {
-    if (slot.end <= effectiveStart) continue;
+    if (slot.end <= fromMins) continue;
     if (slot.start > cursor + 10) {
       const travel = prevJob ? estTravelMins(prevJob.lat, prevJob.lng, slot.lat, slot.lng) : 0;
       const usableStart = Math.min(cursor + travel, slot.start - 15);
@@ -457,12 +414,15 @@ function calcGaps(engId, sched, fromMins) {
     cursor = Math.max(cursor, slot.end);
     prevJob = slot;
   }
-  if (DAY_END * 60 > cursor + 20) {
-    gaps.push({ startMins: cursor, endMins: DAY_END * 60, gapMins: DAY_END * 60 - cursor, travelMins: 0 });
+  if (DAY_END*60 > cursor + 20) {
+    gaps.push({ startMins: cursor, endMins: DAY_END*60, gapMins: DAY_END*60 - cursor, travelMins: 0 });
   }
 
+  // Store for click handler
+  gapStore[engId + '_' + (fromMins < DAY_START*60+60 ? 'tomorrow' : 'today')] = gaps;
   gapStore[engId + '_today'] = gaps;
   gapStore[engId + '_tomorrow'] = gaps;
+
   return gaps;
 }
 
