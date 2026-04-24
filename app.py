@@ -266,6 +266,23 @@ def assign_job(job_id):
         print(f"[ASSIGN] ERROR: {e}")
         return jsonify({'error': str(e)}), 500
 
+@app.route('/api/jobs/<job_id>/constraints', methods=['GET'])
+def get_job_constraints(job_id):
+    try:
+        data = bc_get(f'/jobs/{job_id}/constraints', {'pageSize': 100})
+        items = data if isinstance(data, list) else (data.get('items') or [])
+        constraints = []
+        for c in items:
+            constraints.append({
+                'type':         c.get('type') or '',
+                'constraintAt': c.get('constraintAt'),
+                'entityId':     c.get('entityId'),
+            })
+        return jsonify({'constraints': constraints})
+    except Exception as e:
+        print(f"[CONSTRAINTS] ERROR for job {job_id}: {e}")
+        return jsonify({'constraints': [], 'error': str(e)})
+
 @app.route('/api/debug/categories')
 def debug_categories():
     try:
