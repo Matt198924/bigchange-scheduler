@@ -518,7 +518,7 @@ function renderTimeline() {
       return `<div class="gap-block ${cls}" 
         style="left:${pct(g.startMins)};width:${widthPct(g.startMins, g.endMins)};"
         title="${minsToLabel(g.startMins)}–${minsToLabel(g.endMins)} (${g.gapMins} min free)"
-        ononclick="clickGap('${engId}','${eng.name}',${g.startMins},${g.endMins},${g.gapMins},${g.travelMins||0},event)">
+        onclick="clickGap('${engId}','${eng.name}',${g.startMins},${g.endMins},${g.gapMins},${g.travelMins||0},event)">
         <span class="gap-label">${label}</span>
       </div>`;
     }).join('');
@@ -730,7 +730,7 @@ function renderTodayTimeline() {
       return `<div class="gap-block ${cls}"
         style="left:${pct(g.startMins)};width:${widthPct(g.startMins, g.endMins)};"
         title="${minsToLabel(g.startMins)}–${minsToLabel(g.endMins)} (${g.gapMins}min usable)"
-        ononclick="clickGap('${engId}','${name.replace(/'/g,"\'")}',${g.startMins},${g.endMins},${g.gapMins},${g.travelMins||0},event,'today')">
+        onclick="clickGap('${engId}','${name.replace(/'/g,"\'")}',${g.startMins},${g.endMins},${g.gapMins},${g.travelMins||0},event,'today')">
         <span class="gap-label">${label}</span>
       </div>`;
     }).join('');
