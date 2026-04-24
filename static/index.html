@@ -305,23 +305,70 @@ function minsToLabel(mins) {
   return m === 0 ? `${h12}${suffix}` : `${h12}:${String(m).padStart(2,'0')}${suffix}`;
 }
 
+function haversineKm(lat1, lng1, lat2, lng2) {
+  if (!lat1 || !lng1 || !lat2 || !lng2) return null;
+  const R = 6371;
+  const dLat = (lat2 - lat1) * Math.PI / 180;
+  const dLng = (lat2 - lng1) * Math.PI / 180; // fix: was lng2-lng1
+  const a = Math.sin(dLat/2)**2 + Math.cos(lat1*Math.PI/180) * Math.cos(lat2*Math.PI/180) * Math.sin(dLng/2)**2;
+  return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a));
+}
+
+function travelMins(lat1, lng1, lat2, lng2) {
+  const km = haversineKm(lat1, lng1, lat2, lng2);
+  if (km === null) return 30; // default 30 min if no coords
+  const avgSpeedKmh = 64; // ~40mph
+  return Math.round((km / avgSpeedKmh) * 60) + 10; // +10 min buffer for parking/access
+}
+
 function getGaps(engId) {
   const engJobs = (schedule[engId] || [])
-    .map(j => ({ start: timeToMins(j.startTime), end: timeToMins(j.endTime), label: j.client || j.desc }))
+    .map(j => ({
+      start: timeToMins(j.startTime),
+      end:   timeToMins(j.endTime),
+      label: j.client || j.desc,
+      lat:   j.lat,
+      lng:   j.lng,
+    }))
     .filter(j => j.start >= 0 && j.end > j.start)
     .sort((a, b) => a.start - b.start);
 
   const gaps = [];
   let cursor = DAY_START * 60;
+  let prevJob = null;
 
   for (const slot of engJobs) {
     if (slot.start > cursor + 10) {
-      gaps.push({ startMins: cursor, endMins: slot.start, gapMins: slot.start - cursor });
+      // Travel time from previous job location to next job location
+      const travelBefore = prevJob ? travelMins(prevJob.lat, prevJob.lng, slot.lat, slot.lng) : 0;
+      const usableStart = cursor + travelBefore;
+      const usableEnd   = slot.start;
+      const usableMins  = usableEnd - usableStart;
+      if (usableMins >= 30) {
+        gaps.push({
+          startMins:  usableStart,
+          endMins:    usableEnd,
+          gapMins:    usableMins,
+          rawStart:   cursor,
+          travelMins: travelBefore,
+          nextLat:    slot.lat,
+          nextLng:    slot.lng,
+        });
+      }
     }
-    cursor = Math.max(cursor, slot.end);
+    cursor  = Math.max(cursor, slot.end);
+    prevJob = slot;
   }
-  if (DAY_END * 60 > cursor + 10) {
-    gaps.push({ startMins: cursor, endMins: DAY_END * 60, gapMins: DAY_END * 60 - cursor });
+
+  // Gap after last job — travel back is not needed so just use remaining time
+  if (DAY_END * 60 > cursor + 30) {
+    gaps.push({
+      startMins:  cursor,
+      endMins:    DAY_END * 60,
+      gapMins:    DAY_END * 60 - cursor,
+      rawStart:   cursor,
+      travelMins: 0,
+    });
   }
   return gaps;
 }
@@ -377,9 +424,10 @@ function renderTimeline() {
       const fits = selectedJob && g.gapMins >= selectedJob.durationMins;
       const noJob = !selectedJob;
       const cls = noJob ? 'empty' : fits ? 'fits' : 'no-fit';
+      const travelLabel = g.travelMins > 0 ? ` (${g.travelMins}min travel)` : '';
       const label = noJob
-        ? (g.gapMins >= 30 ? minsToLabel(g.startMins) + '–' + minsToLabel(g.endMins) : '')
-        : fits ? `✓ ${g.gapMins}min free` : '';
+        ? (g.gapMins >= 30 ? minsToLabel(g.startMins) + '–' + minsToLabel(g.endMins) + travelLabel : '')
+        : fits ? `✓ ${g.gapMins}min free${travelLabel}` : '';
       return `<div class="gap-block ${cls}" 
         style="left:${pct(g.startMins)};width:${widthPct(g.startMins, g.endMins)};"
         title="${minsToLabel(g.startMins)}–${minsToLabel(g.endMins)} (${g.gapMins} min free)"
@@ -420,7 +468,8 @@ function renderTimeline() {
 
 // ── GAP CLICK ────────────────────────────────────────────
 
-function clickGap(engId, engName, startMins, endMins, gapMins, event) {
+function clickGap(engId, engName, startMins, endMins, gapMins, travelMins, event) {
+  const gap = { startMins, endMins, gapMins, travelMins };
   event.stopPropagation();
 
   const fittingJobs = jobs.filter(j => j.durationMins <= gapMins);
@@ -428,8 +477,9 @@ function clickGap(engId, engName, startMins, endMins, gapMins, event) {
   const popup = document.getElementById('gap-popup');
   document.getElementById('popup-title').textContent =
     engName + ' — ' + minsToLabel(startMins) + ' to ' + minsToLabel(endMins);
+  const travelNote = gap && gap.travelMins > 0 ? ` · ${gap.travelMins}min travel included` : '';
   document.getElementById('popup-sub').textContent =
-    gapMins + ' minute gap · ' + (fittingJobs.length ? fittingJobs.length + ' job' + (fittingJobs.length!==1?'s':'') + ' will fit' : 'No unassigned jobs fit this gap');
+    gapMins + ' minutes usable' + travelNote + ' · ' + (fittingJobs.length ? fittingJobs.length + ' job' + (fittingJobs.length!==1?'s':'') + ' will fit' : 'No unassigned jobs fit this gap');
 
   if (!fittingJobs.length) {
     document.getElementById('popup-body').innerHTML =
