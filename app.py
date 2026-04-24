@@ -209,6 +209,37 @@ def get_tomorrow_schedule():
         print(f"[TOMORROW] ERROR: {e}")
         return jsonify({'error': str(e)}), 500
 
+@app.route('/api/schedule/today')
+def get_today_schedule():
+    try:
+        today = datetime.now()
+        raw = fetch_paged({
+            'plannedAtFrom': today.strftime('%Y-%m-%dT00:00:00'),
+            'plannedAtTo':   today.strftime('%Y-%m-%dT23:59:59'),
+        })
+        print(f"[TODAY] Got {len(raw)} jobs")
+
+        by_engineer = {}
+        for j in raw:
+            rid = str(j.get('resourceId') or '')
+            if not rid: continue
+            by_engineer.setdefault(rid, []).append(format_job(j))
+
+        for rid in by_engineer:
+            by_engineer[rid].sort(key=lambda j: j['startTime'] or '99:99')
+
+        eng_names = {}
+        for rid, eng_jobs in by_engineer.items():
+            for j in eng_jobs:
+                if j.get('resourceName'):
+                    eng_names[rid] = j['resourceName']
+                    break
+
+        return jsonify({'byEngineer': by_engineer, 'engNames': eng_names, 'date': today.strftime('%Y-%m-%d')})
+    except Exception as e:
+        print(f"[TODAY] ERROR: {e}")
+        return jsonify({'error': str(e)}), 500
+
 @app.route('/api/jobs/<job_id>/assign', methods=['POST'])
 def assign_job(job_id):
     try:
