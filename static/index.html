@@ -489,8 +489,8 @@ function renderTimeline() {
 
 // ── GAP CLICK ────────────────────────────────────────────
 
-function clickGap(engId, engName, startMins, endMins, gapMins, travelMins, event) {
-  const gap = { startMins, endMins, gapMins, travelMins };
+function clickGap(engId, engName, startMins, endMins, gapMins, travelMins, event, day='tomorrow') {
+  const gap = { startMins, endMins, gapMins, travelMins, day };
   event.stopPropagation();
 
   const fittingJobs = jobs.filter(j => j.durationMins <= gapMins);
@@ -514,7 +514,7 @@ function clickGap(engId, engName, startMins, endMins, gapMins, travelMins, event
           <div class="fitting-job-sub">${j.client}</div>
         </div>
         <span class="fitting-job-dur">${j.durationMins}min</span>
-        <button class="btn-assign" onclick="assignJob('${j.id}','${engId}',${startMins},'${j.ref}','${engName.replace(/'/g,"\\'")}')">Assign</button>
+        <button class="btn-assign" onclick="assignJob('${j.id}','${engId}',${startMins},'${j.ref}','${engName.replace(/'/g,"\\'")}'  ,'${gap.day||'tomorrow'}')">Assign</button>
       </div>`).join('');
   }
 
@@ -539,8 +539,8 @@ document.addEventListener('click', e => {
 
 // ── ASSIGN ───────────────────────────────────────────────
 
-async function assignJob(jobId, engId, startMins, jobRef, engName) {
-  const d = new Date(tomorrow);
+async function assignJob(jobId, engId, startMins, jobRef, engName, day='tomorrow') {
+  const d = day === 'today' ? new Date() : new Date(tomorrow);
   d.setHours(Math.floor(startMins / 60), startMins % 60, 0, 0);
   const plannedStart = d.toISOString();
 
@@ -566,7 +566,7 @@ async function assignJob(jobId, engId, startMins, jobRef, engName) {
 
     renderJobList();
     showToast(jobRef + ' assigned to ' + engName);
-    loadSchedule();
+    if (day === 'today') { loadTodaySchedule(); } else { loadSchedule(); }
   } catch(e) {
     showToast('Failed: ' + e.message);
   }
@@ -619,17 +619,19 @@ function renderTodayTimeline() {
   // Eng list
   document.getElementById('today-eng-list').innerHTML = engIds.map(id => {
     const name = todayEngNames[id] || ('Eng ' + id);
-    const jobs = todaySchedule[id] || [];
-    const done = jobs.filter(j => ['completedok','completedwithissues'].includes((j.status||'').toLowerCase())).length;
+    const engJobs = todaySchedule[id] || [];
+    const done = engJobs.filter(j => ['completedok','completedwithissues'].includes((j.status||'').toLowerCase())).length;
+    const gaps = getTodayGaps(id, nowMins);
     return `<div style="padding:8px 10px;border-bottom:1px solid #f0f0ee;font-size:12px;">
       <div style="font-weight:500;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">${name}</div>
-      <div style="font-size:10px;color:#aaa;">${done}/${jobs.length} done</div>
+      <div style="font-size:10px;color:#aaa;">${done}/${engJobs.length} done · ${gaps.length} gap${gaps.length!==1?'s':''}</div>
     </div>`;
   }).join('');
 
   const rowsHtml = engIds.map(engId => {
     const name = todayEngNames[engId] || ('Eng ' + engId);
     const engJobs = (todaySchedule[engId] || []).sort((a,b) => (a.startTime||'') > (b.startTime||'') ? 1 : -1);
+    const gaps = getTodayGaps(engId, nowMins);
 
     const blocks = engJobs.map(j => {
       const s = timeToMins(j.startTime);
@@ -648,13 +650,31 @@ function renderTodayTimeline() {
       </div>`;
     }).join('');
 
+    const gapBlocks = gaps.map(g => {
+      const fits = selectedJob && g.gapMins >= selectedJob.durationMins;
+      const noJob = !selectedJob;
+      const cls = noJob ? 'empty' : fits ? 'fits' : 'no-fit';
+      const travelLabel = g.travelMins > 0 ? ` (${g.travelMins}min travel)` : '';
+      const label = noJob
+        ? (g.gapMins >= 30 ? minsToLabel(g.startMins) + '–' + minsToLabel(g.endMins) : '')
+        : fits ? `✓ ${g.gapMins}min free${travelLabel}` : '';
+      return `<div class="gap-block ${cls}"
+        style="left:${pct(g.startMins)};width:${widthPct(g.startMins, g.endMins)};"
+        title="${minsToLabel(g.startMins)}–${minsToLabel(g.endMins)} (${g.gapMins}min usable)"
+        onclick="clickGap('${engId}','${name.replace(/'/g,"\'")}',${g.startMins},${g.endMins},${g.gapMins},${g.travelMins||0},event,'today')">
+        <span class="gap-label">${label}</span>
+      </div>`;
+    }).join('');
+
     return `<div class="eng-row">
       <div class="eng-label" style="font-size:11px;">
         <div class="eng-name" style="font-size:11px;">${name}</div>
+        <div style="font-size:10px;color:#aaa;">${engJobs.length} jobs · ${gaps.length} gaps</div>
       </div>
       <div class="track-wrap">
         <div class="track">
           ${blocks}
+          ${gapBlocks}
           <div style="position:absolute;top:0;bottom:0;left:${nowPct}%;width:2px;background:#E24B4A;z-index:5;" title="Now"></div>
         </div>
       </div>
@@ -669,6 +689,45 @@ function renderTodayTimeline() {
       </div>
     </div>
     ${rowsHtml}`;
+}
+
+function getTodayGaps(engId, nowMins) {
+  // Only show gaps from NOW onwards — no point showing past gaps
+  const engJobs = (todaySchedule[engId] || [])
+    .map(j => ({
+      start: timeToMins(j.startTime),
+      end:   timeToMins(j.endTime),
+      label: j.client || j.desc,
+      lat:   j.lat,
+      lng:   j.lng,
+    }))
+    .filter(j => j.start >= 0 && j.end > j.start)
+    .sort((a, b) => a.start - b.start);
+
+  const gaps = [];
+  // Start from now, not from 5am
+  let cursor = Math.max(nowMins, DAY_START * 60);
+  let prevJob = engJobs.filter(j => j.end <= nowMins).pop() || null;
+
+  for (const slot of engJobs) {
+    if (slot.end <= nowMins) continue; // skip past jobs
+    if (slot.start > cursor + 10) {
+      const travelTime = prevJob ? travelMins(prevJob.lat, prevJob.lng, slot.lat, slot.lng) : 0;
+      const usableStart = cursor + travelTime;
+      const usableMins  = slot.start - usableStart;
+      if (usableMins >= 30) {
+        gaps.push({ startMins: usableStart, endMins: slot.start, gapMins: usableMins, travelMins: travelTime });
+      }
+    }
+    cursor  = Math.max(cursor, slot.end);
+    prevJob = slot;
+  }
+
+  // Gap after last job until end of day
+  if (DAY_END * 60 > cursor + 30) {
+    gaps.push({ startMins: cursor, endMins: DAY_END * 60, gapMins: DAY_END * 60 - cursor, travelMins: 0 });
+  }
+  return gaps;
 }
 
 function showToast(msg) {
