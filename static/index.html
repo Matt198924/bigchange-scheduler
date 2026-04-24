@@ -518,7 +518,7 @@ function renderTimeline() {
       const label = noJob
         ? (g.gapMins >= 30 ? minsToLabel(g.startMins) + '–' + minsToLabel(g.endMins) + travelLabel : '')
         : fits ? `✓ ${g.gapMins}min free${travelLabel}` : '';
-      return `<div class="gap-block ${cls}" 
+      return `<div class="gap-block clickable-gap ${cls}" 
         style="left:${pct(g.startMins)};width:${widthPct(g.startMins, g.endMins)};"
         title="${minsToLabel(g.startMins)}–${minsToLabel(g.endMins)} (${g.gapMins} min free)"
         onclick="clickGap('${engId}','${eng.name}',${g.startMins},${g.endMins},${g.gapMins},${g.travelMins||0},event)">
@@ -602,12 +602,7 @@ function closePopup() {
   document.getElementById('gap-popup').style.display = 'none';
 }
 
-document.addEventListener('click', e => {
-  const popup = document.getElementById('gap-popup');
-  if (popup.style.display !== 'none' && !popup.contains(e.target)) {
-    closePopup();
-  }
-});
+// popup close handled in delegated listener above
 
 // ── ASSIGN ───────────────────────────────────────────────
 
@@ -730,7 +725,7 @@ function renderTodayTimeline() {
       const label = noJob
         ? (g.gapMins >= 30 ? minsToLabel(g.startMins) + '–' + minsToLabel(g.endMins) : '')
         : fits ? `✓ ${g.gapMins}min free${travelLabel}` : '';
-      return `<div class="gap-block ${cls}"
+      return `<div class="gap-block clickable-gap ${cls}"
         style="left:${pct(g.startMins)};width:${widthPct(g.startMins, g.endMins)};"
         title="${minsToLabel(g.startMins)}–${minsToLabel(g.endMins)} (${g.gapMins}min usable)"
         onclick="clickGap('${engId}','${name.replace(/'/g,"\'")}',${g.startMins},${g.endMins},${g.gapMins},${g.travelMins||0},event,'today')">
@@ -809,6 +804,28 @@ function showToast(msg) {
   clearTimeout(window._tt);
   window._tt = setTimeout(() => t.classList.remove('show'), 3500);
 }
+
+// Single delegated event listener for ALL gap clicks - avoids inline onclick issues
+document.addEventListener('click', function(e) {
+  const gap = e.target.closest('.clickable-gap');
+  if (gap) {
+    e.stopPropagation();
+    const engId   = gap.dataset.engid;
+    const engName = gap.dataset.engname;
+    const startMins = parseInt(gap.dataset.start);
+    const endMins   = parseInt(gap.dataset.end);
+    const gapMins   = parseInt(gap.dataset.gap);
+    const travelMins = parseInt(gap.dataset.travel || 0);
+    const day       = gap.dataset.day || 'tomorrow';
+    clickGap(engId, engName, startMins, endMins, gapMins, travelMins, e, day);
+    return;
+  }
+  // Close popup if clicking outside
+  const popup = document.getElementById('gap-popup');
+  if (popup && popup.style.display !== 'none' && !popup.contains(e.target)) {
+    closePopup();
+  }
+});
 
 loadAll();
 setInterval(loadAll, 120000);
