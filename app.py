@@ -220,9 +220,19 @@ def assign_job(job_id):
         payload = {'resourceId': int(resource_id)}
         if planned_start:
             payload['plannedStartAt'] = planned_start
-        result = bc_post(f'/jobs/{job_id}/assign', payload)
-        return jsonify({'success': True, 'result': result})
+        # Correct endpoint is PUT /jobs/:jobId/schedule
+        token = get_token()
+        url = f'{API_BASE}/jobs/{job_id}/schedule'
+        resp = requests.put(url, headers={
+            'Authorization': f'Bearer {token}',
+            'Content-Type': 'application/json',
+            'customer-id': CUSTOMER_ID,
+        }, json=payload, timeout=15)
+        print(f"[ASSIGN] {resp.status_code}: {resp.text[:300]}")
+        resp.raise_for_status()
+        return jsonify({'success': True})
     except Exception as e:
+        print(f"[ASSIGN] ERROR: {e}")
         return jsonify({'error': str(e)}), 500
 
 @app.route('/api/debug/categories')
