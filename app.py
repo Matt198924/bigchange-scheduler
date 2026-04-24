@@ -147,31 +147,31 @@ def get_engineers():
 @app.route('/api/jobs/unassigned')
 def get_unassigned_jobs():
     try:
-        # Fetch all jobs that are NOT completed - using status filter directly
-        # BigChange status values that mean "still active/pending"
+        # Query using StatusModifiedAt in yearly chunks to avoid API limits
         raw = []
-        active_statuses = [
-            'new', 'unscheduled', 'scheduled', 'sent', 'read',
-            'accepted', 'onTheWay', 'started', 'suspended',
-            'lateStart', 'lateFinish', 'rescheduled', 'refused'
-        ]
-        for s in active_statuses:
-            try:
-                # Status filter needs a date range - use a wide window
-                batch = fetch_paged({
-                    'status': s,
-                    'StatusModifiedAtFrom': '2020-01-01T00:00:00',
-                    'StatusModifiedAtTo': (datetime.now() + timedelta(days=365)).strftime('%Y-%m-%dT23:59:59'),
-                })
-                print(f"[UNASSIGNED] status={s}: {len(batch)} jobs")
-                raw.extend(batch)
-            except Exception as e:
-                print(f"[UNASSIGNED] status={s} failed: {e}")
-
-        # Deduplicate
         seen = set()
-        raw = [j for j in raw if not (j.get('id') in seen or seen.add(j.get('id')))]
-        print(f"[UNASSIGNED] Total unique jobs: {len(raw)}")
+        # Try each year from 2023 to now+1
+        years = [
+            ('2023-01-01T00:00:00', '2023-12-31T23:59:59'),
+            ('2024-01-01T00:00:00', '2024-12-31T23:59:59'),
+            ('2025-01-01T00:00:00', '2025-12-31T23:59:59'),
+            ('2026-01-01T00:00:00', '2026-12-31T23:59:59'),
+            ('2027-01-01T00:00:00', '2027-12-31T23:59:59'),
+        ]
+        for from_dt, to_dt in years:
+            try:
+                batch = fetch_paged({
+                    'StatusModifiedAtFrom': from_dt,
+                    'StatusModifiedAtTo':   to_dt,
+                })
+                new_jobs = [j for j in batch if j.get('id') not in seen]
+                seen.update(j.get('id') for j in new_jobs)
+                raw.extend(new_jobs)
+                print(f"[UNASSIGNED] {from_dt[:4]}: {len(batch)} jobs, {len(new_jobs)} new")
+            except Exception as e:
+                print(f"[UNASSIGNED] {from_dt[:4]} failed: {e}")
+
+        print(f"[UNASSIGNED] Total unique: {len(raw)}")
 
         print(f"[UNASSIGNED] Total fetched: {len(raw)}")
         cats = {}
