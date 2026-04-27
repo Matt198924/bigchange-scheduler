@@ -115,11 +115,6 @@ body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; b
 
 <div class="metrics">
   <div class="metric"><div class="m-label">Unassigned jobs</div><div class="m-value red" id="m-unassigned">—</div></div>
-  <div class="metric"><div class="m-label">Scheduled today</div><div class="m-value blue" id="m-today-total">—</div></div>
-  <div class="metric"><div class="m-label">Completed OK</div><div class="m-value green" id="m-today-ok">—</div></div>
-  <div class="metric"><div class="m-label">Completed w/ issues</div><div class="m-value amber" id="m-today-issues">—</div></div>
-  <div class="metric"><div class="m-label">In progress</div><div class="m-value blue" id="m-today-active">—</div></div>
-  <div class="metric"><div class="m-label">Yet to start</div><div class="m-value red" id="m-today-pending">—</div></div>
   <div class="metric"><div class="m-label">Engineers today</div><div class="m-value blue" id="m-today-engs">—</div></div>
   <div class="metric"><div class="m-label">Engineers tomorrow</div><div class="m-value blue" id="m-engs">—</div></div>
   <div class="metric"><div class="m-label">Jobs tomorrow</div><div class="m-value blue" id="m-tomorrow">—</div></div>
@@ -223,18 +218,6 @@ async function loadSchedule(day) {
     todaySchedule = data.byEngineer || {};
     todayEngNames = data.engNames || {};
     document.getElementById('m-today-engs').textContent = Object.keys(todaySchedule).length;
-    // Calculate today's job stats
-    const allTodayJobs = Object.values(todaySchedule).flat();
-    const totalToday = allTodayJobs.length;
-    const completedOk = allTodayJobs.filter(j => (j.status||'').toLowerCase() === 'completedok').length;
-    const completedIssues = allTodayJobs.filter(j => (j.status||'').toLowerCase() === 'completedwithissues').length;
-    const active = allTodayJobs.filter(j => ['started','ontheway','suspended'].includes((j.status||'').toLowerCase())).length;
-    document.getElementById('m-today-total').textContent = totalToday;
-    document.getElementById('m-today-ok').textContent = completedOk;
-    document.getElementById('m-today-issues').textContent = completedIssues;
-    document.getElementById('m-today-active').textContent = active;
-    const pending = allTodayJobs.filter(j => ['new','scheduled','sent','read','accepted','refused'].includes((j.status||'').toLowerCase())).length;
-    document.getElementById('m-today-pending').textContent = pending;
   } else {
     schedule = data.byEngineer || {};
     engNames = data.engNames || {};
@@ -391,19 +374,9 @@ function renderTimeline() {
            + '<span class="gap-label">' + lbl + '</span></div>';
     }).join('');
 
-    let dayStartHtml = '';
     // Now line for today
     const nowLineHtml = currentTab==='today'
       ? '<div class="now-line" style="left:' + pct(nowMins) + ';"></div>' : '';
-
-    // Day start marker for tomorrow
-    let dayStartHtml = '';
-    if (currentTab === 'tomorrow') {
-      const effStart = getEffectiveDayStart(engId, sched);
-      if (effStart && effStart > DAY_START*60) {
-        dayStartHtml = '<div style="position:absolute;top:0;bottom:0;left:' + pct(effStart) + ';width:2px;background:#185FA5;opacity:0.5;z-index:4;" title="Est. departure ' + fmtMins(effStart) + '"></div>';
-      }
-    }
 
     return '<div class="eng-row">'
          + '<div class="eng-label"><div class="eng-name">' + escHtml(name) + '</div>'
