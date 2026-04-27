@@ -1,341 +1,653 @@
-import os
-import re
-import time
-import requests
-from flask import Flask, jsonify, request, send_from_directory
-from flask_cors import CORS
-from datetime import datetime, timezone, timedelta
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>BigChange Scheduler</title>
+<style>
+* { box-sizing: border-box; margin: 0; padding: 0; }
+body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; background: #f5f5f3; color: #1a1a1a; font-size: 14px; }
 
-app = Flask(__name__, static_folder='static')
-CORS(app)
+.topbar { background: #185FA5; padding: 0 1.5rem; height: 52px; display: flex; align-items: center; justify-content: space-between; }
+.logo { font-size: 15px; font-weight: 600; color: #fff; }
+.topbar-sub { font-size: 12px; color: rgba(255,255,255,0.7); margin-left: 12px; }
+.conn-badge { font-size: 11px; padding: 3px 10px; border-radius: 20px; background: rgba(255,255,255,0.2); color: #fff; }
+.conn-badge.error { background: #E24B4A; }
+.btn-refresh { padding: 5px 12px; border: 1px solid rgba(255,255,255,0.4); border-radius: 7px; background: transparent; color: #fff; font-size: 12px; cursor: pointer; }
 
-CLIENT_ID     = os.environ.get('BIGCHANGE_CLIENT_ID', '')
-CLIENT_SECRET = os.environ.get('BIGCHANGE_CLIENT_SECRET', '')
-CUSTOMER_ID   = os.environ.get('BIGCHANGE_CUSTOMER_ID', '1564')
-API_BASE      = 'https://api.bigchange.com/v1'
-TOKEN_URL     = 'https://api.bigchange.com/auth/tokens'
+.metrics { display: flex; gap: 1px; background: #e5e5e3; border-bottom: 1px solid #e5e5e3; }
+.metric { flex: 1; background: #fff; padding: 12px 1rem; text-align: center; }
+.metric .m-label { font-size: 11px; color: #888; margin-bottom: 3px; }
+.metric .m-value { font-size: 20px; font-weight: 600; color: #1a1a1a; }
+.metric .m-value.blue { color: #185FA5; }
+.metric .m-value.green { color: #3B6D11; }
+.metric .m-value.red { color: #A32D2D; }
 
-VALID_CATEGORY_IDS = {77961, 82685, 82693, 82694, 82695, 82696, 82697}
-COMPLETED_STATUSES = {'completedok', 'completedwithissues', 'cancelled'}
+.tabs { display: flex; background: #fff; border-bottom: 1px solid #e5e5e3; padding: 0 1rem; }
+.tab { padding: 10px 16px; font-size: 13px; border: none; background: none; cursor: pointer; color: #888; border-bottom: 2px solid transparent; margin-bottom: -1px; }
+.tab.active { color: #185FA5; border-bottom-color: #185FA5; font-weight: 500; }
 
-_token_cache = {'token': None, 'expires_at': 0}
-_cache = {}
+.layout { display: grid; grid-template-columns: 280px 1fr; height: calc(100vh - 140px); }
+.left { background: #fff; border-right: 1px solid #e5e5e3; display: flex; flex-direction: column; overflow: hidden; }
+.panel-head { padding: 10px 14px; border-bottom: 1px solid #e5e5e3; display: flex; align-items: center; justify-content: space-between; flex-shrink: 0; }
+.panel-title { font-size: 12px; font-weight: 600; color: #888; text-transform: uppercase; letter-spacing: 0.05em; }
+.panel-count { font-size: 12px; color: #aaa; }
+.jobs-scroll { flex: 1; overflow-y: auto; }
+.job-item { padding: 10px 14px; border-bottom: 1px solid #f0f0ee; cursor: pointer; border-left: 3px solid transparent; }
+.job-item:hover { background: #fafaf9; }
+.job-item.selected { background: #EBF4FF; border-left-color: #185FA5; }
+.job-ref { font-size: 11px; font-weight: 600; color: #185FA5; margin-bottom: 2px; }
+.job-desc { font-size: 12px; font-weight: 500; margin-bottom: 2px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.job-client { font-size: 11px; color: #888; margin-bottom: 5px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.job-tags { display: flex; gap: 5px; align-items: center; }
+.tag-dur { font-size: 10px; padding: 2px 6px; border-radius: 4px; background: #E6F1FB; color: #185FA5; }
+.tag-type { font-size: 10px; padding: 2px 6px; border-radius: 4px; background: #f0f0ee; color: #666; }
 
-def get_token():
-    now = time.time()
-    if _token_cache['token'] and now < _token_cache['expires_at'] - 30:
-        return _token_cache['token']
-    resp = requests.post(TOKEN_URL, data={
-        'grant_type': 'client_credentials',
-        'client_id': CLIENT_ID,
-        'client_secret': CLIENT_SECRET,
-    }, timeout=15)
-    resp.raise_for_status()
-    data = resp.json()
-    _token_cache['token'] = data['access_token']
-    _token_cache['expires_at'] = time.time() + data.get('expires_in', 3600)
-    return _token_cache['token']
+.right { display: flex; flex-direction: column; overflow: hidden; }
+.timeline-controls { padding: 8px 14px; background: #fff; border-bottom: 1px solid #e5e5e3; display: flex; align-items: center; gap: 10px; flex-shrink: 0; min-height: 40px; }
+.selected-pill { font-size: 11px; padding: 3px 10px; border-radius: 20px; background: #185FA5; color: #fff; }
+.hint { font-size: 11px; color: #aaa; margin-left: auto; }
 
-def cache_get(key, max_age=90):
-    entry = _cache.get(key)
-    if entry and time.time() - entry['ts'] < max_age:
-        return entry['data']
-    return None
+.timeline-scroll { flex: 1; overflow-y: auto; overflow-x: hidden; }
 
-def cache_set(key, data):
-    _cache[key] = {'data': data, 'ts': time.time()}
+.hour-header { display: grid; grid-template-columns: 160px 1fr; background: #fff; border-bottom: 1px solid #e5e5e3; position: sticky; top: 0; z-index: 10; }
+.hour-header-label { padding: 4px 10px; font-size: 10px; color: #aaa; border-right: 1px solid #f0f0ee; }
+.hour-ticks { display: flex; }
+.hour-tick { flex: 1; font-size: 10px; color: #aaa; padding: 4px 0 4px 3px; border-left: 1px solid #f0f0ee; }
 
-def bc_get(path, params=None):
-    token = get_token()
-    url = f'{API_BASE}{path}'
-    print(f"[API] GET {url} params={params}")
-    resp = requests.get(url, headers={
-        'Authorization': f'Bearer {token}',
-        'Content-Type': 'application/json',
-        'customer-id': CUSTOMER_ID,
-    }, params=params, timeout=30)
-    print(f"[API] {resp.status_code}: {resp.text[:200]}")
-    resp.raise_for_status()
-    return resp.json()
+.eng-row { display: grid; grid-template-columns: 160px 1fr; border-bottom: 1px solid #f0f0ee; min-height: 50px; }
+.eng-label { padding: 8px 10px; border-right: 1px solid #f0f0ee; background: #fff; display: flex; flex-direction: column; justify-content: center; }
+.eng-name { font-size: 12px; font-weight: 500; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.eng-meta { font-size: 10px; color: #aaa; margin-top: 2px; }
 
-def bc_put(path, body):
-    token = get_token()
-    resp = requests.put(f'{API_BASE}{path}', headers={
-        'Authorization': f'Bearer {token}',
-        'Content-Type': 'application/json',
-        'customer-id': CUSTOMER_ID,
-    }, json=body, timeout=15)
-    print(f"[PUT] {resp.status_code}: {resp.text[:200]}")
-    resp.raise_for_status()
-    try: return resp.json()
-    except: return {}
+.track-wrap { position: relative; background: #f9f9f7; display: flex; align-items: center; padding: 0 8px; }
+.track { position: relative; width: 100%; height: 32px; background: #f0f0ee; border-radius: 4px; }
 
-def fetch_paged(params):
-    all_items = []
-    page = 1
-    while page <= 10:
-        data = bc_get('/jobs', {**params, 'pageNumber': page, 'pageSize': 1000})
-        items = data if isinstance(data, list) else (data.get('items') or [])
-        all_items.extend(items)
-        print(f"[PAGED] Page {page}: {len(items)} items")
-        if len(items) < 1000:
-            break
-        page += 1
-    return all_items
+.job-block { position: absolute; top: 2px; height: 28px; border-radius: 3px; display: flex; align-items: center; padding: 0 5px; overflow: hidden; z-index: 2; }
+.job-block-label { font-size: 10px; font-weight: 500; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 
-def is_group_entry(name):
-    return bool(re.match(r'^\(\d+\)', name.strip()))
+.gap-block { position: absolute; top: 2px; height: 28px; border-radius: 3px; z-index: 1; display: flex; align-items: center; justify-content: center; cursor: pointer; }
+.gap-block:hover { opacity: 0.8; }
+.gap-empty { background: rgba(99,153,34,0.15); border: 1px dashed #639922; }
+.gap-fits { background: rgba(24,95,165,0.2); border: 2px solid #185FA5; }
+.gap-nofit { background: rgba(200,200,200,0.1); border: 1px dashed #ccc; }
+.gap-label { font-size: 9px; font-weight: 500; white-space: nowrap; overflow: hidden; padding: 0 4px; color: #3B6D11; }
+.gap-fits .gap-label { color: #185FA5; }
 
-def is_valid_category(job):
-    cat_id = job.get('categoryId')
-    if cat_id is None:
-        return False
-    return int(cat_id) in VALID_CATEGORY_IDS
+.now-line { position: absolute; top: 0; bottom: 0; width: 2px; background: #E24B4A; z-index: 5; pointer-events: none; }
 
-def get_duration_minutes(job):
-    for field in ['plannedDuration', 'actualDuration', 'duration']:
-        val = job.get(field)
-        if val:
-            try:
-                v = float(val)
-                return int(v) if v > 24 else int(v * 60)
-            except: pass
-    return 60
+.gap-popup { position: fixed; background: #fff; border: 1px solid #e5e5e3; border-radius: 10px; box-shadow: 0 4px 20px rgba(0,0,0,0.15); padding: 16px; width: 340px; z-index: 1000; max-height: 420px; overflow-y: auto; }
+.gap-popup h3 { font-size: 13px; font-weight: 600; margin-bottom: 4px; }
+.gap-popup-sub { font-size: 12px; color: #888; margin-bottom: 12px; }
+.gap-popup-close { position: absolute; top: 10px; right: 12px; font-size: 18px; cursor: pointer; color: #aaa; border: none; background: none; line-height: 1; }
+.fitting-job { padding: 8px 10px; border: 1px solid #e5e5e3; border-radius: 7px; margin-bottom: 6px; display: flex; align-items: center; gap: 8px; }
+.fitting-job.selected-job { border-color: #185FA5; background: #f0f6ff; }
+.fitting-job-info { flex: 1; min-width: 0; }
+.fitting-job-ref { font-size: 11px; font-weight: 600; color: #185FA5; }
+.fitting-job-desc { font-size: 12px; font-weight: 500; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.fitting-job-sub { font-size: 11px; color: #888; }
+.fitting-job-dur { font-size: 11px; padding: 2px 7px; border-radius: 20px; background: #E6F1FB; color: #185FA5; flex-shrink: 0; }
+.btn-assign { padding: 4px 10px; border-radius: 6px; border: 1px solid #185FA5; background: #185FA5; color: #fff; font-size: 11px; cursor: pointer; flex-shrink: 0; }
+.btn-assign:hover { background: #0C447C; }
+.no-fitting { font-size: 12px; color: #aaa; text-align: center; padding: 16px 0; }
+.constraint-info { font-size: 11px; color: #854F0B; background: #FAEEDA; padding: 4px 8px; border-radius: 4px; margin-bottom: 8px; }
 
-def format_job(j):
-    loc = j.get('contactLocation') or {}
-    return {
-        'id':              str(j.get('id', '')),
-        'ref':             str(j.get('reference') or j.get('id', '')),
-        'desc':            (j.get('description') or 'Job')[:100],
-        'client':          j.get('contactName') or j.get('customerName') or '—',
-        'area':            j.get('contactAddress') or '—',
-        'type':            j.get('typeName') or 'Reactive',
-        'status':          j.get('status') or '',
-        'category':        j.get('categoryName') or '',
-        'resourceId':      str(j.get('resourceId') or ''),
-        'resourceName':    j.get('resourceName') or '',
-        'startTime':       j.get('actualStartAt') or j.get('plannedStartAt'),
-        'endTime':         j.get('actualEndAt') or j.get('plannedEndAt'),
-        'actualStart':     j.get('actualStartAt'),
-        'statusModifiedAt': j.get('statusModifiedAt'),
-        'durationMins':    get_duration_minutes(j),
-        'lat':             loc.get('latitude'),
-        'lng':             loc.get('longitude'),
+.spinner { width: 20px; height: 20px; border: 2px solid #e5e5e3; border-top-color: #185FA5; border-radius: 50%; animation: spin 0.8s linear infinite; margin: 2rem auto; display: block; }
+@keyframes spin { to { transform: rotate(360deg); } }
+.empty-msg { padding: 2rem; text-align: center; color: #aaa; font-size: 13px; }
+
+#toast { position: fixed; bottom: 24px; left: 50%; transform: translateX(-50%); background: #1a1a1a; color: #fff; padding: 10px 20px; border-radius: 8px; font-size: 13px; opacity: 0; transition: opacity 0.3s; pointer-events: none; z-index: 2000; }
+#toast.show { opacity: 1; }
+</style>
+</head>
+<body>
+
+<div class="topbar">
+  <div style="display:flex;align-items:center;">
+    <span class="logo">BigChange Scheduler</span>
+    <span class="topbar-sub" id="topbar-date"></span>
+  </div>
+  <div style="display:flex;align-items:center;gap:10px;">
+    <span class="conn-badge" id="conn-badge">Connecting...</span>
+    <button class="btn-refresh" onclick="loadAll()">&#8635; Refresh</button>
+  </div>
+</div>
+
+<div class="metrics">
+  <div class="metric"><div class="m-label">Unassigned jobs</div><div class="m-value red" id="m-unassigned">—</div></div>
+  <div class="metric"><div class="m-label">Scheduled today</div><div class="m-value blue" id="m-today-total">—</div></div>
+  <div class="metric"><div class="m-label">Completed OK</div><div class="m-value green" id="m-today-ok">—</div></div>
+  <div class="metric"><div class="m-label">Completed w/ issues</div><div class="m-value amber" id="m-today-issues">—</div></div>
+  <div class="metric"><div class="m-label">In progress</div><div class="m-value blue" id="m-today-active">—</div></div>
+  <div class="metric"><div class="m-label">Yet to start</div><div class="m-value red" id="m-today-pending">—</div></div>
+  <div class="metric"><div class="m-label">Engineers today</div><div class="m-value blue" id="m-today-engs">—</div></div>
+  <div class="metric"><div class="m-label">Engineers tomorrow</div><div class="m-value blue" id="m-engs">—</div></div>
+  <div class="metric"><div class="m-label">Jobs tomorrow</div><div class="m-value blue" id="m-tomorrow">—</div></div>
+  <div class="metric"><div class="m-label">Assigned today</div><div class="m-value green" id="m-done">0</div></div>
+</div>
+
+<div class="tabs">
+  <button class="tab active" id="tab-today-btn" onclick="switchTab('today')">Today's live schedule</button>
+  <button class="tab" id="tab-tomorrow-btn" onclick="switchTab('tomorrow')">Tomorrow — assign jobs</button>
+</div>
+
+<div class="layout">
+  <div class="left">
+    <div class="panel-head">
+      <span class="panel-title">Unassigned jobs</span>
+      <span class="panel-count" id="job-count">—</span>
+    </div>
+    <div class="jobs-scroll" id="jobs-list">
+      <div class="spinner"></div>
+    </div>
+  </div>
+  <div class="right">
+    <div class="timeline-controls">
+      <span id="timeline-title" style="font-size:13px;font-weight:600;"></span>
+      <span class="selected-pill" id="selected-pill" style="display:none;"></span>
+      <span class="hint" id="timeline-hint">Select a job then click a gap</span>
+    </div>
+    <div class="timeline-scroll" id="timeline-container">
+      <div class="spinner"></div>
+    </div>
+  </div>
+</div>
+
+<div class="gap-popup" id="gap-popup" style="display:none;">
+  <button class="gap-popup-close" onclick="closePopup()">&#10005;</button>
+  <h3 id="popup-title"></h3>
+  <div class="gap-popup-sub" id="popup-sub"></div>
+  <div id="popup-constraints"></div>
+  <div id="popup-body"></div>
+</div>
+
+<div id="toast"></div>
+
+<script>
+const DAY_START = 5;
+const DAY_END = 17;
+const DAY_MINS = (DAY_END - DAY_START) * 60;
+const HOURS = Array.from({length: DAY_END - DAY_START + 1}, (_, i) => DAY_START + i);
+
+let jobs = [], engineers = [], schedule = {}, engNames = {}, todaySchedule = {}, todayEngNames = {};
+let selectedJob = null, selectedConstraints = [], currentTab = 'today', assignedToday = 0;
+
+// Set up dates
+const todayDate = new Date();
+const tomorrowDate = new Date(); tomorrowDate.setDate(tomorrowDate.getDate() + 1);
+document.getElementById('topbar-date').textContent =
+  'Today: ' + todayDate.toLocaleDateString('en-GB', {weekday:'short',day:'numeric',month:'short'}) +
+  '  |  Tomorrow: ' + tomorrowDate.toLocaleDateString('en-GB', {weekday:'long',day:'numeric',month:'long'});
+
+// ── API ──────────────────────────────────────────────────
+async function api(path, opts) {
+  const r = await fetch(path, opts);
+  if (!r.ok) { const e = await r.json().catch(()=>({error:r.statusText})); throw new Error(e.error||r.statusText); }
+  return r.json();
+}
+
+function setBadge(state, text) {
+  const b = document.getElementById('conn-badge');
+  b.textContent = text;
+  b.className = 'conn-badge' + (state==='error'?' error':'');
+}
+
+async function loadAll() {
+  setBadge('loading','Loading...');
+  try {
+    await Promise.all([loadJobs(), loadEngineers(), loadSchedule('today'), loadSchedule('tomorrow')]);
+    renderAll();
+    setBadge('ok','Live');
+  } catch(e) {
+    setBadge('error','Error');
+    showToast('Error: ' + e.message);
+  }
+}
+
+async function loadJobs() {
+  const data = await api('/api/jobs/unassigned');
+  jobs = data.jobs || [];
+  document.getElementById('m-unassigned').textContent = jobs.length;
+  document.getElementById('job-count').textContent = jobs.length + ' jobs';
+}
+
+async function loadEngineers() {
+  const data = await api('/api/engineers');
+  engineers = data.engineers || [];
+}
+
+async function loadSchedule(day) {
+  const endpoint = day === 'today' ? '/api/schedule/today' : '/api/schedule/tomorrow';
+  const data = await api(endpoint);
+  if (day === 'today') {
+    todaySchedule = data.byEngineer || {};
+    todayEngNames = data.engNames || {};
+    document.getElementById('m-today-engs').textContent = Object.keys(todaySchedule).length;
+    // Calculate today's job stats
+    const allTodayJobs = Object.values(todaySchedule).flat();
+    const totalToday = allTodayJobs.length;
+    const completedOk = allTodayJobs.filter(j => (j.status||'').toLowerCase() === 'completedok').length;
+    const completedIssues = allTodayJobs.filter(j => (j.status||'').toLowerCase() === 'completedwithissues').length;
+    const active = allTodayJobs.filter(j => ['started','ontheway','suspended'].includes((j.status||'').toLowerCase())).length;
+    document.getElementById('m-today-total').textContent = totalToday;
+    document.getElementById('m-today-ok').textContent = completedOk;
+    document.getElementById('m-today-issues').textContent = completedIssues;
+    document.getElementById('m-today-active').textContent = active;
+    const pending = allTodayJobs.filter(j => ['new','scheduled','sent','read','accepted','refused'].includes((j.status||'').toLowerCase())).length;
+    document.getElementById('m-today-pending').textContent = pending;
+  } else {
+    schedule = data.byEngineer || {};
+    engNames = data.engNames || {};
+    const total = Object.values(schedule).reduce((s,a)=>s+a.length,0);
+    document.getElementById('m-engs').textContent = Object.keys(schedule).length;
+    document.getElementById('m-tomorrow').textContent = total;
+  }
+}
+
+function renderAll() {
+  renderJobList();
+  renderTimeline();
+}
+
+// ── TABS ─────────────────────────────────────────────────
+function switchTab(tab) {
+  currentTab = tab;
+  document.getElementById('tab-today-btn').className = 'tab' + (tab==='today'?' active':'');
+  document.getElementById('tab-tomorrow-btn').className = 'tab' + (tab==='tomorrow'?' active':'');
+  renderTimeline();
+}
+
+// ── JOB LIST ─────────────────────────────────────────────
+function renderJobList() {
+  const c = document.getElementById('jobs-list');
+  if (!jobs.length) { c.innerHTML = '<div class="empty-msg">No unassigned jobs found</div>'; return; }
+  c.innerHTML = jobs.map(j => `
+    <div class="job-item${selectedJob&&selectedJob.id===j.id?' selected':''}" onclick="selectJob('${j.id}')">
+      <div class="job-ref">${escHtml(j.ref)}</div>
+      <div class="job-desc">${escHtml(j.desc)}</div>
+      <div class="job-client">${escHtml(j.client)}</div>
+      <div class="job-tags">
+        <span class="tag-dur">${j.durationMins} min</span>
+        <span class="tag-type">${escHtml(j.type)}</span>
+      </div>
+    </div>`).join('');
+}
+
+function selectJob(id) {
+  selectedJob = jobs.find(j => j.id === id) || null;
+  selectedConstraints = [];
+  renderJobList();
+  const pill = document.getElementById('selected-pill');
+  const hint = document.getElementById('timeline-hint');
+  if (selectedJob) {
+    pill.textContent = selectedJob.ref + ' — ' + selectedJob.durationMins + 'min';
+    pill.style.display = 'inline-block';
+    hint.textContent = 'Fetching constraints...';
+    fetchConstraints(selectedJob.id).then(c => {
+      selectedConstraints = c;
+      const labels = c.map(describeConstraint).filter(Boolean);
+      hint.textContent = labels.length ? labels.join(' · ') : 'Click a gap to assign this job';
+      renderTimeline();
+    });
+  } else {
+    pill.style.display = 'none';
+    hint.textContent = 'Select a job then click a gap';
+    renderTimeline();
+  }
+}
+
+async function fetchConstraints(jobId) {
+  try {
+    const data = await api('/api/jobs/' + jobId + '/constraints');
+    return data.constraints || [];
+  } catch(e) { return []; }
+}
+
+function describeConstraint(c) {
+  const at = c.constraintAt ? fmtTime(c.constraintAt) : '';
+  if (c.type === 'jobMustStartAfter')    return 'Start after ' + at;
+  if (c.type === 'jobMustStartBefore')   return 'Start before ' + at;
+  if (c.type === 'jobMustCompleteBefore') return 'Complete before ' + at;
+  if (c.type === 'jobResource')          return 'Specific engineer required';
+  if (c.type === 'jobRequiresResourceSkill') return 'Skill required';
+  return '';
+}
+
+function constraintPasses(gapStart, gapEnd, durMins, constraints) {
+  for (const c of constraints) {
+    if (!c.constraintAt) continue;
+    const mins = timeToMins(c.constraintAt);
+    if (mins < 0) continue;
+    if (c.type === 'jobMustStartAfter'    && gapStart < mins)            return false;
+    if (c.type === 'jobMustStartBefore'   && gapStart >= mins)           return false;
+    if (c.type === 'jobMustCompleteBefore' && gapStart + durMins > mins) return false;
+  }
+  return true;
+}
+
+// ── TIMELINE ─────────────────────────────────────────────
+function renderTimeline() {
+  const sched = currentTab === 'today' ? todaySchedule : schedule;
+  const names = currentTab === 'today' ? todayEngNames : engNames;
+  const dateObj = currentTab === 'today' ? todayDate : tomorrowDate;
+  const container = document.getElementById('timeline-container');
+
+  document.getElementById('timeline-title').textContent = currentTab === 'today'
+    ? "Today's live schedule — " + todayDate.toLocaleDateString('en-GB', {weekday:'long',day:'numeric',month:'long'})
+    : "Tomorrow's schedule — " + tomorrowDate.toLocaleDateString('en-GB', {weekday:'long',day:'numeric',month:'long'});
+
+  const engIds = Object.keys(sched)
+    .filter(id => (sched[id]||[]).length > 0)
+    .sort((a,b) => (names[a]||'').localeCompare(names[b]||''));
+
+  if (!engIds.length) {
+    container.innerHTML = '<div class="empty-msg">No engineers scheduled</div>';
+    return;
+  }
+
+  const now = new Date();
+  const nowMins = now.getHours()*60 + now.getMinutes();
+
+  const ticksHtml = HOURS.map(h => {
+    const lbl = h===12?'12pm':h<12?h+'am':(h-12)+'pm';
+    return '<div class="hour-tick">' + lbl + '</div>';
+  }).join('');
+
+  const rows = engIds.map(engId => {
+    const name = names[engId] || ('Engineer ' + engId);
+    const engJobs = (sched[engId]||[]).slice().sort((a,b)=>(a.startTime||'')>(b.startTime||'')?1:-1);
+    const gaps = calcGaps(engId, sched, currentTab === 'today' ? nowMins : DAY_START*60);
+    const done = engJobs.filter(j=>['completedok','completedwithissues'].includes((j.status||'').toLowerCase())).length;
+
+    // Job blocks
+    const jobBlocksHtml = engJobs.map(j => {
+      const s = timeToMins(j.startTime), e = timeToMins(j.endTime);
+      if (s<0||e<=s) return '';
+      const cs = Math.max(s, DAY_START*60), ce = Math.min(e, DAY_END*60);
+      if (ce<=cs) return '';
+      const st = (j.status||'').toLowerCase();
+      const bg = st==='completedok'||st==='completedwithissues' ? '#C0DD97'
+               : st==='started'||st==='ontheway' ? '#FFD080' : '#B5D4F4';
+      const br = st==='completedok'||st==='completedwithissues' ? '#639922'
+               : st==='started'||st==='ontheway' ? '#BA7517' : '#378ADD';
+      return '<div class="job-block" style="left:' + pct(cs) + ';width:' + wpct(cs,ce) + ';background:' + bg + ';border:1px solid ' + br + ';" title="' + escHtml(j.client||j.desc) + '">'
+           + '<span class="job-block-label" style="color:#1a1a1a;">' + escHtml((j.client||j.desc).substring(0,30)) + '</span></div>';
+    }).join('');
+
+    // Gap blocks
+    const gapBlocksHtml = gaps.map((g, gi) => {
+      const fits = selectedJob && g.gapMins >= selectedJob.durationMins
+                   && constraintPasses(g.startMins, g.endMins, selectedJob.durationMins, selectedConstraints);
+      const cls = !selectedJob ? 'gap-empty' : fits ? 'gap-fits' : 'gap-nofit';
+      const lbl = !selectedJob ? (g.gapMins>=30 ? fmtMins(g.startMins)+'-'+fmtMins(g.endMins) : '')
+                               : fits ? '✓ '+g.gapMins+'min' : '';
+      // Use data attributes - no inline JS strings with dynamic values
+      return '<div class="gap-block ' + cls + '" '
+           + 'style="left:' + pct(g.startMins) + ';width:' + wpct(g.startMins,g.endMins) + ';" '
+           + 'data-engid="' + engId + '" '
+           + 'data-gi="' + gi + '" '
+           + 'data-day="' + currentTab + '" '
+           + 'title="' + fmtMins(g.startMins) + '-' + fmtMins(g.endMins) + ' (' + g.gapMins + 'min)">'
+           + '<span class="gap-label">' + lbl + '</span></div>';
+    }).join('');
+
+    // Now line for today
+    const nowLineHtml = currentTab==='today'
+      ? '<div class="now-line" style="left:' + pct(nowMins) + ';"></div>' : '';
+
+    let dayStartHtml = '';
+
+
+    return '<div class="eng-row">'
+         + '<div class="eng-label"><div class="eng-name">' + escHtml(name) + '</div>'
+         + '<div class="eng-meta">' + (currentTab==='today' ? done+'/'+engJobs.length+' done' : engJobs.length+' jobs') + ' · ' + gaps.length + ' gaps</div></div>'
+         + '<div class="track-wrap"><div class="track">' + jobBlocksHtml + gapBlocksHtml + nowLineHtml + '</div></div>'
+         + '</div>';
+  }).join('');
+
+  container.innerHTML = '<div class="hour-header"><div class="hour-header-label">Engineer</div><div class="hour-ticks">' + ticksHtml + '</div></div>' + rows;
+}
+
+// Store gap data separately so click handler can look it up
+const gapStore = {};
+
+function calcGaps(engId, sched, fromMins) {
+  const isToday = fromMins > DAY_START * 60;
+
+  const engJobs = (sched[engId]||[])
+    .map(j => ({
+      start: timeToMins(j.startTime),
+      end: timeToMins(j.endTime),
+      lat: j.lat, lng: j.lng, client: j.client,
+      status: j.status, actualStart: j.actualStart,
+      statusModifiedAt: j.statusModifiedAt,
+    }))
+    .filter(j => j.start >= 0 && j.end > j.start)
+    .sort((a,b) => a.start - b.start);
+
+  // Effective start: for today use current time, for tomorrow always use 5am
+  const effectiveStart = isToday ? fromMins : DAY_START * 60;
+  const cursor0 = Math.max(effectiveStart, DAY_START * 60);
+
+  const gaps = [];
+  let cursor = cursor0;
+  let prevJob = engJobs.filter(j => j.end <= effectiveStart).pop() || null;
+
+  for (const slot of engJobs) {
+    if (slot.end <= effectiveStart) continue;
+    if (slot.start > cursor + 10) {
+      const travel = prevJob ? estTravelMins(prevJob.lat, prevJob.lng, slot.lat, slot.lng) : 0;
+      const usableStart = Math.min(cursor + travel, slot.start - 15);
+      const usableMins = slot.start - usableStart;
+      if (usableMins >= 20) {
+        gaps.push({ startMins: usableStart, endMins: slot.start, gapMins: usableMins, travelMins: travel });
+      }
     }
+    cursor = Math.max(cursor, slot.end);
+    prevJob = slot;
+  }
+  if (DAY_END * 60 > cursor + 20) {
+    gaps.push({ startMins: cursor, endMins: DAY_END * 60, gapMins: DAY_END * 60 - cursor, travelMins: 0 });
+  }
 
-@app.route('/')
-def index():
-    return send_from_directory('static', 'index.html')
+  gapStore[engId + '_today'] = gaps;
+  gapStore[engId + '_tomorrow'] = gaps;
+  return gaps;
+}
 
-@app.route('/api/status')
-def api_status():
-    try:
-        get_token()
-        return jsonify({'status': 'connected'})
-    except Exception as e:
-        return jsonify({'status': 'error', 'message': str(e)}), 500
+function estTravelMins(lat1, lng1, lat2, lng2) {
+  if (!lat1||!lng1||!lat2||!lng2) return 30;
+  const R = 6371;
+  const dLat = (lat2-lat1)*Math.PI/180;
+  const dLng = (lng2-lng1)*Math.PI/180;
+  const a = Math.sin(dLat/2)**2 + Math.cos(lat1*Math.PI/180)*Math.cos(lat2*Math.PI/180)*Math.sin(dLng/2)**2;
+  const km = R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a));
+  return Math.round(km / 64 * 60) + 10;
+}
 
-@app.route('/api/engineers')
-def get_engineers():
-    try:
-        data = bc_get('/resources', {'pageSize': 200})
-        raw = data if isinstance(data, list) else (data.get('items') or [])
-        engineers = []
-        for i, e in enumerate(raw):
-            name = e.get('name') or f"{e.get('firstName','')} {e.get('lastName','')}".strip() or 'Engineer'
-            if is_group_entry(name): continue
-            if e.get('type', '').lower() in ['vehicle', 'asset']: continue
-            is_trainee = '(T)' in name or '(TS)' in name
-            engineers.append({
-                'id':        str(e.get('id') or i),
-                'name':      name.replace('(T)', '').replace('(TS)', '').strip(),
-                'isTrainee': is_trainee,
-                'region':    e.get('region') or e.get('homePostcode') or '—',
-            })
-        return jsonify({'engineers': engineers, 'total': len(engineers)})
-    except Exception as e:
-        return jsonify({'error': str(e)}), 500
+// ── GAP CLICK via event delegation ───────────────────────
+document.addEventListener('click', function(e) {
+  const gapEl = e.target.closest('.gap-block');
+  if (gapEl) {
+    e.stopPropagation();
+    const engId = gapEl.dataset.engid;
+    const gi    = parseInt(gapEl.dataset.gi);
+    const day   = gapEl.dataset.day;
+    const key   = engId + '_' + day;
+    const gaps  = gapStore[key] || [];
+    const g     = gaps[gi];
+    if (!g) { showToast('Gap data not found — please refresh'); return; }
+    const sched = day === 'today' ? todaySchedule : schedule;
+    const names = day === 'today' ? todayEngNames : engNames;
+    const engName = names[engId] || ('Engineer ' + engId);
+    showGapPopup(engId, engName, g, day, e);
+    return;
+  }
 
-@app.route('/api/jobs/unassigned')
-def get_unassigned_jobs():
-    try:
-        cached = cache_get('unassigned_jobs', max_age=90)
-        if cached is not None:
-            print(f"[UNASSIGNED] Cache hit: {len(cached)} jobs")
-            return jsonify({'jobs': cached, 'total': len(cached)})
+  // Close popup if clicking outside
+  const popup = document.getElementById('gap-popup');
+  if (popup.style.display !== 'none' && !popup.contains(e.target)) {
+    closePopup();
+  }
+});
 
-        from_date = (datetime.now() - timedelta(days=14)).strftime('%Y-%m-%dT00:00:00')
-        to_date   = (datetime.now() + timedelta(days=90)).strftime('%Y-%m-%dT23:59:59')
+function showGapPopup(engId, engName, g, day, e) {
+  // Get surrounding job locations for proximity check
+  const sched = day === 'today' ? todaySchedule : schedule;
+  const engJobs = (sched[engId] || [])
+    .map(j => ({ start: timeToMins(j.startTime), end: timeToMins(j.endTime), lat: j.lat, lng: j.lng }))
+    .filter(j => j.start >= 0)
+    .sort((a,b) => a.start - b.start);
 
-        all_raw = []
-        seen_ids = set()
+  // Find the job before and after the gap
+  const prevJob = engJobs.filter(j => j.end <= g.startMins).pop() || null;
+  const nextJob = engJobs.find(j => j.start >= g.endMins) || null;
 
-        for status_val in ['new', 'unscheduled']:
-            try:
-                data = bc_get('/jobs', {
-                    'StatusModifiedAtFrom': from_date,
-                    'StatusModifiedAtTo':   to_date,
-                    'status':               status_val,
-                    'pageSize':             1000,
-                })
-                # Note: BigChange API doesn't support categoryId filter directly
-                # so we filter after fetching
-                items = data if isinstance(data, list) else (data.get('items') or [])
-                new_items = [j for j in items if j.get('id') not in seen_ids]
-                seen_ids.update(j.get('id') for j in new_items)
-                all_raw.extend(new_items)
-                print(f"[UNASSIGNED] status={status_val}: {len(items)} jobs")
-            except Exception as e:
-                print(f"[UNASSIGNED] status={status_val} failed: {e}")
+  const MAX_TRAVEL = 45; // minutes
 
-        print(f"[UNASSIGNED] Total fetched: {len(all_raw)}")
+  const fittingJobs = jobs.filter(j => {
+    if (j.durationMins > g.gapMins) return false;
+    if (!constraintPasses(g.startMins, g.endMins, j.durationMins, selectedConstraints)) return false;
+    // Check proximity to surrounding jobs — must be within 45 min drive of at least one
+    if (!j.lat || !j.lng) return true; // no coords, include anyway
+    const travelFromPrev = prevJob && prevJob.lat ? estTravelMins(prevJob.lat, prevJob.lng, j.lat, j.lng) : null;
+    const travelToNext   = nextJob && nextJob.lat ? estTravelMins(j.lat, j.lng, nextJob.lat, nextJob.lng) : null;
+    // If we have at least one reference point, check it's within 45 mins
+    if (travelFromPrev !== null && travelToNext !== null) return travelFromPrev <= MAX_TRAVEL && travelToNext <= MAX_TRAVEL;
+    if (travelFromPrev !== null) return travelFromPrev <= MAX_TRAVEL;
+    if (travelToNext   !== null) return travelToNext   <= MAX_TRAVEL;
+    return true; // no surrounding jobs to compare, include
+  });
 
-        jobs = []
-        for j in all_raw:
-            if j.get('resourceId'): continue
-            if not is_valid_category(j): continue
-            jobs.append(format_job(j))
+  document.getElementById('popup-title').textContent = escHtml(engName) + ' — ' + fmtMins(g.startMins) + ' to ' + fmtMins(g.endMins);
+  document.getElementById('popup-sub').textContent = g.gapMins + ' min usable' + (g.travelMins > 0 ? ' (incl. ~' + g.travelMins + 'min travel)' : '') + ' · ' + fittingJobs.length + ' job' + (fittingJobs.length!==1?'s':'') + ' fit';
 
-        jobs.sort(key=lambda j: -j['durationMins'])
-        print(f"[UNASSIGNED] Returning {len(jobs)} jobs")
-        cache_set('unassigned_jobs', jobs)
-        return jsonify({'jobs': jobs, 'total': len(jobs)})
+  // Constraints info
+  const cLabels = selectedConstraints.map(describeConstraint).filter(Boolean);
+  document.getElementById('popup-constraints').innerHTML = cLabels.length
+    ? '<div class="constraint-info">⚠ ' + cLabels.join(' · ') + '</div>' : '';
 
-    except Exception as e:
-        print(f"[UNASSIGNED] ERROR: {e}")
-        return jsonify({'error': str(e)}), 500
+  if (!fittingJobs.length) {
+    document.getElementById('popup-body').innerHTML = '<div class="no-fitting">No unassigned jobs fit this ' + g.gapMins + ' min gap</div>';
+  } else {
+    // Put selected job first
+    const sorted = [...fittingJobs].sort((a,b) => {
+      if (selectedJob && a.id===selectedJob.id) return -1;
+      if (selectedJob && b.id===selectedJob.id) return 1;
+      return b.durationMins - a.durationMins;
+    });
+    document.getElementById('popup-body').innerHTML = sorted.slice(0,10).map(j => {
+      const travelFrom = prevJob && prevJob.lat && j.lat ? estTravelMins(prevJob.lat, prevJob.lng, j.lat, j.lng) : null;
+      const travelTo   = nextJob && nextJob.lat && j.lat ? estTravelMins(j.lat, j.lng, nextJob.lat, nextJob.lng) : null;
+      const travelInfo = travelFrom !== null ? '~' + travelFrom + 'min from prev' + (travelTo !== null ? ', ~' + travelTo + 'min to next' : '') : '';
+      return '<div class="fitting-job' + (selectedJob&&j.id===selectedJob.id?' selected-job':'') + '">'
+        + '<div class="fitting-job-info">'
+        + '<div class="fitting-job-ref">' + escHtml(j.ref) + '</div>'
+        + '<div class="fitting-job-desc">' + escHtml(j.desc) + '</div>'
+        + '<div class="fitting-job-sub">' + escHtml(j.client) + (travelInfo ? ' · <span style="color:#854F0B;">&#128664; ' + travelInfo + '</span>' : '') + '</div>'
+        + '</div>'
+        + '<span class="fitting-job-dur">' + j.durationMins + 'min</span>'
+        + '<button class="btn-assign" data-jobid="' + j.id + '" data-jobref="' + escHtml(j.ref) + '" data-engid="' + engId + '" data-engname="' + escHtml(engName) + '" data-start="' + g.startMins + '" data-day="' + day + '">Assign</button>'
+        + '</div>';
+    }).join('');
+  }
 
-@app.route('/api/schedule/tomorrow')
-def get_tomorrow_schedule():
-    try:
-        cached = cache_get('schedule_tomorrow', max_age=60)
-        if cached:
-            return jsonify(cached)
+  const x = Math.min(e.clientX + 10, window.innerWidth - 360);
+  const y = Math.min(e.clientY + 10, window.innerHeight - 440);
+  const popup = document.getElementById('gap-popup');
+  popup.style.left = x + 'px';
+  popup.style.top  = y + 'px';
+  popup.style.display = 'block';
+}
 
-        tomorrow = datetime.now() + timedelta(days=1)
-        raw = fetch_paged({
-            'plannedAtFrom': tomorrow.strftime('%Y-%m-%dT00:00:00'),
-            'plannedAtTo':   tomorrow.strftime('%Y-%m-%dT23:59:59'),
-        })
-        print(f"[TOMORROW] Got {len(raw)} jobs")
+// Assign button clicks via delegation
+document.getElementById('gap-popup').addEventListener('click', function(e) {
+  const btn = e.target.closest('.btn-assign');
+  if (!btn) return;
+  const jobId   = btn.dataset.jobid;
+  const jobRef  = btn.dataset.jobref;
+  const engId   = btn.dataset.engid;
+  const engName = btn.dataset.engname;
+  const startMins = parseInt(btn.dataset.start);
+  const day     = btn.dataset.day;
+  assignJob(jobId, jobRef, engId, engName, startMins, day);
+});
 
-        by_engineer = {}
-        eng_names = {}
-        for j in raw:
-            if (j.get('status') or '').lower() in COMPLETED_STATUSES: continue
-            rid = str(j.get('resourceId') or '')
-            if not rid: continue
-            job = format_job(j)
-            by_engineer.setdefault(rid, []).append(job)
-            if job['resourceName']:
-                eng_names[rid] = job['resourceName']
+function closePopup() {
+  document.getElementById('gap-popup').style.display = 'none';
+}
 
-        for rid in by_engineer:
-            by_engineer[rid].sort(key=lambda j: j['startTime'] or '99:99')
+async function assignJob(jobId, jobRef, engId, engName, startMins, day) {
+  const d = day === 'today' ? new Date(todayDate) : new Date(tomorrowDate);
+  d.setHours(Math.floor(startMins/60), startMins%60, 0, 0);
+  closePopup();
+  showToast('Assigning ' + jobRef + '...');
+  try {
+    await api('/api/jobs/' + jobId + '/assign', {
+      method: 'POST',
+      headers: {'Content-Type':'application/json'},
+      body: JSON.stringify({resourceId: engId, plannedStart: d.toISOString()})
+    });
+    jobs = jobs.filter(j => j.id !== jobId);
+    if (selectedJob && selectedJob.id === jobId) { selectedJob = null; selectedConstraints = []; }
+    assignedToday++;
+    document.getElementById('m-unassigned').textContent = jobs.length;
+    document.getElementById('job-count').textContent = jobs.length + ' jobs';
+    document.getElementById('m-done').textContent = assignedToday;
+    document.getElementById('selected-pill').style.display = 'none';
+    document.getElementById('timeline-hint').textContent = 'Select a job then click a gap';
+    showToast(jobRef + ' assigned to ' + engName);
+    renderJobList();
+    await loadSchedule(day);
+    renderTimeline();
+  } catch(err) {
+    showToast('Failed: ' + err.message);
+  }
+}
 
-        result = {'byEngineer': by_engineer, 'engNames': eng_names, 'date': tomorrow.strftime('%Y-%m-%d')}
-        cache_set('schedule_tomorrow', result)
-        return jsonify(result)
+// ── HELPERS ──────────────────────────────────────────────
+function timeToMins(t) {
+  if (!t) return -1;
+  try {
+    const d = new Date(t);
+    if (!isNaN(d)) return d.getHours()*60 + d.getMinutes();
+    const p = t.split(':');
+    return parseInt(p[0])*60 + parseInt(p[1]||0);
+  } catch(e) { return -1; }
+}
 
-    except Exception as e:
-        print(f"[TOMORROW] ERROR: {e}")
-        return jsonify({'error': str(e)}), 500
+function pct(mins) {
+  return ((mins - DAY_START*60) / DAY_MINS * 100).toFixed(3) + '%';
+}
 
-@app.route('/api/schedule/today')
-def get_today_schedule():
-    try:
-        cached = cache_get('schedule_today', max_age=30)
-        if cached:
-            return jsonify(cached)
+function wpct(s, e) {
+  return ((e-s) / DAY_MINS * 100).toFixed(3) + '%';
+}
 
-        today = datetime.now()
-        raw = fetch_paged({
-            'plannedAtFrom': today.strftime('%Y-%m-%dT00:00:00'),
-            'plannedAtTo':   today.strftime('%Y-%m-%dT23:59:59'),
-        })
-        print(f"[TODAY] Got {len(raw)} jobs")
+function fmtMins(mins) {
+  const h = Math.floor(mins/60), m = mins%60;
+  const suffix = h>=12?'pm':'am', h12 = h>12?h-12:h===0?12:h;
+  return h12 + (m?':'+String(m).padStart(2,'0'):'') + suffix;
+}
 
-        by_engineer = {}
-        eng_names = {}
-        for j in raw:
-            rid = str(j.get('resourceId') or '')
-            if not rid: continue
-            job = format_job(j)
-            by_engineer.setdefault(rid, []).append(job)
-            if job['resourceName']:
-                eng_names[rid] = job['resourceName']
+function fmtTime(dt) {
+  try { return new Date(dt).toLocaleTimeString('en-GB',{hour:'2-digit',minute:'2-digit'}); }
+  catch(e) { return dt; }
+}
 
-        for rid in by_engineer:
-            by_engineer[rid].sort(key=lambda j: j['startTime'] or '99:99')
+function escHtml(s) {
+  return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+}
 
-        result = {'byEngineer': by_engineer, 'engNames': eng_names, 'date': today.strftime('%Y-%m-%d')}
-        cache_set('schedule_today', result)
-        return jsonify(result)
+function showToast(msg) {
+  const t = document.getElementById('toast');
+  t.textContent = msg; t.classList.add('show');
+  clearTimeout(window._tt);
+  window._tt = setTimeout(() => t.classList.remove('show'), 3500);
+}
 
-    except Exception as e:
-        print(f"[TODAY] ERROR: {e}")
-        return jsonify({'error': str(e)}), 500
-
-@app.route('/api/jobs/<job_id>/assign', methods=['POST'])
-def assign_job(job_id):
-    try:
-        body = request.get_json()
-        resource_id   = body.get('resourceId')
-        planned_start = body.get('plannedStart')
-        if not resource_id:
-            return jsonify({'error': 'resourceId required'}), 400
-        payload = {'resourceId': int(resource_id)}
-        if planned_start:
-            payload['plannedStartAt'] = planned_start
-        _cache.pop('unassigned_jobs', None)
-        _cache.pop('schedule_today', None)
-        _cache.pop('schedule_tomorrow', None)
-        result = bc_put(f'/jobs/{job_id}/schedule', payload)
-        return jsonify({'success': True, 'result': result})
-    except Exception as e:
-        print(f"[ASSIGN] ERROR: {e}")
-        return jsonify({'error': str(e)}), 500
-
-@app.route('/api/jobs/<job_id>/constraints', methods=['GET'])
-def get_job_constraints(job_id):
-    try:
-        data  = bc_get(f'/jobs/{job_id}/constraints', {'pageSize': 100})
-        items = data if isinstance(data, list) else (data.get('items') or [])
-        constraints = [{'type': c.get('type'), 'constraintAt': c.get('constraintAt'), 'entityId': c.get('entityId')} for c in items]
-        return jsonify({'constraints': constraints})
-    except Exception as e:
-        return jsonify({'constraints': [], 'error': str(e)})
-
-@app.route('/api/debug/category-ids')
-def get_category_ids():
-    try:
-        from_date = (datetime.now() - timedelta(days=14)).strftime('%Y-%m-%dT00:00:00')
-        to_date   = (datetime.now() + timedelta(days=90)).strftime('%Y-%m-%dT23:59:59')
-        all_raw = []
-        for status_val in ['new', 'unscheduled']:
-            try:
-                data = bc_get('/jobs', {
-                    'StatusModifiedAtFrom': from_date,
-                    'StatusModifiedAtTo':   to_date,
-                    'status':               status_val,
-                    'pageSize':             1000,
-                })
-                # Note: BigChange API doesn't support categoryId filter directly
-                # so we filter after fetching
-                items = data if isinstance(data, list) else (data.get('items') or [])
-                all_raw.extend(items)
-            except: pass
-        cats = {}
-        for j in all_raw:
-            name = j.get('categoryName') or 'none'
-            cid  = j.get('categoryId')
-            if name not in cats:
-                cats[name] = cid
-        return jsonify({'categories': cats})
-    except Exception as e:
-        return jsonify({'error': str(e)}), 500
-
-if __name__ == '__main__':
-    port = int(os.environ.get('PORT', 5000))
-    app.run(host='0.0.0.0', port=port)
+loadAll();
+setInterval(loadAll, 120000);
+</script>
+</body>
+</html>
