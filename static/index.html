@@ -395,6 +395,15 @@ function renderTimeline() {
     const nowLineHtml = currentTab==='today'
       ? '<div class="now-line" style="left:' + pct(nowMins) + ';"></div>' : '';
 
+    // Day start marker for tomorrow
+    let dayStartHtml = '';
+    if (currentTab === 'tomorrow') {
+      const effStart = getEffectiveDayStart(engId, sched);
+      if (effStart && effStart > DAY_START*60) {
+        dayStartHtml = '<div style="position:absolute;top:0;bottom:0;left:' + pct(effStart) + ';width:2px;background:#185FA5;opacity:0.5;z-index:4;" title="Est. departure ' + fmtMins(effStart) + '"></div>';
+      }
+    }
+
     return '<div class="eng-row">'
          + '<div class="eng-label"><div class="eng-name">' + escHtml(name) + '</div>'
          + '<div class="eng-meta">' + (currentTab==='today' ? done+'/'+engJobs.length+' done' : engJobs.length+' jobs') + ' · ' + gaps.length + ' gaps</div></div>'
