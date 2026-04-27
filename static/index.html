@@ -391,6 +391,7 @@ function renderTimeline() {
            + '<span class="gap-label">' + lbl + '</span></div>';
     }).join('');
 
+    let dayStartHtml = '';
     // Now line for today
     const nowLineHtml = currentTab==='today'
       ? '<div class="now-line" style="left:' + pct(nowMins) + ';"></div>' : '';
