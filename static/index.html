@@ -115,6 +115,11 @@ body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; b
 
 <div class="metrics">
   <div class="metric"><div class="m-label">Unassigned jobs</div><div class="m-value red" id="m-unassigned">—</div></div>
+  <div class="metric"><div class="m-label">Scheduled today</div><div class="m-value blue" id="m-today-total">—</div></div>
+  <div class="metric"><div class="m-label">Completed OK</div><div class="m-value green" id="m-today-ok">—</div></div>
+  <div class="metric"><div class="m-label">Completed w/ issues</div><div class="m-value amber" id="m-today-issues">—</div></div>
+  <div class="metric"><div class="m-label">In progress</div><div class="m-value blue" id="m-today-active">—</div></div>
+  <div class="metric"><div class="m-label">Yet to start</div><div class="m-value red" id="m-today-pending">—</div></div>
   <div class="metric"><div class="m-label">Engineers today</div><div class="m-value blue" id="m-today-engs">—</div></div>
   <div class="metric"><div class="m-label">Engineers tomorrow</div><div class="m-value blue" id="m-engs">—</div></div>
   <div class="metric"><div class="m-label">Jobs tomorrow</div><div class="m-value blue" id="m-tomorrow">—</div></div>
@@ -218,6 +223,18 @@ async function loadSchedule(day) {
     todaySchedule = data.byEngineer || {};
     todayEngNames = data.engNames || {};
     document.getElementById('m-today-engs').textContent = Object.keys(todaySchedule).length;
+    // Calculate today's job stats
+    const allTodayJobs = Object.values(todaySchedule).flat();
+    const totalToday = allTodayJobs.length;
+    const completedOk = allTodayJobs.filter(j => (j.status||'').toLowerCase() === 'completedok').length;
+    const completedIssues = allTodayJobs.filter(j => (j.status||'').toLowerCase() === 'completedwithissues').length;
+    const active = allTodayJobs.filter(j => ['started','ontheway','suspended'].includes((j.status||'').toLowerCase())).length;
+    document.getElementById('m-today-total').textContent = totalToday;
+    document.getElementById('m-today-ok').textContent = completedOk;
+    document.getElementById('m-today-issues').textContent = completedIssues;
+    document.getElementById('m-today-active').textContent = active;
+    const pending = allTodayJobs.filter(j => ['new','scheduled','sent','read','accepted','refused'].includes((j.status||'').toLowerCase())).length;
+    document.getElementById('m-today-pending').textContent = pending;
   } else {
     schedule = data.byEngineer || {};
     engNames = data.engNames || {};
@@ -381,7 +398,7 @@ function renderTimeline() {
     return '<div class="eng-row">'
          + '<div class="eng-label"><div class="eng-name">' + escHtml(name) + '</div>'
          + '<div class="eng-meta">' + (currentTab==='today' ? done+'/'+engJobs.length+' done' : engJobs.length+' jobs') + ' · ' + gaps.length + ' gaps</div></div>'
-         + '<div class="track-wrap"><div class="track">' + jobBlocksHtml + gapBlocksHtml + nowLineHtml + '</div></div>'
+         + '<div class="track-wrap"><div class="track">' + jobBlocksHtml + gapBlocksHtml + nowLineHtml + dayStartHtml + '</div></div>'
          + '</div>';
   }).join('');
 
@@ -391,18 +408,61 @@ function renderTimeline() {
 // Store gap data separately so click handler can look it up
 const gapStore = {};
 
-function calcGaps(engId, sched, fromMins) {
+function getEffectiveDayStart(engId, sched) {
   const engJobs = (sched[engId]||[])
-    .map(j => ({ start: timeToMins(j.startTime), end: timeToMins(j.endTime), lat: j.lat, lng: j.lng, client: j.client }))
-    .filter(j => j.start>=0 && j.end>j.start)
-    .sort((a,b) => a.start-b.start);
+    .filter(j => j.startTime)
+    .sort((a,b) => (a.startTime||'') > (b.startTime||'') ? 1 : -1);
+
+  if (!engJobs.length) return DAY_START * 60;
+  const firstJob = engJobs[0];
+  const status = (firstJob.status||'').toLowerCase();
+
+  // onTheWay status — statusModifiedAt is when they left
+  if (status === 'ontheway' && firstJob.statusModifiedAt) {
+    const m = timeToMins(firstJob.statusModifiedAt);
+    if (m > 0) return m;
+  }
+
+  // Has actual start — work back by estimated travel
+  if (firstJob.actualStart) {
+    const arrivalMins = timeToMins(firstJob.actualStart);
+    const travel = firstJob.lat ? 30 : 30; // default 30min travel
+    return Math.max(arrivalMins - travel, DAY_START * 60);
+  }
+
+  // Use planned start minus estimated travel
+  const plannedMins = timeToMins(firstJob.startTime);
+  if (plannedMins > 0) {
+    return Math.max(plannedMins - 30, DAY_START * 60);
+  }
+
+  return DAY_START * 60;
+}
+
+function calcGaps(engId, sched, fromMins) {
+  const isToday = fromMins > DAY_START * 60;
+
+  const engJobs = (sched[engId]||[])
+    .map(j => ({
+      start: timeToMins(j.startTime),
+      end: timeToMins(j.endTime),
+      lat: j.lat, lng: j.lng, client: j.client,
+      status: j.status, actualStart: j.actualStart,
+      statusModifiedAt: j.statusModifiedAt,
+    }))
+    .filter(j => j.start >= 0 && j.end > j.start)
+    .sort((a,b) => a.start - b.start);
+
+  // Effective start: for today use current time, for tomorrow use estimated departure
+  const effectiveStart = isToday ? fromMins : getEffectiveDayStart(engId, sched);
+  const cursor0 = Math.max(effectiveStart, DAY_START * 60);
 
   const gaps = [];
-  let cursor = Math.max(fromMins, DAY_START*60);
-  let prevJob = engJobs.filter(j => j.end <= fromMins).pop() || null;
+  let cursor = cursor0;
+  let prevJob = engJobs.filter(j => j.end <= effectiveStart).pop() || null;
 
   for (const slot of engJobs) {
-    if (slot.end <= fromMins) continue;
+    if (slot.end <= effectiveStart) continue;
     if (slot.start > cursor + 10) {
       const travel = prevJob ? estTravelMins(prevJob.lat, prevJob.lng, slot.lat, slot.lng) : 0;
       const usableStart = Math.min(cursor + travel, slot.start - 15);
@@ -414,15 +474,12 @@ function calcGaps(engId, sched, fromMins) {
     cursor = Math.max(cursor, slot.end);
     prevJob = slot;
   }
-  if (DAY_END*60 > cursor + 20) {
-    gaps.push({ startMins: cursor, endMins: DAY_END*60, gapMins: DAY_END*60 - cursor, travelMins: 0 });
+  if (DAY_END * 60 > cursor + 20) {
+    gaps.push({ startMins: cursor, endMins: DAY_END * 60, gapMins: DAY_END * 60 - cursor, travelMins: 0 });
   }
 
-  // Store for click handler
-  gapStore[engId + '_' + (fromMins < DAY_START*60+60 ? 'tomorrow' : 'today')] = gaps;
   gapStore[engId + '_today'] = gaps;
   gapStore[engId + '_tomorrow'] = gaps;
-
   return gaps;
 }
 
