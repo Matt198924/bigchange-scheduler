@@ -201,21 +201,18 @@ function setBadge(state, text) {
 
 async function loadAll() {
   setBadge('loading','Loading...');
-  // Load each section independently so UI shows as soon as each part arrives
+  // Load critical data first - jobs, today schedule, engineers
   const results = await Promise.allSettled([
     loadJobs(),
     loadEngineers(),
     loadSchedule('today'),
-    loadSchedule('tomorrow')
   ]);
-  const errors = results.filter(r => r.status === 'rejected');
-  if (errors.length) {
-    setBadge('error','Error');
-    showToast('Error loading some data — ' + errors[0].reason?.message);
-  } else {
-    setBadge('ok','Live');
-  }
   renderAll();
+  setBadge('ok','Live');
+  // Load tomorrow in background - not needed for initial view
+  loadSchedule('tomorrow').then(() => {
+    if (currentTab === 'tomorrow') renderTimeline();
+  }).catch(e => console.error('Tomorrow schedule failed:', e));
 }
 
 async function loadJobs() {
