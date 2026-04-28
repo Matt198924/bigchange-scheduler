@@ -201,14 +201,21 @@ function setBadge(state, text) {
 
 async function loadAll() {
   setBadge('loading','Loading...');
-  try {
-    await Promise.all([loadJobs(), loadEngineers(), loadSchedule('today'), loadSchedule('tomorrow')]);
-    renderAll();
-    setBadge('ok','Live');
-  } catch(e) {
+  // Load each section independently so UI shows as soon as each part arrives
+  const results = await Promise.allSettled([
+    loadJobs(),
+    loadEngineers(),
+    loadSchedule('today'),
+    loadSchedule('tomorrow')
+  ]);
+  const errors = results.filter(r => r.status === 'rejected');
+  if (errors.length) {
     setBadge('error','Error');
-    showToast('Error: ' + e.message);
+    showToast('Error loading some data — ' + errors[0].reason?.message);
+  } else {
+    setBadge('ok','Live');
   }
+  renderAll();
 }
 
 async function loadJobs() {
@@ -216,29 +223,7 @@ async function loadJobs() {
   jobs = data.jobs || [];
   document.getElementById('m-unassigned').textContent = jobs.length;
   document.getElementById('job-count').textContent = jobs.length + ' jobs';
-  // Fetch constraints for all jobs in background
-  fetchAllConstraints();
-}
-
-async function fetchAllConstraints() {
-  // Fetch in batches of 5 to avoid hammering the API
-  const batchSize = 5;
-  for (let i = 0; i < jobs.length; i += batchSize) {
-    const batch = jobs.slice(i, i + batchSize);
-    await Promise.all(batch.map(async j => {
-      if (jobConstraints[j.id] !== undefined) return; // already fetched
-      try {
-        const data = await api('/api/jobs/' + j.id + '/constraints');
-        jobConstraints[j.id] = data.constraints || [];
-      } catch(e) {
-        jobConstraints[j.id] = [];
-      }
-    }));
-    // Small delay between batches to be kind to the API
-    if (i + batchSize < jobs.length) await new Promise(r => setTimeout(r, 200));
-    // Re-render job list as constraints come in
-    renderJobList();
-  }
+  renderJobList(); // show jobs as soon as they load
 }
 
 async function loadEngineers() {
