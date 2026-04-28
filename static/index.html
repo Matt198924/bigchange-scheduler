@@ -221,7 +221,29 @@ async function loadJobs() {
   jobs = data.jobs || [];
   document.getElementById('m-unassigned').textContent = jobs.length;
   document.getElementById('job-count').textContent = jobs.length + ' jobs';
-  renderJobList(); // show jobs as soon as they load
+  renderJobList();
+  // Fetch flags in background for all jobs
+  fetchAllFlags();
+}
+
+const jobFlags = {}; // cache flags per job id
+
+async function fetchAllFlags() {
+  for (let i = 0; i < jobs.length; i += 3) {
+    const batch = jobs.slice(i, i + 3);
+    await Promise.all(batch.map(async j => {
+      if (jobFlags[j.id] !== undefined) return;
+      try {
+        const data = await api('/api/jobs/' + j.id + '/flags');
+        jobFlags[j.id] = data.flags || [];
+      } catch(e) {
+        jobFlags[j.id] = [];
+      }
+    }));
+    if (i === 0) renderJobList(); // re-render after first batch
+    await new Promise(r => setTimeout(r, 300));
+  }
+  renderJobList(); // final re-render
 }
 
 async function loadEngineers() {
@@ -292,6 +314,7 @@ function renderJobList() {
       + '<span class="tag-dur">' + j.durationMins + ' min</span>'
       + '<span class="tag-type">' + escHtml(j.type) + '</span>'
       + '</div>'
+      + renderFlags(j.id)
       + constraintHtml
       + '</div>';
   }).join('');
@@ -634,6 +657,12 @@ function closePopup() {
 async function assignJob(jobId, jobRef, engId, engName, startMins, day) {
   const d = day === 'today' ? new Date(todayDate) : new Date(tomorrowDate);
   d.setHours(Math.floor(startMins/60), startMins%60, 0, 0);
+  // If time is in the past, push to 15 mins from now
+  if (d < new Date()) {
+    const now = new Date();
+    now.setMinutes(now.getMinutes() + 15, 0, 0);
+    d.setTime(now.getTime());
+  }
   closePopup();
   showToast('Assigning ' + jobRef + '...');
   try {
@@ -805,6 +834,20 @@ function renderSameSite() {
 
         + '</div></div>';
     }).join('');
+}
+
+function renderFlags(jobId) {
+  const flags = jobFlags[jobId];
+  if (!flags || !flags.length) return '';
+  return '<div style="margin-top:5px;display:flex;flex-wrap:wrap;gap:4px;">'
+    + flags.map(f => {
+        const colour = f.colour || '#888';
+        return '<span style="font-size:10px;padding:2px 8px;border-radius:20px;background:' + colour + '20;color:' + colour + ';border:1px solid ' + colour + '40;font-weight:500;">'
+          + '&#9873; ' + escHtml(f.name)
+          + (f.comment ? ' — ' + escHtml(f.comment.substring(0, 60)) : '')
+          + '</span>';
+      }).join('')
+    + '</div>';
 }
 
 function showToast(msg) {
