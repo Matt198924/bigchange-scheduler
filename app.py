@@ -16,6 +16,11 @@ API_BASE      = 'https://api.bigchange.com/v1'
 TOKEN_URL     = 'https://api.bigchange.com/auth/tokens'
 
 VALID_CATEGORY_IDS = {77961, 82685, 82693, 82694, 82695, 82696, 82697}
+
+JOBWATCH_URL      = 'https://webservice.bigchange.com/v01/services.ashx'
+JOBWATCH_KEY      = os.environ.get('JOBWATCH_KEY', '')
+JOBWATCH_USERNAME = os.environ.get('JOBWATCH_USERNAME', '')
+JOBWATCH_PASSWORD = os.environ.get('JOBWATCH_PASSWORD', '')
 COMPLETED_STATUSES = {'completedok', 'completedwithissues', 'cancelled'}
 
 _token_cache = {'token': None, 'expires_at': 0}
@@ -296,6 +301,39 @@ def assign_job(job_id):
     except Exception as e:
         print(f"[ASSIGN] ERROR: {e}")
         return jsonify({'error': str(e)}), 500
+
+def jobwatch_get(action, params=None):
+    import base64
+    creds = base64.b64encode(f'{JOBWATCH_USERNAME}:{JOBWATCH_PASSWORD}'.encode()).decode()
+    p = {'action': action, 'Format': 'JSON'}
+    if params:
+        p.update(params)
+    resp = requests.get(JOBWATCH_URL, params=p, headers={
+        'Authorization': f'Basic {creds}',
+        'key': JOBWATCH_KEY,
+    }, timeout=15)
+    resp.raise_for_status()
+    return resp.json()
+
+@app.route('/api/jobs/<job_id>/flags', methods=['GET'])
+def get_job_flags(job_id):
+    try:
+        # Only fetch flags we care about
+        TARGET_FLAGS = {'parts received', 'parts with engineer'}
+        data = jobwatch_get('JobFlags', {'JobId': job_id})
+        flags = []
+        for f in (data if isinstance(data, list) else []):
+            name = (f.get('name') or f.get('Name') or '').lower().strip()
+            if name in TARGET_FLAGS:
+                flags.append({
+                    'name':    f.get('name') or f.get('Name') or '',
+                    'colour':  f.get('colour') or f.get('Colour') or '#888',
+                    'comment': f.get('comment') or f.get('Comment') or '',
+                })
+        return jsonify({'flags': flags})
+    except Exception as e:
+        print(f"[FLAGS] ERROR for job {job_id}: {e}")
+        return jsonify({'flags': [], 'error': str(e)})
 
 @app.route('/api/jobs/<job_id>/constraints', methods=['GET'])
 def get_job_constraints(job_id):
