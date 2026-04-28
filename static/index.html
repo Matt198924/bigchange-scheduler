@@ -613,10 +613,11 @@ async function showGapPopup(engId, engName, g, day, e) {
   }
 }
 
-// Assign button clicks via delegation
-document.getElementById('gap-popup').addEventListener('click', function(e) {
+// Assign button clicks via delegation - handles both gap popup and same site tab
+document.addEventListener('click', function(e) {
   const btn = e.target.closest('.btn-assign');
   if (!btn) return;
+  e.stopPropagation();
   const jobId   = btn.dataset.jobid;
   const jobRef  = btn.dataset.jobref;
   const engId   = btn.dataset.engid;
