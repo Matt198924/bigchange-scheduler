@@ -175,6 +175,7 @@ const DAY_MINS = (DAY_END - DAY_START) * 60;
 const HOURS = Array.from({length: DAY_END - DAY_START + 1}, (_, i) => DAY_START + i);
 
 let jobs = [], engineers = [], schedule = {}, engNames = {}, todaySchedule = {}, todayEngNames = {};
+const constraintsCache = {}; // cache constraints per job id to avoid repeated fetches
 let selectedJob = null, selectedConstraints = [], currentTab = 'today', assignedToday = 0;
 let jobConstraints = {}; // cache of constraints per job id
 
@@ -568,20 +569,36 @@ function showGapPopup(engId, engName, g, day, e) {
     return true;
   });
 
-  // Use cached constraints (fetched on load)
+  // Sort candidates - selected job first
   const sorted = [...candidateJobs].sort((a,b) => {
     if (selectedJob && a.id===selectedJob.id) return -1;
     if (selectedJob && b.id===selectedJob.id) return 1;
     return b.durationMins - a.durationMins;
   });
 
-  // Filter by constraints using cached data
-  const fittingJobs = sorted.filter(j => {
-    const constraints = jobConstraints[j.id] || [];
-    return constraintPasses(g.startMins, g.endMins, j.durationMins, constraints);
-  }).slice(0, 10);
+  // Fetch constraints on demand for top candidates only (fast - only 10 calls)
+  const top = sorted.slice(0, 10);
+  const constraintCache = {};
+  await Promise.all(top.map(async j => {
+    if (constraintsCache[j.id] !== undefined) {
+      constraintCache[j.id] = constraintsCache[j.id];
+      return;
+    }
+    try {
+      const data = await api('/api/jobs/' + j.id + '/constraints');
+      constraintsCache[j.id] = data.constraints || [];
+      constraintCache[j.id] = constraintsCache[j.id];
+    } catch(e) {
+      constraintsCache[j.id] = [];
+      constraintCache[j.id] = [];
+    }
+  }));
 
-  const constraintCache = jobConstraints; // alias for rendering below
+  // Filter by constraints
+  const fittingJobs = top.filter(j => {
+    const constraints = constraintCache[j.id] || [];
+    return constraintPasses(g.startMins, g.endMins, j.durationMins, constraints);
+  });
 
   // Update popup with results
   document.getElementById('popup-sub').textContent = g.gapMins + ' min usable'
