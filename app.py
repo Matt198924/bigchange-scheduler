@@ -318,22 +318,31 @@ def jobwatch_get(action, params=None):
 @app.route('/api/jobs/<job_id>/flags', methods=['GET'])
 def get_job_flags(job_id):
     try:
-        # Only fetch flags we care about
         TARGET_FLAGS = {'parts received', 'parts with engineer'}
         data = jobwatch_get('JobFlags', {'JobId': job_id})
+        print(f"[FLAGS] Raw response for {job_id}: {str(data)[:500]}")
+        raw = data if isinstance(data, list) else (data.get('Result') or data.get('result') or data.get('Flags') or data.get('flags') or [])
         flags = []
-        for f in (data if isinstance(data, list) else []):
-            name = (f.get('name') or f.get('Name') or '').lower().strip()
+        for f in raw:
+            name = (f.get('name') or f.get('Name') or f.get('FlagName') or '').lower().strip()
             if name in TARGET_FLAGS:
                 flags.append({
-                    'name':    f.get('name') or f.get('Name') or '',
-                    'colour':  f.get('colour') or f.get('Colour') or '#888',
+                    'name':    f.get('name') or f.get('Name') or f.get('FlagName') or '',
+                    'colour':  f.get('colour') or f.get('Colour') or f.get('Color') or '#888',
                     'comment': f.get('comment') or f.get('Comment') or '',
                 })
-        return jsonify({'flags': flags})
+        return jsonify({'flags': flags, 'raw_count': len(raw)})
     except Exception as e:
         print(f"[FLAGS] ERROR for job {job_id}: {e}")
         return jsonify({'flags': [], 'error': str(e)})
+
+@app.route('/api/jobs/<job_id>/flags/debug', methods=['GET'])
+def debug_job_flags(job_id):
+    try:
+        data = jobwatch_get('JobFlags', {'JobId': job_id})
+        return jsonify({'raw': data})
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
 
 @app.route('/api/jobs/<job_id>/constraints', methods=['GET'])
 def get_job_constraints(job_id):
