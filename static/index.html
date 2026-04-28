@@ -222,8 +222,7 @@ async function loadJobs() {
   document.getElementById('m-unassigned').textContent = jobs.length;
   document.getElementById('job-count').textContent = jobs.length + ' jobs';
   renderJobList();
-  // Fetch flags in background for all jobs
-  fetchAllFlags();
+  // Flags fetched on demand only - not in background
 }
 
 const jobFlags = {}; // cache flags per job id
