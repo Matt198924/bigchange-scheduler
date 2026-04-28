@@ -744,15 +744,29 @@ function renderSameSite() {
 
         + '<div style="display:grid;grid-template-columns:1fr auto 1fr;gap:12px;align-items:start;">'
 
-        // Unassigned job
+        // Unassigned job - with assign buttons for each engineer already at site
         + '<div style="background:#FFF8F0;border:1px solid #FAEEDA;border-radius:8px;padding:12px;">'
         + '<div style="font-size:10px;font-weight:600;color:#854F0B;text-transform:uppercase;letter-spacing:0.05em;margin-bottom:6px;">Unassigned</div>'
         + '<div style="font-size:12px;font-weight:600;color:#185FA5;">' + escHtml(u.ref) + '</div>'
         + '<div style="font-size:13px;font-weight:500;margin:3px 0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">' + escHtml(u.desc) + '</div>'
-        + '<div style="margin-top:6px;display:flex;gap:5px;flex-wrap:wrap;">'
+        + '<div style="margin-top:6px;display:flex;gap:5px;flex-wrap:wrap;align-items:center;">'
         + '<span style="font-size:10px;padding:2px 6px;border-radius:4px;background:#E6F1FB;color:#185FA5;">' + u.durationMins + ' min</span>'
         + '<span style="font-size:10px;padding:2px 6px;border-radius:4px;background:#f0f0ee;color:#666;">' + escHtml(u.type) + '</span>'
-        + '</div></div>'
+        + '</div>'
+        + '<div style="margin-top:10px;display:flex;flex-direction:column;gap:5px;">'
+        + m.scheduled.map(s =>
+            '<button class="btn-assign" style="font-size:11px;width:100%;text-align:left;padding:6px 10px;"'
+            + ' data-jobid="' + u.id + '"'
+            + ' data-jobref="' + escHtml(u.ref) + '"'
+            + ' data-engid="' + s.engId + '"'
+            + ' data-engname="' + escHtml(s.engName) + '"'
+            + ' data-start="' + (s.startTime ? timeToMins(s.startTime) : DAY_START*60) + '"'
+            + ' data-day="' + s.dayLabel.toLowerCase() + '">'
+            + '&#128664; Assign to ' + escHtml(s.engName) + ' (' + s.dayLabel + ')'
+            + '</button>'
+          ).join('')
+        + '</div>'
+        + '</div>'
 
         // Arrow
         + '<div style="text-align:center;padding-top:24px;font-size:18px;color:#185FA5;">&#8644;</div>'
