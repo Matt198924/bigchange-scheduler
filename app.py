@@ -133,10 +133,6 @@ def format_job(j):
 def index():
     return send_from_directory('static', 'index.html')
 
-@app.route('/logo.png')
-def logo():
-    return send_from_directory('static', 'logo.png')
-
 @app.route('/api/status')
 def api_status():
     try:
