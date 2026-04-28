@@ -339,13 +339,22 @@ def get_job_flags(job_id):
 @app.route('/api/jobs/<job_id>/flags/debug', methods=['GET'])
 def debug_job_flags(job_id):
     results = {}
-    # Try different action names
-    for action in ['JobFlags', 'GetJobFlags', 'JobFlag', 'Flags', 'JobGetFlags']:
+    # Try different action names and parameter combinations
+    tests = [
+        ('JobFlags', {'JobId': job_id}),
+        ('JobFlags', {'Id': job_id}),
+        ('JobFlags', {'jobid': job_id}),
+        ('GetJobFlags', {'JobId': job_id}),
+        ('JobFlagList', {'JobId': job_id}),
+        ('FlagList', {'JobId': job_id}),
+    ]
+    for action, params in tests:
+        key = f"{action}_{list(params.keys())[0]}"
         try:
-            data = jobwatch_get(action, {'JobId': job_id})
-            results[action] = data
+            data = jobwatch_get(action, params)
+            results[key] = data
         except Exception as e:
-            results[action] = str(e)
+            results[key] = str(e)
     return jsonify(results)
 
 @app.route('/api/jobs/<job_id>/constraints', methods=['GET'])
