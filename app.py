@@ -160,7 +160,7 @@ def get_engineers():
 @app.route('/api/jobs/unassigned')
 def get_unassigned_jobs():
     try:
-        cached = cache_get('unassigned_jobs', max_age=90)
+        cached = cache_get('unassigned_jobs', max_age=180)
         if cached is not None:
             print(f"[UNASSIGNED] Cache hit: {len(cached)} jobs")
             return jsonify({'jobs': cached, 'total': len(cached)})
@@ -209,7 +209,7 @@ def get_unassigned_jobs():
 @app.route('/api/schedule/tomorrow')
 def get_tomorrow_schedule():
     try:
-        cached = cache_get('schedule_tomorrow', max_age=60)
+        cached = cache_get('schedule_tomorrow', max_age=120)
         if cached:
             return jsonify(cached)
 
