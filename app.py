@@ -338,11 +338,15 @@ def get_job_flags(job_id):
 
 @app.route('/api/jobs/<job_id>/flags/debug', methods=['GET'])
 def debug_job_flags(job_id):
-    try:
-        data = jobwatch_get('JobFlags', {'JobId': job_id})
-        return jsonify({'raw': data})
-    except Exception as e:
-        return jsonify({'error': str(e)}), 500
+    results = {}
+    # Try different action names
+    for action in ['JobFlags', 'GetJobFlags', 'JobFlag', 'Flags', 'JobGetFlags']:
+        try:
+            data = jobwatch_get(action, {'JobId': job_id})
+            results[action] = data
+        except Exception as e:
+            results[action] = str(e)
+    return jsonify(results)
 
 @app.route('/api/jobs/<job_id>/constraints', methods=['GET'])
 def get_job_constraints(job_id):
