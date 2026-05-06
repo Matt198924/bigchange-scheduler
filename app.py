@@ -156,14 +156,14 @@ def get_engineers():
             if is_group_entry(name): continue
             if e.get('type', '').lower() in ['vehicle', 'asset']: continue
             is_trainee = '(T)' in name or '(TS)' in name
+            start_loc = e.get('startAtLocation') or {}
             engineers.append({
                 'id':        str(e.get('id') or i),
                 'name':      name.replace('(T)', '').replace('(TS)', '').strip(),
                 'isTrainee': is_trainee,
                 'region':    e.get('region') or e.get('homePostcode') or '—',
-                'contactId': str(e.get('contactId') or ''),
-                'homeLat':   (e.get('startAtLocation') or e.get('homeLocation') or e.get('contactLocation') or {}).get('latitude'),
-                'homeLng':   (e.get('startAtLocation') or e.get('homeLocation') or e.get('contactLocation') or {}).get('longitude'),
+                'homeLat':   start_loc.get('latitude'),
+                'homeLng':   start_loc.get('longitude'),
             })
         return jsonify({'engineers': engineers, 'total': len(engineers)})
     except Exception as e:
