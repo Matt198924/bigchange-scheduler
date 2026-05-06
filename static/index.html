@@ -180,6 +180,29 @@ const HOURS = Array.from({length: DAY_END - DAY_START + 1}, (_, i) => DAY_START 
 
 let jobs = [], engineers = [], schedule = {}, engNames = {}, todaySchedule = {}, todayEngNames = {};
 const constraintsCache = {}; // cache constraints per job id to avoid repeated fetches
+const engHomeCache = {}; // cache home locations per engineer id
+
+async function getEngHomeLocation(engId) {
+  if (engHomeCache[engId] !== undefined) return engHomeCache[engId];
+  // First check if we already have it from engineers data
+  const eng = engineers.find(e => e.id === engId);
+  if (eng && eng.homeLat && eng.homeLng) {
+    engHomeCache[engId] = { lat: eng.homeLat, lng: eng.homeLng };
+    return engHomeCache[engId];
+  }
+  // Fetch from contact if we have contactId
+  if (eng && eng.contactId) {
+    try {
+      const data = await api('/api/contacts/' + eng.contactId + '/location');
+      if (data.lat && data.lng) {
+        engHomeCache[engId] = { lat: data.lat, lng: data.lng };
+        return engHomeCache[engId];
+      }
+    } catch(e) {}
+  }
+  engHomeCache[engId] = null;
+  return null;
+}
 let selectedJob = null, selectedConstraints = [], currentTab = 'today', assignedToday = 0;
 let jobConstraints = {}; // cache of constraints per job id
 
@@ -375,7 +398,7 @@ function constraintPasses(gapStart, gapEnd, durMins, constraints) {
 }
 
 // ── TIMELINE ─────────────────────────────────────────────
-function renderTimeline() {
+async function renderTimeline() {
   const sched = currentTab === 'today' ? todaySchedule : schedule;
   const names = currentTab === 'today' ? todayEngNames : engNames;
   const dateObj = currentTab === 'today' ? todayDate : tomorrowDate;
@@ -402,10 +425,16 @@ function renderTimeline() {
     return '<div class="hour-tick">' + lbl + '</div>';
   }).join('');
 
+  // Pre-calculate gaps with home travel for all engineers
+  const gapsMap = {};
+  await Promise.all(engIds.map(async engId => {
+    gapsMap[engId] = await calcGapsWithHome(engId, sched, currentTab === 'today' ? nowMins : DAY_START*60);
+  }));
+
   const rows = engIds.map(engId => {
     const name = names[engId] || ('Engineer ' + engId);
     const engJobs = (sched[engId]||[]).slice().sort((a,b)=>(a.startTime||'')>(b.startTime||'')?1:-1);
-    const gaps = calcGaps(engId, sched, currentTab === 'today' ? nowMins : DAY_START*60);
+    const gaps = gapsMap[engId] || [];
     const done = engJobs.filter(j=>['completedok','completedwithissues'].includes((j.status||'').toLowerCase())).length;
 
     // Job blocks
@@ -503,6 +532,58 @@ function calcGaps(engId, sched, fromMins) {
   gapStore[engId + '_tomorrow'] = gaps;
   return gaps;
 }
+
+async function calcGapsWithHome(engId, sched, fromMins) {
+  const gaps = calcGaps(engId, sched, fromMins);
+  if (!gaps.length) return gaps;
+
+  const home = await getEngHomeLocation(engId);
+  if (!home) return gaps;
+
+  const engJobs = (sched[engId] || [])
+    .map(j => ({ start: timeToMins(j.startTime), end: timeToMins(j.endTime), lat: j.lat, lng: j.lng }))
+    .filter(j => j.start >= 0 && j.lat)
+    .sort((a,b) => a.start - b.start);
+
+  if (!engJobs.length) return gaps;
+
+  // ── Drive from home to first job ──────────────────
+  const firstJob = engJobs[0];
+  const driveToFirst = estTravelMins(home.lat, home.lng, firstJob.lat, firstJob.lng);
+  // Earliest the engineer can be available = first job start - drive from home
+  // So any gap before firstJob.start - driveToFirst is unusable
+  const availableFrom = firstJob.start - driveToFirst;
+  // Trim or remove gaps that fall before this
+  for (let i = gaps.length - 1; i >= 0; i--) {
+    const g = gaps[i];
+    if (g.endMins <= availableFrom) {
+      gaps.splice(i, 1); // remove entirely - engineer hasn't left home yet
+    } else if (g.startMins < availableFrom) {
+      g.startMins = availableFrom; // trim start
+      g.gapMins = g.endMins - g.startMins;
+      g.driveFromHomeMins = driveToFirst;
+      if (g.gapMins < 20) gaps.splice(i, 1); // too small now, remove
+    }
+  }
+
+  // ── Drive from last job back home ─────────────────
+  const lastJob = engJobs[engJobs.length - 1];
+  const driveHome = estTravelMins(lastJob.lat, lastJob.lng, home.lat, home.lng);
+  // Last gap must end driveHome mins before end of day
+  const mustLeaveBy = DAY_END * 60 - driveHome;
+  if (gaps.length) {
+    const lastGap = gaps[gaps.length - 1];
+    if (lastGap.endMins > mustLeaveBy) {
+      lastGap.endMins = mustLeaveBy;
+      lastGap.gapMins = lastGap.endMins - lastGap.startMins;
+      lastGap.driveHomeMins = driveHome;
+      if (lastGap.gapMins < 20) gaps.pop();
+    }
+  }
+
+  return gaps;
+}
+
 
 function estTravelMins(lat1, lng1, lat2, lng2) {
   if (!lat1||!lng1||!lat2||!lng2) return 30;
