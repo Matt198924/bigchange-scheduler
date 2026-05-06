@@ -364,6 +364,20 @@ def debug_job_flags(job_id):
             results[key] = str(e)
     return jsonify(results)
 
+@app.route('/api/resources/debug', methods=['GET'])
+def debug_resources():
+    try:
+        data = bc_get('/resources', {'pageSize': 3})
+        raw = data if isinstance(data, list) else (data.get('items') or [])
+        # Return first non-group engineer's raw data
+        for e in raw:
+            name = e.get('name', '')
+            if not name.startswith('(0'):
+                return jsonify({'sample': e})
+        return jsonify({'sample': raw[0] if raw else {}})
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
 @app.route('/api/contacts/<contact_id>/location', methods=['GET'])
 def get_contact_location(contact_id):
     try:
