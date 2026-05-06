@@ -437,6 +437,49 @@ async function renderTimeline() {
     const gaps = gapsMap[engId] || [];
     const done = engJobs.filter(j=>['completedok','completedwithissues'].includes((j.status||'').toLowerCase())).length;
 
+    // Home travel indicators
+    let homeStartHtml = '';
+    let homeEndHtml = '';
+    const homeData = engHomeCache[engId];
+    if (homeData && engJobs.length) {
+      const firstJob = engJobs[0];
+      const lastJob = engJobs[engJobs.length - 1];
+      const firstStart = timeToMins(firstJob.startTime);
+      const lastEnd = timeToMins(lastJob.endTime);
+
+      if (firstJob.lat && firstStart > DAY_START * 60) {
+        const driveToFirst = estTravelMins(homeData.lat, homeData.lng, firstJob.lat, firstJob.lng);
+        const leaveHomeMins = firstStart - driveToFirst;
+        if (leaveHomeMins >= DAY_START * 60) {
+          const w = wpct(Math.max(leaveHomeMins, DAY_START*60), firstStart);
+          const l = pct(Math.max(leaveHomeMins, DAY_START*60));
+          homeStartHtml = '<div style="position:absolute;top:2px;height:28px;left:' + l + ';width:' + w + ';'
+            + 'background:repeating-linear-gradient(90deg,rgba(74,144,226,0.15) 0,rgba(74,144,226,0.15) 8px,transparent 8px,transparent 14px);'
+            + 'border-top:1px dashed #4A90E2;border-bottom:1px dashed #4A90E2;'
+            + 'display:flex;align-items:center;justify-content:center;z-index:1;" '
+            + 'title="Drive to first job: ~' + driveToFirst + 'min">'
+            + '<span style="font-size:9px;color:#2171c7;font-weight:600;white-space:nowrap;">&#8962; ' + driveToFirst + 'min</span>'
+            + '</div>';
+        }
+      }
+
+      if (lastJob.lat && lastEnd > 0 && lastEnd < DAY_END * 60) {
+        const driveHome = estTravelMins(lastJob.lat, lastJob.lng, homeData.lat, homeData.lng);
+        const arriveHomeMins = lastEnd + driveHome;
+        if (arriveHomeMins <= DAY_END * 60) {
+          const w = wpct(lastEnd, Math.min(arriveHomeMins, DAY_END*60));
+          const l = pct(lastEnd);
+          homeEndHtml = '<div style="position:absolute;top:2px;height:28px;left:' + l + ';width:' + w + ';'
+            + 'background:repeating-linear-gradient(90deg,rgba(239,68,68,0.1) 0,rgba(239,68,68,0.1) 8px,transparent 8px,transparent 14px);'
+            + 'border-top:1px dashed #E24B4A;border-bottom:1px dashed #E24B4A;'
+            + 'display:flex;align-items:center;justify-content:center;z-index:1;" '
+            + 'title="Drive home: ~' + driveHome + 'min">'
+            + '<span style="font-size:9px;color:#E24B4A;font-weight:600;white-space:nowrap;">&#8962; ' + driveHome + 'min</span>'
+            + '</div>';
+        }
+      }
+    }
+
     // Job blocks
     const jobBlocksHtml = engJobs.map(j => {
       const s = timeToMins(j.startTime), e = timeToMins(j.endTime);
@@ -476,10 +519,22 @@ async function renderTimeline() {
     let dayStartHtml = '';
 
 
+    // Build travel summary for label
+    let travelSummary = '';
+    const homeD = engHomeCache[engId];
+    if (homeD && engJobs.length) {
+      const fj = engJobs[0], lj = engJobs[engJobs.length-1];
+      const toFirst = fj.lat ? estTravelMins(homeD.lat, homeD.lng, fj.lat, fj.lng) : null;
+      const toHome  = lj.lat ? estTravelMins(lj.lat, lj.lng, homeD.lat, homeD.lng) : null;
+      if (toFirst || toHome) {
+        travelSummary = ' · &#8962; ' + (toFirst ? toFirst+'m' : '?') + '/' + (toHome ? toHome+'m' : '?');
+      }
+    }
+
     return '<div class="eng-row">'
          + '<div class="eng-label"><div class="eng-name">' + escHtml(name) + '</div>'
-         + '<div class="eng-meta">' + (currentTab==='today' ? done+'/'+engJobs.length+' done' : engJobs.length+' jobs') + ' · ' + gaps.length + ' gaps</div></div>'
-         + '<div class="track-wrap"><div class="track">' + jobBlocksHtml + gapBlocksHtml + nowLineHtml + '</div></div>'
+         + '<div class="eng-meta">' + (currentTab==='today' ? done+'/'+engJobs.length+' done' : engJobs.length+' jobs') + ' · ' + gaps.length + ' gaps' + travelSummary + '</div></div>'
+         + '<div class="track-wrap"><div class="track">' + homeStartHtml + homeEndHtml + jobBlocksHtml + gapBlocksHtml + nowLineHtml + '</div></div>'
          + '</div>';
   }).join('');
 
