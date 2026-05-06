@@ -632,7 +632,17 @@ async function showGapPopup(engId, engName, g, day, e) {
           + '</div>'
         + '</div>'
         + '<span class="fitting-job-dur">' + j.durationMins + 'min</span>'
-        + '<button class="btn-assign" data-jobid="' + j.id + '" data-jobref="' + escHtml(j.ref) + '" data-engid="' + engId + '" data-engname="' + escHtml(engName) + '" data-start="' + g.startMins + '" data-day="' + day + '">Assign</button>'
+        + '<button class="btn-assign"'
+        + ' data-jobid="' + j.id + '"'
+        + ' data-jobref="' + escHtml(j.ref) + '"'
+        + ' data-engid="' + engId + '"'
+        + ' data-engname="' + escHtml(engName) + '"'
+        + ' data-start="' + g.rawStart + '"'
+        + ' data-joblat="' + (j.lat || '') + '"'
+        + ' data-joblng="' + (j.lng || '') + '"'
+        + ' data-prevlat="' + (prevJob ? prevJob.lat || '' : '') + '"'
+        + ' data-prevlng="' + (prevJob ? prevJob.lng || '' : '') + '"'
+        + ' data-day="' + day + '">Assign</button>'
         + '</div>';
     }).join('');
   }
@@ -649,16 +659,29 @@ document.addEventListener('click', function(e) {
   const engName = btn.dataset.engname;
   const startMins = parseInt(btn.dataset.start);
   const day     = btn.dataset.day;
-  assignJob(jobId, jobRef, engId, engName, startMins, day);
+  const jobLat  = btn.dataset.joblat;
+  const jobLng  = btn.dataset.joblng;
+  const prevLat = btn.dataset.prevlat;
+  const prevLng = btn.dataset.prevlng;
+  assignJob(jobId, jobRef, engId, engName, startMins, day, jobLat, jobLng, prevLat, prevLng);
 });
 
 function closePopup() {
   document.getElementById('gap-popup').style.display = 'none';
 }
 
-async function assignJob(jobId, jobRef, engId, engName, startMins, day) {
+async function assignJob(jobId, jobRef, engId, engName, startMins, day, jobLat, jobLng, prevLat, prevLng) {
+  // startMins = end of previous job (cursor)
+  // Add travel time from prev job location to new job location for accurate arrival time
+  let arrivalMins = startMins;
+  if (jobLat && jobLng && prevLat && prevLng) {
+    const travel = estTravelMins(parseFloat(prevLat), parseFloat(prevLng), parseFloat(jobLat), parseFloat(jobLng));
+    arrivalMins = startMins + travel;
+    console.log('[ASSIGN] Travel from prev to new job: ' + travel + 'min, arrival at ' + fmtMins(arrivalMins));
+  }
+
   const d = day === 'today' ? new Date(todayDate) : new Date(tomorrowDate);
-  d.setHours(Math.floor(startMins/60), startMins%60, 0, 0);
+  d.setHours(Math.floor(arrivalMins/60), arrivalMins%60, 0, 0);
   // If time is in the past, push to 15 mins from now
   if (d < new Date()) {
     const now = new Date();
@@ -798,6 +821,10 @@ function renderSameSite() {
             + ' data-engid="' + s.engId + '"'
             + ' data-engname="' + escHtml(s.engName) + '"'
             + ' data-start="' + (s.endTime ? timeToMins(s.endTime) : s.startTime ? timeToMins(s.startTime) : DAY_START*60) + '"'
+            + ' data-joblat="' + (u.lat || '') + '"'
+            + ' data-joblng="' + (u.lng || '') + '"'
+            + ' data-prevlat="' + (s.lat || '') + '"'
+            + ' data-prevlng="' + (s.lng || '') + '"'
             + ' data-day="' + s.dayLabel.toLowerCase() + '">'
             + '&#128664; Assign to ' + escHtml(s.engName) + ' (' + s.dayLabel + ' after ' + (s.endTime ? fmtTime(s.endTime) : '?') + ')'
             + '</button>'
