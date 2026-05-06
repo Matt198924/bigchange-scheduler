@@ -133,6 +133,10 @@ def format_job(j):
 def index():
     return send_from_directory('static', 'index.html')
 
+@app.route('/logo.png')
+def logo():
+    return send_from_directory('static', 'logo.png')
+
 @app.route('/api/status')
 def api_status():
     try:
@@ -157,6 +161,9 @@ def get_engineers():
                 'name':      name.replace('(T)', '').replace('(TS)', '').strip(),
                 'isTrainee': is_trainee,
                 'region':    e.get('region') or e.get('homePostcode') or '—',
+                'contactId': str(e.get('contactId') or ''),
+                'homeLat':   (e.get('startAtLocation') or e.get('homeLocation') or e.get('contactLocation') or {}).get('latitude'),
+                'homeLng':   (e.get('startAtLocation') or e.get('homeLocation') or e.get('contactLocation') or {}).get('longitude'),
             })
         return jsonify({'engineers': engineers, 'total': len(engineers)})
     except Exception as e:
@@ -356,6 +363,20 @@ def debug_job_flags(job_id):
         except Exception as e:
             results[key] = str(e)
     return jsonify(results)
+
+@app.route('/api/contacts/<contact_id>/location', methods=['GET'])
+def get_contact_location(contact_id):
+    try:
+        data = bc_get(f'/contacts/{contact_id}')
+        loc = data.get('location') or data.get('contactLocation') or {}
+        address = data.get('address') or {}
+        return jsonify({
+            'lat':      loc.get('latitude'),
+            'lng':      loc.get('longitude'),
+            'postcode': address.get('postcode') or data.get('postcode') or '',
+        })
+    except Exception as e:
+        return jsonify({'lat': None, 'lng': None, 'postcode': '', 'error': str(e)})
 
 @app.route('/api/jobs/<job_id>/constraints', methods=['GET'])
 def get_job_constraints(job_id):
