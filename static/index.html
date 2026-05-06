@@ -185,12 +185,30 @@ const engHomeCache = {}; // cache home locations per engineer id
 async function getEngHomeLocation(engId) {
   if (engHomeCache[engId] !== undefined) return engHomeCache[engId];
   const eng = engineers.find(e => e.id === engId);
+  
+  // Try lat/lng first
   if (eng && eng.homeLat && eng.homeLng) {
     engHomeCache[engId] = { lat: eng.homeLat, lng: eng.homeLng };
-  } else {
-    engHomeCache[engId] = null;
+    return engHomeCache[engId];
   }
-  return engHomeCache[engId];
+
+  // Fall back to postcode lookup using free UK postcodes API
+  const postcode = eng && eng.region ? eng.region.replace(/\s/g, '') : null;
+  if (postcode && postcode.length >= 5) {
+    try {
+      const resp = await fetch('https://api.postcodes.io/postcodes/' + encodeURIComponent(postcode));
+      const data = await resp.json();
+      if (data.status === 200 && data.result) {
+        engHomeCache[engId] = { lat: data.result.latitude, lng: data.result.longitude };
+        return engHomeCache[engId];
+      }
+    } catch(e) {
+      console.log('[HOME] Postcode lookup failed for', postcode, e);
+    }
+  }
+
+  engHomeCache[engId] = null;
+  return null;
 }
 let selectedJob = null, selectedConstraints = [], currentTab = 'today', assignedToday = 0;
 let jobConstraints = {}; // cache of constraints per job id
