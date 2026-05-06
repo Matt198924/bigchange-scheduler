@@ -489,14 +489,14 @@ function calcGaps(engId, sched, fromMins) {
       const usableStart = Math.min(cursor + travel, slot.start - 15);
       const usableMins = slot.start - usableStart;
       if (usableMins >= 20) {
-        gaps.push({ startMins: usableStart, endMins: slot.start, gapMins: usableMins, travelMins: travel });
+        gaps.push({ startMins: usableStart, endMins: slot.start, gapMins: usableMins, travelMins: travel, rawStart: cursor });
       }
     }
     cursor = Math.max(cursor, slot.end);
     prevJob = slot;
   }
   if (DAY_END * 60 > cursor + 20) {
-    gaps.push({ startMins: cursor, endMins: DAY_END * 60, gapMins: DAY_END * 60 - cursor, travelMins: 0 });
+    gaps.push({ startMins: cursor, endMins: DAY_END * 60, gapMins: DAY_END * 60 - cursor, travelMins: 0, rawStart: cursor });
   }
 
   gapStore[engId + '_today'] = gaps;
