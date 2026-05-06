@@ -157,11 +157,17 @@ def get_engineers():
             if e.get('type', '').lower() in ['vehicle', 'asset']: continue
             is_trainee = '(T)' in name or '(TS)' in name
             start_loc = e.get('startAtLocation') or {}
+            # Try to get home postcode from custom fields
+            home_postcode = e.get('homePostcode') or e.get('region') or ''
+            for cf in (e.get('customFields') or []):
+                cap = ((cf.get('definition') or {}).get('caption') or '').lower()
+                if 'postcode' in cap or 'home' in cap:
+                    home_postcode = cf.get('value') or home_postcode
             engineers.append({
                 'id':        str(e.get('id') or i),
                 'name':      name.replace('(T)', '').replace('(TS)', '').strip(),
                 'isTrainee': is_trainee,
-                'region':    e.get('region') or e.get('homePostcode') or '—',
+                'region':    home_postcode or '—',
                 'homeLat':   start_loc.get('latitude'),
                 'homeLng':   start_loc.get('longitude'),
             })
@@ -367,14 +373,27 @@ def debug_job_flags(job_id):
 @app.route('/api/resources/debug', methods=['GET'])
 def debug_resources():
     try:
-        data = bc_get('/resources', {'pageSize': 3})
+        data = bc_get('/resources', {'pageSize': 200})
         raw = data if isinstance(data, list) else (data.get('items') or [])
-        # Return first non-group engineer's raw data
+        # Return key fields for all engineers to find postcode field
+        results = []
         for e in raw:
             name = e.get('name', '')
-            if not name.startswith('(0'):
-                return jsonify({'sample': e})
-        return jsonify({'sample': raw[0] if raw else {}})
+            if is_group_entry(name): continue
+            results.append({
+                'name': name,
+                'region': e.get('region'),
+                'homePostcode': e.get('homePostcode'),
+                'startAtLocation': e.get('startAtLocation'),
+                'address': e.get('address'),
+                'postcode': e.get('postcode'),
+                'customFields': [
+                    {'caption': (cf.get('definition') or {}).get('caption'), 'value': cf.get('value')}
+                    for cf in (e.get('customFields') or [])
+                    if cf.get('value')
+                ]
+            })
+        return jsonify({'engineers': results[:5]})
     except Exception as e:
         return jsonify({'error': str(e)}), 500
 
