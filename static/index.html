@@ -184,24 +184,13 @@ const engHomeCache = {}; // cache home locations per engineer id
 
 async function getEngHomeLocation(engId) {
   if (engHomeCache[engId] !== undefined) return engHomeCache[engId];
-  // First check if we already have it from engineers data
   const eng = engineers.find(e => e.id === engId);
   if (eng && eng.homeLat && eng.homeLng) {
     engHomeCache[engId] = { lat: eng.homeLat, lng: eng.homeLng };
-    return engHomeCache[engId];
+  } else {
+    engHomeCache[engId] = null;
   }
-  // Fetch from contact if we have contactId
-  if (eng && eng.contactId) {
-    try {
-      const data = await api('/api/contacts/' + eng.contactId + '/location');
-      if (data.lat && data.lng) {
-        engHomeCache[engId] = { lat: data.lat, lng: data.lng };
-        return engHomeCache[engId];
-      }
-    } catch(e) {}
-  }
-  engHomeCache[engId] = null;
-  return null;
+  return engHomeCache[engId];
 }
 let selectedJob = null, selectedConstraints = [], currentTab = 'today', assignedToday = 0;
 let jobConstraints = {}; // cache of constraints per job id
