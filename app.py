@@ -424,7 +424,7 @@ def get_job_constraints(job_id):
 @app.route('/api/debug/category-ids')
 def get_category_ids():
     try:
-        from_date = (datetime.now() - timedelta(days=14)).strftime('%Y-%m-%dT00:00:00')
+        from_date = (datetime.now() - timedelta(days=60)).strftime('%Y-%m-%dT00:00:00')
         to_date   = (datetime.now() + timedelta(days=90)).strftime('%Y-%m-%dT23:59:59')
         all_raw = []
         for status_val in ['new', 'unscheduled']:
