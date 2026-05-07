@@ -16,11 +16,6 @@ API_BASE      = 'https://api.bigchange.com/v1'
 TOKEN_URL     = 'https://api.bigchange.com/auth/tokens'
 
 VALID_CATEGORY_IDS = {77961, 82685, 82693, 82694, 82695, 82696, 82697}
-
-JOBWATCH_URL      = 'https://webservice.bigchange.com/v01/services.ashx'
-JOBWATCH_KEY      = os.environ.get('JOBWATCH_KEY', '')
-JOBWATCH_USERNAME = os.environ.get('JOBWATCH_USERNAME', '')
-JOBWATCH_PASSWORD = os.environ.get('JOBWATCH_PASSWORD', '')
 COMPLETED_STATUSES = {'completedok', 'completedwithissues', 'cancelled'}
 
 _token_cache = {'token': None, 'expires_at': 0}
@@ -133,10 +128,6 @@ def format_job(j):
 def index():
     return send_from_directory('static', 'index.html')
 
-@app.route('/logo.png')
-def logo():
-    return send_from_directory('static', 'logo.png')
-
 @app.route('/api/status')
 def api_status():
     try:
@@ -156,20 +147,11 @@ def get_engineers():
             if is_group_entry(name): continue
             if e.get('type', '').lower() in ['vehicle', 'asset']: continue
             is_trainee = '(T)' in name or '(TS)' in name
-            start_loc = e.get('startAtLocation') or {}
-            # Try to get home postcode from custom fields
-            home_postcode = e.get('homePostcode') or e.get('region') or ''
-            for cf in (e.get('customFields') or []):
-                cap = ((cf.get('definition') or {}).get('caption') or '').lower()
-                if 'postcode' in cap or 'home' in cap:
-                    home_postcode = cf.get('value') or home_postcode
             engineers.append({
                 'id':        str(e.get('id') or i),
                 'name':      name.replace('(T)', '').replace('(TS)', '').strip(),
                 'isTrainee': is_trainee,
-                'region':    home_postcode or '—',
-                'homeLat':   start_loc.get('latitude'),
-                'homeLng':   start_loc.get('longitude'),
+                'region':    e.get('region') or e.get('homePostcode') or '—',
             })
         return jsonify({'engineers': engineers, 'total': len(engineers)})
     except Exception as e:
@@ -178,41 +160,42 @@ def get_engineers():
 @app.route('/api/jobs/unassigned')
 def get_unassigned_jobs():
     try:
-        cached = cache_get('unassigned_jobs', max_age=180)
+        cached = cache_get('unassigned_jobs', max_age=120)
         if cached is not None:
             print(f"[UNASSIGNED] Cache hit: {len(cached)} jobs")
             return jsonify({'jobs': cached, 'total': len(cached)})
 
-        from_date = (datetime.now() - timedelta(days=14)).strftime('%Y-%m-%dT00:00:00')
-        to_date   = (datetime.now() + timedelta(days=90)).strftime('%Y-%m-%dT23:59:59')
-
+        # Fetch by each category ID with no resource assigned
+        # This is more reliable than date+status filtering
         all_raw = []
         seen_ids = set()
 
-        for status_val in ['new', 'unscheduled']:
+        for cat_id in VALID_CATEGORY_IDS:
             try:
                 data = bc_get('/jobs', {
-                    'StatusModifiedAtFrom': from_date,
-                    'StatusModifiedAtTo':   to_date,
-                    'status':               status_val,
-                    'pageSize':             1000,
+                    'categoryId': cat_id,
+                    'pageSize':   1000,
                 })
-                # Note: BigChange API doesn't support categoryId filter directly
-                # so we filter after fetching
                 items = data if isinstance(data, list) else (data.get('items') or [])
                 new_items = [j for j in items if j.get('id') not in seen_ids]
                 seen_ids.update(j.get('id') for j in new_items)
                 all_raw.extend(new_items)
-                print(f"[UNASSIGNED] status={status_val}: {len(items)} jobs")
+                print(f"[UNASSIGNED] category={cat_id}: {len(items)} jobs")
             except Exception as e:
-                print(f"[UNASSIGNED] status={status_val} failed: {e}")
+                print(f"[UNASSIGNED] category={cat_id} failed: {e}")
 
         print(f"[UNASSIGNED] Total fetched: {len(all_raw)}")
+
+        # Filter to only unassigned and not completed
+        EXCLUDE_STATUSES = {'completedok', 'completedwithissues', 'cancelled', 
+                           'scheduled', 'sent', 'read', 'accepted', 'refused', 
+                           'ontheway', 'started', 'suspended'}
 
         jobs = []
         for j in all_raw:
             if j.get('resourceId'): continue
-            if not is_valid_category(j): continue
+            status = (j.get('status') or '').lower()
+            if status in EXCLUDE_STATUSES: continue
             jobs.append(format_job(j))
 
         jobs.sort(key=lambda j: -j['durationMins'])
@@ -315,102 +298,6 @@ def assign_job(job_id):
         print(f"[ASSIGN] ERROR: {e}")
         return jsonify({'error': str(e)}), 500
 
-def jobwatch_get(action, params=None):
-    import base64
-    creds = base64.b64encode(f'{JOBWATCH_USERNAME}:{JOBWATCH_PASSWORD}'.encode()).decode()
-    p = {'action': action, 'Format': 'JSON'}
-    if params:
-        p.update(params)
-    resp = requests.get(JOBWATCH_URL, params=p, headers={
-        'Authorization': f'Basic {creds}',
-        'key': JOBWATCH_KEY,
-    }, timeout=15)
-    resp.raise_for_status()
-    return resp.json()
-
-@app.route('/api/jobs/<job_id>/flags', methods=['GET'])
-def get_job_flags(job_id):
-    try:
-        TARGET_FLAGS = {'parts received', 'parts with engineer'}
-        data = jobwatch_get('JobFlags', {'JobId': job_id})
-        print(f"[FLAGS] Raw response for {job_id}: {str(data)[:500]}")
-        raw = data if isinstance(data, list) else (data.get('Result') or data.get('result') or data.get('Flags') or data.get('flags') or [])
-        flags = []
-        for f in raw:
-            name = (f.get('name') or f.get('Name') or f.get('FlagName') or '').lower().strip()
-            if name in TARGET_FLAGS:
-                flags.append({
-                    'name':    f.get('name') or f.get('Name') or f.get('FlagName') or '',
-                    'colour':  f.get('colour') or f.get('Colour') or f.get('Color') or '#888',
-                    'comment': f.get('comment') or f.get('Comment') or '',
-                })
-        return jsonify({'flags': flags, 'raw_count': len(raw)})
-    except Exception as e:
-        print(f"[FLAGS] ERROR for job {job_id}: {e}")
-        return jsonify({'flags': [], 'error': str(e)})
-
-@app.route('/api/jobs/<job_id>/flags/debug', methods=['GET'])
-def debug_job_flags(job_id):
-    results = {}
-    # Try different action names and parameter combinations
-    tests = [
-        ('JobFlags', {'JobId': job_id}),
-        ('JobFlags', {'Id': job_id}),
-        ('JobFlags', {'jobid': job_id}),
-        ('GetJobFlags', {'JobId': job_id}),
-        ('JobFlagList', {'JobId': job_id}),
-        ('FlagList', {'JobId': job_id}),
-    ]
-    for action, params in tests:
-        key = f"{action}_{list(params.keys())[0]}"
-        try:
-            data = jobwatch_get(action, params)
-            results[key] = data
-        except Exception as e:
-            results[key] = str(e)
-    return jsonify(results)
-
-@app.route('/api/resources/debug', methods=['GET'])
-def debug_resources():
-    try:
-        data = bc_get('/resources', {'pageSize': 200})
-        raw = data if isinstance(data, list) else (data.get('items') or [])
-        # Return key fields for all engineers to find postcode field
-        results = []
-        for e in raw:
-            name = e.get('name', '')
-            if is_group_entry(name): continue
-            results.append({
-                'name': name,
-                'region': e.get('region'),
-                'homePostcode': e.get('homePostcode'),
-                'startAtLocation': e.get('startAtLocation'),
-                'address': e.get('address'),
-                'postcode': e.get('postcode'),
-                'customFields': [
-                    {'caption': (cf.get('definition') or {}).get('caption'), 'value': cf.get('value')}
-                    for cf in (e.get('customFields') or [])
-                    if cf.get('value')
-                ]
-            })
-        return jsonify({'engineers': results[:5]})
-    except Exception as e:
-        return jsonify({'error': str(e)}), 500
-
-@app.route('/api/contacts/<contact_id>/location', methods=['GET'])
-def get_contact_location(contact_id):
-    try:
-        data = bc_get(f'/contacts/{contact_id}')
-        loc = data.get('location') or data.get('contactLocation') or {}
-        address = data.get('address') or {}
-        return jsonify({
-            'lat':      loc.get('latitude'),
-            'lng':      loc.get('longitude'),
-            'postcode': address.get('postcode') or data.get('postcode') or '',
-        })
-    except Exception as e:
-        return jsonify({'lat': None, 'lng': None, 'postcode': '', 'error': str(e)})
-
 @app.route('/api/jobs/<job_id>/constraints', methods=['GET'])
 def get_job_constraints(job_id):
     try:
@@ -424,7 +311,7 @@ def get_job_constraints(job_id):
 @app.route('/api/debug/category-ids')
 def get_category_ids():
     try:
-        from_date = (datetime.now() - timedelta(days=60)).strftime('%Y-%m-%dT00:00:00')
+        from_date = (datetime.now() - timedelta(days=14)).strftime('%Y-%m-%dT00:00:00')
         to_date   = (datetime.now() + timedelta(days=90)).strftime('%Y-%m-%dT23:59:59')
         all_raw = []
         for status_val in ['new', 'unscheduled']:
