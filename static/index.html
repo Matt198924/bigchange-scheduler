@@ -9,7 +9,7 @@
 body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; background: #f5f5f3; color: #1a1a1a; font-size: 14px; }
 
 .topbar { background: #185FA5; padding: 0 1.5rem; height: 52px; display: flex; align-items: center; justify-content: space-between; }
-.topbar-divider { width: 1px; height: 24px; background: rgba(255,255,255,0.3); margin: 0 12px; }
+.logo { font-size: 15px; font-weight: 600; color: #fff; }
 .topbar-sub { font-size: 12px; color: rgba(255,255,255,0.7); margin-left: 12px; }
 .conn-badge { font-size: 11px; padding: 3px 10px; border-radius: 20px; background: rgba(255,255,255,0.2); color: #fff; }
 .conn-badge.error { background: #E24B4A; }
@@ -22,16 +22,14 @@ body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; b
 .metric .m-value.blue { color: #185FA5; }
 .metric .m-value.green { color: #3B6D11; }
 .metric .m-value.red { color: #A32D2D; }
-.metric .m-value.amber { color: #854F0B; }
 
 .tabs { display: flex; background: #fff; border-bottom: 1px solid #e5e5e3; padding: 0 1rem; }
 .tab { padding: 10px 16px; font-size: 13px; border: none; background: none; cursor: pointer; color: #888; border-bottom: 2px solid transparent; margin-bottom: -1px; }
-.tab:hover { color: #185FA5; }
 .tab.active { color: #185FA5; border-bottom-color: #185FA5; font-weight: 500; }
 
 .layout { display: grid; grid-template-columns: 280px 1fr; height: calc(100vh - 140px); }
 .left { background: #fff; border-right: 1px solid #e5e5e3; display: flex; flex-direction: column; overflow: hidden; }
-.panel-head { padding: 10px 14px; border-bottom: 1px solid #e5e5e3; display: flex; align-items: center; justify-content: space-between; }
+.panel-head { padding: 10px 14px; border-bottom: 1px solid #e5e5e3; display: flex; align-items: center; justify-content: space-between; flex-shrink: 0; }
 .panel-title { font-size: 12px; font-weight: 600; color: #888; text-transform: uppercase; letter-spacing: 0.05em; }
 .panel-count { font-size: 12px; color: #aaa; }
 .jobs-scroll { flex: 1; overflow-y: auto; }
@@ -41,62 +39,79 @@ body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; b
 .job-ref { font-size: 11px; font-weight: 600; color: #185FA5; margin-bottom: 2px; }
 .job-desc { font-size: 12px; font-weight: 500; margin-bottom: 2px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .job-client { font-size: 11px; color: #888; margin-bottom: 5px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-.job-tags { display: flex; gap: 5px; align-items: center; flex-wrap: wrap; }
+.job-tags { display: flex; gap: 5px; align-items: center; }
 .tag-dur { font-size: 10px; padding: 2px 6px; border-radius: 4px; background: #E6F1FB; color: #185FA5; }
 .tag-type { font-size: 10px; padding: 2px 6px; border-radius: 4px; background: #f0f0ee; color: #666; }
 
 .right { display: flex; flex-direction: column; overflow: hidden; }
-.timeline-controls { padding: 8px 14px; background: #fff; border-bottom: 1px solid #e5e5e3; display: flex; align-items: center; gap: 10px; min-height: 40px; }
+.timeline-controls { padding: 8px 14px; background: #fff; border-bottom: 1px solid #e5e5e3; display: flex; align-items: center; gap: 10px; flex-shrink: 0; min-height: 40px; }
 .selected-pill { font-size: 11px; padding: 3px 10px; border-radius: 20px; background: #185FA5; color: #fff; }
 .hint { font-size: 11px; color: #aaa; margin-left: auto; }
 
 .timeline-scroll { flex: 1; overflow-y: auto; overflow-x: hidden; }
+
 .hour-header { display: grid; grid-template-columns: 160px 1fr; background: #fff; border-bottom: 1px solid #e5e5e3; position: sticky; top: 0; z-index: 10; }
 .hour-header-label { padding: 4px 10px; font-size: 10px; color: #aaa; border-right: 1px solid #f0f0ee; }
 .hour-ticks { display: flex; }
 .hour-tick { flex: 1; font-size: 10px; color: #aaa; padding: 4px 0 4px 3px; border-left: 1px solid #f0f0ee; }
 
 .eng-row { display: grid; grid-template-columns: 160px 1fr; border-bottom: 1px solid #f0f0ee; min-height: 50px; }
-.eng-row:hover { background: #fafaf9; }
 .eng-label { padding: 8px 10px; border-right: 1px solid #f0f0ee; background: #fff; display: flex; flex-direction: column; justify-content: center; }
 .eng-name { font-size: 12px; font-weight: 500; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .eng-meta { font-size: 10px; color: #aaa; margin-top: 2px; }
+
 .track-wrap { position: relative; background: #f9f9f7; display: flex; align-items: center; padding: 0 8px; }
 .track { position: relative; width: 100%; height: 32px; background: #f0f0ee; border-radius: 4px; }
 
 .job-block { position: absolute; top: 2px; height: 28px; border-radius: 3px; display: flex; align-items: center; padding: 0 5px; overflow: hidden; z-index: 2; }
 .job-block-label { font-size: 10px; font-weight: 500; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-.gap-block { position: absolute; top: 2px; height: 28px; border-radius: 3px; z-index: 1; display: flex; align-items: center; justify-content: center; cursor: pointer; transition: all 0.15s; }
+
+.job-tooltip {
+  display: none; position: fixed;
+  background: #fff; border: 1px solid #e5e5e3;
+  border-radius: 10px; box-shadow: 0 4px 24px rgba(0,0,0,0.15);
+  padding: 13px 15px; width: 290px; z-index: 999;
+  pointer-events: none; font-size: 12px;
+}
+.job-tooltip.visible { display: block; }
+.job-tooltip-ref { font-size: 11px; font-weight: 600; color: #185FA5; margin-bottom: 3px; }
+.job-tooltip-client { font-size: 13px; font-weight: 600; color: #1a1a1a; margin-bottom: 2px; }
+.job-tooltip-addr { font-size: 11px; color: #888; margin-bottom: 8px; }
+.job-tooltip-desc { font-size: 11px; color: #444; margin-bottom: 8px; line-height: 1.45; border-top: 1px solid #f0f0ee; padding-top: 8px; }
+.job-tooltip-row { display: flex; justify-content: space-between; font-size: 11px; margin-bottom: 4px; }
+.job-tooltip-lbl { color: #888; }
+.job-tooltip-val { font-weight: 500; color: #1a1a1a; text-align: right; }
+.job-tooltip-status { margin-top: 8px; font-size: 10px; padding: 2px 8px; border-radius: 20px; display: inline-block; font-weight: 500; }
+
+.gap-block { position: absolute; top: 2px; height: 28px; border-radius: 3px; z-index: 1; display: flex; align-items: center; justify-content: center; cursor: pointer; }
 .gap-block:hover { opacity: 0.8; }
 .gap-empty { background: rgba(99,153,34,0.15); border: 1px dashed #639922; }
 .gap-fits { background: rgba(24,95,165,0.2); border: 2px solid #185FA5; }
 .gap-nofit { background: rgba(200,200,200,0.1); border: 1px dashed #ccc; }
 .gap-label { font-size: 9px; font-weight: 500; white-space: nowrap; overflow: hidden; padding: 0 4px; color: #3B6D11; }
 .gap-fits .gap-label { color: #185FA5; }
+
 .now-line { position: absolute; top: 0; bottom: 0; width: 2px; background: #E24B4A; z-index: 5; pointer-events: none; }
 
-.gap-popup { position: fixed; background: #fff; border: 1px solid #e5e5e3; border-radius: 10px; box-shadow: 0 4px 20px rgba(0,0,0,0.12); padding: 16px; width: 360px; z-index: 1000; max-height: 440px; overflow-y: auto; }
+.gap-popup { position: fixed; background: #fff; border: 1px solid #e5e5e3; border-radius: 10px; box-shadow: 0 4px 20px rgba(0,0,0,0.15); padding: 16px; width: 340px; z-index: 1000; max-height: 420px; overflow-y: auto; }
 .gap-popup h3 { font-size: 13px; font-weight: 600; margin-bottom: 4px; }
 .gap-popup-sub { font-size: 12px; color: #888; margin-bottom: 12px; }
-.gap-popup-close { position: absolute; top: 12px; right: 14px; font-size: 16px; cursor: pointer; color: #aaa; border: none; background: none; }
-.fitting-job { padding: 9px 11px; border: 1px solid #e5e5e3; border-radius: 8px; margin-bottom: 6px; display: flex; align-items: center; gap: 8px; }
-.fitting-job:hover { border-color: #185FA5; }
-.fitting-job.selected-job { border-color: #185FA5; background: #EBF4FF; }
+.gap-popup-close { position: absolute; top: 10px; right: 12px; font-size: 18px; cursor: pointer; color: #aaa; border: none; background: none; line-height: 1; }
+.fitting-job { padding: 8px 10px; border: 1px solid #e5e5e3; border-radius: 7px; margin-bottom: 6px; display: flex; align-items: center; gap: 8px; }
+.fitting-job.selected-job { border-color: #185FA5; background: #f0f6ff; }
 .fitting-job-info { flex: 1; min-width: 0; }
 .fitting-job-ref { font-size: 11px; font-weight: 600; color: #185FA5; }
 .fitting-job-desc { font-size: 12px; font-weight: 500; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .fitting-job-sub { font-size: 11px; color: #888; }
-.fitting-job-dur { font-size: 10px; padding: 2px 7px; border-radius: 20px; background: #E6F1FB; color: #185FA5; flex-shrink: 0; }
-.btn-assign { padding: 5px 12px; border-radius: 6px; border: 1px solid #185FA5; background: #185FA5; color: #fff; font-size: 11px; cursor: pointer; flex-shrink: 0; transition: all 0.15s; }
+.fitting-job-dur { font-size: 11px; padding: 2px 7px; border-radius: 20px; background: #E6F1FB; color: #185FA5; flex-shrink: 0; }
+.btn-assign { padding: 4px 10px; border-radius: 6px; border: 1px solid #185FA5; background: #185FA5; color: #fff; font-size: 11px; cursor: pointer; flex-shrink: 0; }
 .btn-assign:hover { background: #0C447C; }
 .no-fitting { font-size: 12px; color: #aaa; text-align: center; padding: 16px 0; }
-.constraint-info { font-size: 11px; color: #854F0B; background: #FAEEDA; border: 1px solid #f0c060; padding: 5px 10px; border-radius: 6px; margin-bottom: 8px; }
-
-#samesite-view { background: #f5f5f3; }
+.constraint-info { font-size: 11px; color: #854F0B; background: #FAEEDA; padding: 4px 8px; border-radius: 4px; margin-bottom: 8px; }
 
 .spinner { width: 20px; height: 20px; border: 2px solid #e5e5e3; border-top-color: #185FA5; border-radius: 50%; animation: spin 0.8s linear infinite; margin: 2rem auto; display: block; }
 @keyframes spin { to { transform: rotate(360deg); } }
-.empty-msg { padding: 3rem 1rem; text-align: center; color: #aaa; font-size: 13px; }
+.empty-msg { padding: 2rem; text-align: center; color: #aaa; font-size: 13px; }
 
 #toast { position: fixed; bottom: 24px; left: 50%; transform: translateX(-50%); background: #1a1a1a; color: #fff; padding: 10px 20px; border-radius: 8px; font-size: 13px; opacity: 0; transition: opacity 0.3s; pointer-events: none; z-index: 2000; }
 #toast.show { opacity: 1; }
@@ -105,9 +120,8 @@ body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; b
 <body>
 
 <div class="topbar">
-  <div style="display:flex;align-items:center;gap:16px;">
-    <img src="/logo.png" alt="R&S Services" style="height:28px;border-radius:3px;display:block;">
-    <div class="topbar-divider"></div>
+  <div style="display:flex;align-items:center;">
+    <span class="logo">BigChange Scheduler</span>
     <span class="topbar-sub" id="topbar-date"></span>
   </div>
   <div style="display:flex;align-items:center;gap:10px;">
@@ -132,7 +146,6 @@ body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; b
 <div class="tabs">
   <button class="tab active" id="tab-today-btn" onclick="switchTab('today')">Today's live schedule</button>
   <button class="tab" id="tab-tomorrow-btn" onclick="switchTab('tomorrow')">Tomorrow — assign jobs</button>
-  <button class="tab" id="tab-same-site-btn" onclick="switchTab('samesite')">Same site opportunities</button>
 </div>
 
 <div class="layout">
@@ -158,10 +171,6 @@ body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; b
 </div>
 
 
-<div id="samesite-view" style="display:none;padding:1.25rem;overflow-y:auto;height:calc(100vh - 140px);background:#f9f9f7;">
-  <div id="samesite-content"><div class="empty-msg">Click this tab to find same-site opportunities</div></div>
-</div>
-
 <div class="gap-popup" id="gap-popup" style="display:none;">
   <button class="gap-popup-close" onclick="closePopup()">&#10005;</button>
   <h3 id="popup-title"></h3>
@@ -171,6 +180,17 @@ body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; b
 </div>
 
 <div id="toast"></div>
+<div class="job-tooltip" id="job-tooltip">
+  <div class="job-tooltip-ref" id="tt-ref"></div>
+  <div class="job-tooltip-client" id="tt-client"></div>
+  <div class="job-tooltip-addr" id="tt-addr"></div>
+  <div class="job-tooltip-desc" id="tt-desc"></div>
+  <div class="job-tooltip-row"><span class="job-tooltip-lbl">Type</span><span class="job-tooltip-val" id="tt-type"></span></div>
+  <div class="job-tooltip-row"><span class="job-tooltip-lbl">Duration</span><span class="job-tooltip-val" id="tt-dur"></span></div>
+  <div class="job-tooltip-row"><span class="job-tooltip-lbl">Planned start</span><span class="job-tooltip-val" id="tt-start"></span></div>
+  <div class="job-tooltip-row"><span class="job-tooltip-lbl">Planned end</span><span class="job-tooltip-val" id="tt-end"></span></div>
+  <div><span class="job-tooltip-status" id="tt-status"></span></div>
+</div>
 
 <script>
 const DAY_START = 5;
@@ -180,36 +200,6 @@ const HOURS = Array.from({length: DAY_END - DAY_START + 1}, (_, i) => DAY_START 
 
 let jobs = [], engineers = [], schedule = {}, engNames = {}, todaySchedule = {}, todayEngNames = {};
 const constraintsCache = {}; // cache constraints per job id to avoid repeated fetches
-const engHomeCache = {}; // cache home locations per engineer id
-
-async function getEngHomeLocation(engId) {
-  if (engHomeCache[engId] !== undefined) return engHomeCache[engId];
-  const eng = engineers.find(e => e.id === engId);
-  
-  // Try lat/lng first
-  if (eng && eng.homeLat && eng.homeLng) {
-    engHomeCache[engId] = { lat: eng.homeLat, lng: eng.homeLng };
-    return engHomeCache[engId];
-  }
-
-  // Fall back to postcode lookup using free UK postcodes API
-  const postcode = eng && eng.region ? eng.region.replace(/\s/g, '') : null;
-  if (postcode && postcode.length >= 5) {
-    try {
-      const resp = await fetch('https://api.postcodes.io/postcodes/' + encodeURIComponent(postcode));
-      const data = await resp.json();
-      if (data.status === 200 && data.result) {
-        engHomeCache[engId] = { lat: data.result.latitude, lng: data.result.longitude };
-        return engHomeCache[engId];
-      }
-    } catch(e) {
-      console.log('[HOME] Postcode lookup failed for', postcode, e);
-    }
-  }
-
-  engHomeCache[engId] = null;
-  return null;
-}
 let selectedJob = null, selectedConstraints = [], currentTab = 'today', assignedToday = 0;
 let jobConstraints = {}; // cache of constraints per job id
 
@@ -254,28 +244,7 @@ async function loadJobs() {
   jobs = data.jobs || [];
   document.getElementById('m-unassigned').textContent = jobs.length;
   document.getElementById('job-count').textContent = jobs.length + ' jobs';
-  renderJobList();
-  // Flags fetched on demand only - not in background
-}
-
-const jobFlags = {}; // cache flags per job id
-
-async function fetchAllFlags() {
-  for (let i = 0; i < jobs.length; i += 3) {
-    const batch = jobs.slice(i, i + 3);
-    await Promise.all(batch.map(async j => {
-      if (jobFlags[j.id] !== undefined) return;
-      try {
-        const data = await api('/api/jobs/' + j.id + '/flags');
-        jobFlags[j.id] = data.flags || [];
-      } catch(e) {
-        jobFlags[j.id] = [];
-      }
-    }));
-    if (i === 0) renderJobList(); // re-render after first batch
-    await new Promise(r => setTimeout(r, 300));
-  }
-  renderJobList(); // final re-render
+  renderJobList(); // show jobs as soon as they load
 }
 
 async function loadEngineers() {
@@ -321,11 +290,7 @@ function switchTab(tab) {
   currentTab = tab;
   document.getElementById('tab-today-btn').className = 'tab' + (tab==='today'?' active':'');
   document.getElementById('tab-tomorrow-btn').className = 'tab' + (tab==='tomorrow'?' active':'');
-  document.getElementById('tab-same-site-btn').className = 'tab' + (tab==='samesite'?' active':'');
-  document.querySelector('.layout').style.display = tab === 'samesite' ? 'none' : 'grid';
-  document.getElementById('samesite-view').style.display = tab === 'samesite' ? 'block' : 'none';
-  if (tab === 'samesite') renderSameSite();
-  else renderTimeline();
+  renderTimeline();
 }
 
 // ── JOB LIST ─────────────────────────────────────────────
@@ -346,7 +311,6 @@ function renderJobList() {
       + '<span class="tag-dur">' + j.durationMins + ' min</span>'
       + '<span class="tag-type">' + escHtml(j.type) + '</span>'
       + '</div>'
-      + renderFlags(j.id)
       + constraintHtml
       + '</div>';
   }).join('');
@@ -405,7 +369,7 @@ function constraintPasses(gapStart, gapEnd, durMins, constraints) {
 }
 
 // ── TIMELINE ─────────────────────────────────────────────
-async function renderTimeline() {
+function renderTimeline() {
   const sched = currentTab === 'today' ? todaySchedule : schedule;
   const names = currentTab === 'today' ? todayEngNames : engNames;
   const dateObj = currentTab === 'today' ? todayDate : tomorrowDate;
@@ -432,60 +396,11 @@ async function renderTimeline() {
     return '<div class="hour-tick">' + lbl + '</div>';
   }).join('');
 
-  // Pre-calculate gaps with home travel for all engineers
-  const gapsMap = {};
-  await Promise.all(engIds.map(async engId => {
-    gapsMap[engId] = await calcGapsWithHome(engId, sched, currentTab === 'today' ? nowMins : DAY_START*60);
-  }));
-
   const rows = engIds.map(engId => {
     const name = names[engId] || ('Engineer ' + engId);
     const engJobs = (sched[engId]||[]).slice().sort((a,b)=>(a.startTime||'')>(b.startTime||'')?1:-1);
-    const gaps = gapsMap[engId] || [];
+    const gaps = calcGaps(engId, sched, currentTab === 'today' ? nowMins : DAY_START*60);
     const done = engJobs.filter(j=>['completedok','completedwithissues'].includes((j.status||'').toLowerCase())).length;
-
-    // Home travel indicators
-    let homeStartHtml = '';
-    let homeEndHtml = '';
-    const homeData = engHomeCache[engId];
-    if (homeData && engJobs.length) {
-      const firstJob = engJobs[0];
-      const lastJob = engJobs[engJobs.length - 1];
-      const firstStart = timeToMins(firstJob.startTime);
-      const lastEnd = timeToMins(lastJob.endTime);
-
-      if (firstJob.lat && firstStart > DAY_START * 60) {
-        const driveToFirst = estTravelMins(homeData.lat, homeData.lng, firstJob.lat, firstJob.lng);
-        const leaveHomeMins = firstStart - driveToFirst;
-        if (leaveHomeMins >= DAY_START * 60) {
-          const w = wpct(Math.max(leaveHomeMins, DAY_START*60), firstStart);
-          const l = pct(Math.max(leaveHomeMins, DAY_START*60));
-          homeStartHtml = '<div style="position:absolute;top:2px;height:28px;left:' + l + ';width:' + w + ';'
-            + 'background:repeating-linear-gradient(90deg,rgba(74,144,226,0.15) 0,rgba(74,144,226,0.15) 8px,transparent 8px,transparent 14px);'
-            + 'border-top:1px dashed #4A90E2;border-bottom:1px dashed #4A90E2;'
-            + 'display:flex;align-items:center;justify-content:center;z-index:1;" '
-            + 'title="Drive to first job: ~' + driveToFirst + 'min">'
-            + '<span style="font-size:9px;color:#2171c7;font-weight:600;white-space:nowrap;">&#8962; ' + driveToFirst + 'min</span>'
-            + '</div>';
-        }
-      }
-
-      if (lastJob.lat && lastEnd > 0 && lastEnd < DAY_END * 60) {
-        const driveHome = estTravelMins(lastJob.lat, lastJob.lng, homeData.lat, homeData.lng);
-        const arriveHomeMins = lastEnd + driveHome;
-        if (arriveHomeMins <= DAY_END * 60) {
-          const w = wpct(lastEnd, Math.min(arriveHomeMins, DAY_END*60));
-          const l = pct(lastEnd);
-          homeEndHtml = '<div style="position:absolute;top:2px;height:28px;left:' + l + ';width:' + w + ';'
-            + 'background:repeating-linear-gradient(90deg,rgba(239,68,68,0.1) 0,rgba(239,68,68,0.1) 8px,transparent 8px,transparent 14px);'
-            + 'border-top:1px dashed #E24B4A;border-bottom:1px dashed #E24B4A;'
-            + 'display:flex;align-items:center;justify-content:center;z-index:1;" '
-            + 'title="Drive home: ~' + driveHome + 'min">'
-            + '<span style="font-size:9px;color:#E24B4A;font-weight:600;white-space:nowrap;">&#8962; ' + driveHome + 'min</span>'
-            + '</div>';
-        }
-      }
-    }
 
     // Job blocks
     const jobBlocksHtml = engJobs.map(j => {
@@ -498,7 +413,17 @@ async function renderTimeline() {
                : st==='started'||st==='ontheway' ? '#FFD080' : '#B5D4F4';
       const br = st==='completedok'||st==='completedwithissues' ? '#639922'
                : st==='started'||st==='ontheway' ? '#BA7517' : '#378ADD';
-      return '<div class="job-block" style="left:' + pct(cs) + ';width:' + wpct(cs,ce) + ';background:' + bg + ';border:1px solid ' + br + ';" title="' + escHtml(j.client||j.desc) + '">'
+      return '<div class="job-block" style="left:' + pct(cs) + ';width:' + wpct(cs,ce) + ';background:' + bg + ';border:1px solid ' + br + ';"'
+           + ' data-ref="' + escHtml(j.ref) + '"'
+           + ' data-client="' + escHtml(j.client) + '"'
+           + ' data-addr="' + escHtml(j.area||'') + '"'
+           + ' data-desc="' + escHtml(j.desc) + '"'
+           + ' data-type="' + escHtml(j.type) + '"'
+           + ' data-dur="' + j.durationMins + '"'
+           + ' data-start="' + escHtml(j.startTime||'') + '"'
+           + ' data-end="' + escHtml(j.endTime||'') + '"'
+           + ' data-status="' + escHtml(j.status||'') + '"'
+           + ' onmouseenter="showJobTooltip(event,this)" onmouseleave="hideJobTooltip()">'
            + '<span class="job-block-label" style="color:#1a1a1a;">' + escHtml((j.client||j.desc).substring(0,30)) + '</span></div>';
     }).join('');
 
@@ -526,22 +451,10 @@ async function renderTimeline() {
     let dayStartHtml = '';
 
 
-    // Build travel summary for label
-    let travelSummary = '';
-    const homeD = engHomeCache[engId];
-    if (homeD && engJobs.length) {
-      const fj = engJobs[0], lj = engJobs[engJobs.length-1];
-      const toFirst = fj.lat ? estTravelMins(homeD.lat, homeD.lng, fj.lat, fj.lng) : null;
-      const toHome  = lj.lat ? estTravelMins(lj.lat, lj.lng, homeD.lat, homeD.lng) : null;
-      if (toFirst || toHome) {
-        travelSummary = ' · &#8962; ' + (toFirst ? toFirst+'m' : '?') + '/' + (toHome ? toHome+'m' : '?');
-      }
-    }
-
     return '<div class="eng-row">'
          + '<div class="eng-label"><div class="eng-name">' + escHtml(name) + '</div>'
-         + '<div class="eng-meta">' + (currentTab==='today' ? done+'/'+engJobs.length+' done' : engJobs.length+' jobs') + ' · ' + gaps.length + ' gaps' + travelSummary + '</div></div>'
-         + '<div class="track-wrap"><div class="track">' + homeStartHtml + homeEndHtml + jobBlocksHtml + gapBlocksHtml + nowLineHtml + '</div></div>'
+         + '<div class="eng-meta">' + (currentTab==='today' ? done+'/'+engJobs.length+' done' : engJobs.length+' jobs') + ' · ' + gaps.length + ' gaps</div></div>'
+         + '<div class="track-wrap"><div class="track">' + jobBlocksHtml + gapBlocksHtml + nowLineHtml + '</div></div>'
          + '</div>';
   }).join('');
 
@@ -580,72 +493,20 @@ function calcGaps(engId, sched, fromMins) {
       const usableStart = Math.min(cursor + travel, slot.start - 15);
       const usableMins = slot.start - usableStart;
       if (usableMins >= 20) {
-        gaps.push({ startMins: usableStart, endMins: slot.start, gapMins: usableMins, travelMins: travel, rawStart: cursor });
+        gaps.push({ startMins: usableStart, endMins: slot.start, gapMins: usableMins, travelMins: travel });
       }
     }
     cursor = Math.max(cursor, slot.end);
     prevJob = slot;
   }
   if (DAY_END * 60 > cursor + 20) {
-    gaps.push({ startMins: cursor, endMins: DAY_END * 60, gapMins: DAY_END * 60 - cursor, travelMins: 0, rawStart: cursor });
+    gaps.push({ startMins: cursor, endMins: DAY_END * 60, gapMins: DAY_END * 60 - cursor, travelMins: 0 });
   }
 
   gapStore[engId + '_today'] = gaps;
   gapStore[engId + '_tomorrow'] = gaps;
   return gaps;
 }
-
-async function calcGapsWithHome(engId, sched, fromMins) {
-  const gaps = calcGaps(engId, sched, fromMins);
-  if (!gaps.length) return gaps;
-
-  const home = await getEngHomeLocation(engId);
-  if (!home) return gaps;
-
-  const engJobs = (sched[engId] || [])
-    .map(j => ({ start: timeToMins(j.startTime), end: timeToMins(j.endTime), lat: j.lat, lng: j.lng }))
-    .filter(j => j.start >= 0 && j.lat)
-    .sort((a,b) => a.start - b.start);
-
-  if (!engJobs.length) return gaps;
-
-  // ── Drive from home to first job ──────────────────
-  const firstJob = engJobs[0];
-  const driveToFirst = estTravelMins(home.lat, home.lng, firstJob.lat, firstJob.lng);
-  // Earliest the engineer can be available = first job start - drive from home
-  // So any gap before firstJob.start - driveToFirst is unusable
-  const availableFrom = firstJob.start - driveToFirst;
-  // Trim or remove gaps that fall before this
-  for (let i = gaps.length - 1; i >= 0; i--) {
-    const g = gaps[i];
-    if (g.endMins <= availableFrom) {
-      gaps.splice(i, 1); // remove entirely - engineer hasn't left home yet
-    } else if (g.startMins < availableFrom) {
-      g.startMins = availableFrom; // trim start
-      g.gapMins = g.endMins - g.startMins;
-      g.driveFromHomeMins = driveToFirst;
-      if (g.gapMins < 20) gaps.splice(i, 1); // too small now, remove
-    }
-  }
-
-  // ── Drive from last job back home ─────────────────
-  const lastJob = engJobs[engJobs.length - 1];
-  const driveHome = estTravelMins(lastJob.lat, lastJob.lng, home.lat, home.lng);
-  // Last gap must end driveHome mins before end of day
-  const mustLeaveBy = DAY_END * 60 - driveHome;
-  if (gaps.length) {
-    const lastGap = gaps[gaps.length - 1];
-    if (lastGap.endMins > mustLeaveBy) {
-      lastGap.endMins = mustLeaveBy;
-      lastGap.gapMins = lastGap.endMins - lastGap.startMins;
-      lastGap.driveHomeMins = driveHome;
-      if (lastGap.gapMins < 20) gaps.pop();
-    }
-  }
-
-  return gaps;
-}
-
 
 function estTravelMins(lat1, lng1, lat2, lng2) {
   if (!lat1||!lng1||!lat2||!lng2) return 30;
@@ -775,62 +636,32 @@ async function showGapPopup(engId, engName, g, day, e) {
           + '</div>'
         + '</div>'
         + '<span class="fitting-job-dur">' + j.durationMins + 'min</span>'
-        + '<button class="btn-assign"'
-        + ' data-jobid="' + j.id + '"'
-        + ' data-jobref="' + escHtml(j.ref) + '"'
-        + ' data-engid="' + engId + '"'
-        + ' data-engname="' + escHtml(engName) + '"'
-        + ' data-start="' + g.rawStart + '"'
-        + ' data-joblat="' + (j.lat || '') + '"'
-        + ' data-joblng="' + (j.lng || '') + '"'
-        + ' data-prevlat="' + (prevJob ? prevJob.lat || '' : '') + '"'
-        + ' data-prevlng="' + (prevJob ? prevJob.lng || '' : '') + '"'
-        + ' data-day="' + day + '">Assign</button>'
+        + '<button class="btn-assign" data-jobid="' + j.id + '" data-jobref="' + escHtml(j.ref) + '" data-engid="' + engId + '" data-engname="' + escHtml(engName) + '" data-start="' + g.startMins + '" data-day="' + day + '">Assign</button>'
         + '</div>';
     }).join('');
   }
 }
 
-// Assign button clicks via delegation - handles both gap popup and same site tab
-document.addEventListener('click', function(e) {
+// Assign button clicks via delegation
+document.getElementById('gap-popup').addEventListener('click', function(e) {
   const btn = e.target.closest('.btn-assign');
   if (!btn) return;
-  e.stopPropagation();
   const jobId   = btn.dataset.jobid;
   const jobRef  = btn.dataset.jobref;
   const engId   = btn.dataset.engid;
   const engName = btn.dataset.engname;
   const startMins = parseInt(btn.dataset.start);
   const day     = btn.dataset.day;
-  const jobLat  = btn.dataset.joblat;
-  const jobLng  = btn.dataset.joblng;
-  const prevLat = btn.dataset.prevlat;
-  const prevLng = btn.dataset.prevlng;
-  assignJob(jobId, jobRef, engId, engName, startMins, day, jobLat, jobLng, prevLat, prevLng);
+  assignJob(jobId, jobRef, engId, engName, startMins, day);
 });
 
 function closePopup() {
   document.getElementById('gap-popup').style.display = 'none';
 }
 
-async function assignJob(jobId, jobRef, engId, engName, startMins, day, jobLat, jobLng, prevLat, prevLng) {
-  // startMins = end of previous job (cursor)
-  // Add travel time from prev job location to new job location for accurate arrival time
-  let arrivalMins = startMins;
-  if (jobLat && jobLng && prevLat && prevLng) {
-    const travel = estTravelMins(parseFloat(prevLat), parseFloat(prevLng), parseFloat(jobLat), parseFloat(jobLng));
-    arrivalMins = startMins + travel;
-    console.log('[ASSIGN] Travel from prev to new job: ' + travel + 'min, arrival at ' + fmtMins(arrivalMins));
-  }
-
+async function assignJob(jobId, jobRef, engId, engName, startMins, day) {
   const d = day === 'today' ? new Date(todayDate) : new Date(tomorrowDate);
-  d.setHours(Math.floor(arrivalMins/60), arrivalMins%60, 0, 0);
-  // If time is in the past, push to 15 mins from now
-  if (d < new Date()) {
-    const now = new Date();
-    now.setMinutes(now.getMinutes() + 15, 0, 0);
-    d.setTime(now.getTime());
-  }
+  d.setHours(Math.floor(startMins/60), startMins%60, 0, 0);
   closePopup();
   showToast('Assigning ' + jobRef + '...');
   try {
@@ -891,135 +722,33 @@ function escHtml(s) {
 }
 
 
-function renderSameSite() {
-  const container = document.getElementById('samesite-content');
-  container.innerHTML = '<div class="spinner" style="margin:3rem auto;"></div>';
+function showJobTooltip(e, el) {
+  const tt = document.getElementById('job-tooltip');
+  document.getElementById('tt-ref').textContent    = el.dataset.ref || '';
+  document.getElementById('tt-client').textContent = el.dataset.client || '';
+  document.getElementById('tt-addr').textContent   = el.dataset.addr || '';
+  document.getElementById('tt-desc').textContent   = el.dataset.desc || '';
+  document.getElementById('tt-type').textContent   = el.dataset.type || '';
+  document.getElementById('tt-dur').textContent    = el.dataset.dur ? el.dataset.dur + ' min' : '';
+  document.getElementById('tt-start').textContent  = el.dataset.start ? fmtTime(el.dataset.start) : '—';
+  document.getElementById('tt-end').textContent    = el.dataset.end ? fmtTime(el.dataset.end) : '—';
 
-  // Build lookup of scheduled jobs by contact name (today + tomorrow)
-  const scheduledByContact = {};
+  const st = (el.dataset.status || '').toLowerCase();
+  const statusEl = document.getElementById('tt-status');
+  statusEl.textContent = el.dataset.status || '';
+  statusEl.style.background = st === 'completedok' ? '#EAF3DE' : st === 'completedwithissues' ? '#FAEEDA' : st === 'started' || st === 'ontheway' ? '#FFF3CD' : '#E6F1FB';
+  statusEl.style.color = st === 'completedok' ? '#3B6D11' : st === 'completedwithissues' ? '#854F0B' : st === 'started' || st === 'ontheway' ? '#856404' : '#185FA5';
 
-  const SHOW_STATUSES = ['new','scheduled','sent','read','accepted','refused','ontheway','started','suspended'];
-
-  const addJobs = (sched, names, dayLabel) => {
-    Object.entries(sched).forEach(([engId, engJobs]) => {
-      const engName = names[engId] || ('Engineer ' + engId);
-      engJobs.forEach(j => {
-        const contact = (j.client || '').trim().toLowerCase();
-        if (!contact || contact === '—') return;
-        // Only include active jobs - not completed or cancelled
-        const st = (j.status || '').toLowerCase();
-        if (!SHOW_STATUSES.includes(st)) return;
-        if (!scheduledByContact[contact]) scheduledByContact[contact] = [];
-        scheduledByContact[contact].push({ ...j, engName, engId, dayLabel });
-      });
-    });
-  };
-
-  addJobs(todaySchedule, todayEngNames, 'Today');
-  addJobs(schedule, engNames, 'Tomorrow');
-
-  // Find unassigned jobs that share a contact with a scheduled job
-  const matches = [];
-  jobs.forEach(u => {
-    const contact = (u.client || '').trim().toLowerCase();
-    if (!contact || contact === '—') return;
-    const scheduled = scheduledByContact[contact];
-    if (scheduled && scheduled.length > 0) {
-      matches.push({ unassigned: u, scheduled });
-    }
-  });
-
-  if (!matches.length) {
-    container.innerHTML = '<div class="empty-msg" style="padding:3rem;text-align:center;color:#aaa;font-size:13px;">No same-site opportunities found</div>';
-    return;
-  }
-
-  container.innerHTML =
-    '<div style="font-size:13px;color:#888;margin-bottom:1rem;">'
-    + matches.length + ' unassigned job' + (matches.length !== 1 ? 's' : '')
-    + ' at a site that already has work scheduled</div>'
-    + matches.map(m => {
-      const u = m.unassigned;
-      return '<div style="background:#fff;border:1px solid #e5e5e3;border-radius:10px;padding:16px;margin-bottom:12px;">'
-
-        // Header - site name
-        + '<div style="font-size:12px;font-weight:600;color:#185FA5;margin-bottom:10px;">&#128205; ' + escHtml(u.client) + '</div>'
-
-        + '<div style="display:grid;grid-template-columns:1fr auto 1fr;gap:12px;align-items:start;">'
-
-        // Unassigned job - with assign buttons for each engineer already at site
-        + '<div style="background:#FFF8F0;border:1px solid #FAEEDA;border-radius:8px;padding:12px;">'
-        + '<div style="font-size:10px;font-weight:600;color:#854F0B;text-transform:uppercase;letter-spacing:0.05em;margin-bottom:6px;">Unassigned</div>'
-        + '<div style="font-size:12px;font-weight:600;color:#185FA5;">' + escHtml(u.ref) + '</div>'
-        + '<div style="font-size:13px;font-weight:500;margin:3px 0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">' + escHtml(u.desc) + '</div>'
-        + '<div style="margin-top:6px;display:flex;gap:5px;flex-wrap:wrap;align-items:center;">'
-        + '<span style="font-size:10px;padding:2px 6px;border-radius:4px;background:#E6F1FB;color:#185FA5;">' + u.durationMins + ' min</span>'
-        + '<span style="font-size:10px;padding:2px 6px;border-radius:4px;background:#f0f0ee;color:#666;">' + escHtml(u.type) + '</span>'
-        + '</div>'
-        + '<div style="margin-top:10px;display:flex;flex-direction:column;gap:5px;">'
-        + m.scheduled.map(s =>
-            '<button class="btn-assign" style="font-size:11px;width:100%;text-align:left;padding:6px 10px;"'
-            + ' data-jobid="' + u.id + '"'
-            + ' data-jobref="' + escHtml(u.ref) + '"'
-            + ' data-engid="' + s.engId + '"'
-            + ' data-engname="' + escHtml(s.engName) + '"'
-            + ' data-start="' + (s.endTime ? timeToMins(s.endTime) : s.startTime ? timeToMins(s.startTime) : DAY_START*60) + '"'
-            + ' data-joblat="' + (u.lat || '') + '"'
-            + ' data-joblng="' + (u.lng || '') + '"'
-            + ' data-prevlat="' + (s.lat || '') + '"'
-            + ' data-prevlng="' + (s.lng || '') + '"'
-            + ' data-day="' + s.dayLabel.toLowerCase() + '">'
-            + '&#128664; Assign to ' + escHtml(s.engName) + ' (' + s.dayLabel + ' after ' + (s.endTime ? fmtTime(s.endTime) : '?') + ')'
-            + '</button>'
-          ).join('')
-        + '</div>'
-        + '</div>'
-
-        // Arrow
-        + '<div style="text-align:center;padding-top:24px;font-size:18px;color:#185FA5;">&#8644;</div>'
-
-        // Scheduled jobs
-        + '<div>'
-        + '<div style="font-size:10px;font-weight:600;color:#3B6D11;text-transform:uppercase;letter-spacing:0.05em;margin-bottom:6px;">Already scheduled here</div>'
-        + m.scheduled.map(s => {
-            const startLabel = s.startTime ? fmtTime(s.startTime) : 'TBC';
-            const st = (s.status || '').toLowerCase();
-            const statusColor = st === 'completedok' ? '#3B6D11' : st === 'completedwithissues' ? '#854F0B' : '#185FA5';
-            const statusBg    = st === 'completedok' ? '#EAF3DE' : st === 'completedwithissues' ? '#FAEEDA' : '#E6F1FB';
-            return '<div style="background:#f9f9f7;border:1px solid #e5e5e3;border-radius:7px;padding:10px 12px;margin-bottom:6px;display:flex;align-items:center;gap:8px;">'
-              + '<div style="flex:1;min-width:0;">'
-              + '<div style="font-size:12px;font-weight:500;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">' + escHtml(s.engName) + '</div>'
-              + '<div style="font-size:11px;color:#888;">' + s.dayLabel + ' · ' + startLabel + '</div>'
-              + '</div>'
-              + '<span style="font-size:10px;padding:2px 7px;border-radius:20px;background:' + statusBg + ';color:' + statusColor + ';white-space:nowrap;flex-shrink:0;">' + (s.status || 'scheduled') + '</span>'
-              + '<button class="btn-assign" style="font-size:11px;flex-shrink:0;"'
-              + ' data-jobid="' + u.id + '"'
-              + ' data-jobref="' + escHtml(u.ref) + '"'
-              + ' data-engid="' + s.engId + '"'
-              + ' data-engname="' + escHtml(s.engName) + '"'
-              + ' data-start="' + (s.endTime ? timeToMins(s.endTime) : s.startTime ? timeToMins(s.startTime) : DAY_START*60) + '"'
-              + ' data-day="' + s.dayLabel.toLowerCase() + '">'
-              + 'Assign</button>'
-              + '</div>';
-          }).join('')
-        + '</div>'
-
-        + '</div></div>';
-    }).join('');
+  // Position tooltip - avoid going off screen
+  const x = Math.min(e.clientX + 12, window.innerWidth - 305);
+  const y = Math.min(e.clientY + 12, window.innerHeight - 260);
+  tt.style.left = x + 'px';
+  tt.style.top  = y + 'px';
+  tt.classList.add('visible');
 }
 
-function renderFlags(jobId) {
-  const flags = jobFlags[jobId];
-  if (!flags || !flags.length) return '';
-  return '<div style="margin-top:5px;display:flex;flex-wrap:wrap;gap:4px;">'
-    + flags.map(f => {
-        const colour = f.colour || '#888';
-        return '<span style="font-size:10px;padding:2px 8px;border-radius:20px;background:' + colour + '20;color:' + colour + ';border:1px solid ' + colour + '40;font-weight:500;">'
-          + '&#9873; ' + escHtml(f.name)
-          + (f.comment ? ' — ' + escHtml(f.comment.substring(0, 60)) : '')
-          + '</span>';
-      }).join('')
-    + '</div>';
+function hideJobTooltip() {
+  document.getElementById('job-tooltip').classList.remove('visible');
 }
 
 function showToast(msg) {
