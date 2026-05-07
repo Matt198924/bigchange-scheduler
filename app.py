@@ -165,37 +165,43 @@ def get_unassigned_jobs():
             print(f"[UNASSIGNED] Cache hit: {len(cached)} jobs")
             return jsonify({'jobs': cached, 'total': len(cached)})
 
-        # Fetch by each category ID with no resource assigned
-        # This is more reliable than date+status filtering
         all_raw = []
         seen_ids = set()
 
-        for cat_id in VALID_CATEGORY_IDS:
-            try:
-                data = bc_get('/jobs', {
-                    'categoryId': cat_id,
-                    'pageSize':   1000,
-                })
-                items = data if isinstance(data, list) else (data.get('items') or [])
-                new_items = [j for j in items if j.get('id') not in seen_ids]
-                seen_ids.update(j.get('id') for j in new_items)
-                all_raw.extend(new_items)
-                print(f"[UNASSIGNED] category={cat_id}: {len(items)} jobs")
-            except Exception as e:
-                print(f"[UNASSIGNED] category={cat_id} failed: {e}")
+        # Use a wide date window to catch all unassigned jobs
+        # Jobs can sit unassigned for months so look back 180 days
+        from_date = (datetime.now() - timedelta(days=180)).strftime('%Y-%m-%dT00:00:00')
+        to_date   = (datetime.now() + timedelta(days=90)).strftime('%Y-%m-%dT23:59:59')
+
+        for status_val in ['new', 'unscheduled']:
+            page = 1
+            while page <= 5:  # max 5000 jobs per status
+                try:
+                    data = bc_get('/jobs', {
+                        'StatusModifiedAtFrom': from_date,
+                        'StatusModifiedAtTo':   to_date,
+                        'status':               status_val,
+                        'pageNumber':           page,
+                        'pageSize':             1000,
+                    })
+                    items = data if isinstance(data, list) else (data.get('items') or [])
+                    new_items = [j for j in items if j.get('id') not in seen_ids]
+                    seen_ids.update(j.get('id') for j in new_items)
+                    all_raw.extend(new_items)
+                    print(f"[UNASSIGNED] status={status_val} page={page}: {len(items)} jobs")
+                    if len(items) < 1000:
+                        break
+                    page += 1
+                except Exception as e:
+                    print(f"[UNASSIGNED] status={status_val} page={page} failed: {e}")
+                    break
 
         print(f"[UNASSIGNED] Total fetched: {len(all_raw)}")
-
-        # Filter to only unassigned and not completed
-        EXCLUDE_STATUSES = {'completedok', 'completedwithissues', 'cancelled', 
-                           'scheduled', 'sent', 'read', 'accepted', 'refused', 
-                           'ontheway', 'started', 'suspended'}
 
         jobs = []
         for j in all_raw:
             if j.get('resourceId'): continue
-            status = (j.get('status') or '').lower()
-            if status in EXCLUDE_STATUSES: continue
+            if not is_valid_category(j): continue
             jobs.append(format_job(j))
 
         jobs.sort(key=lambda j: -j['durationMins'])
