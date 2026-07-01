@@ -1,5 +1,4 @@
 import os
-import re
 import time
 import requests
 from flask import Flask, jsonify, request, send_from_directory
@@ -83,9 +82,6 @@ def fetch_paged(params):
         page += 1
     return all_items
 
-def is_group_entry(name):
-    return bool(re.match(r'^\(\d+\)', name.strip()))
-
 def is_valid_category(job):
     cat_id = job.get('categoryId')
     if cat_id is None:
@@ -135,27 +131,6 @@ def api_status():
         return jsonify({'status': 'connected'})
     except Exception as e:
         return jsonify({'status': 'error', 'message': str(e)}), 500
-
-@app.route('/api/engineers')
-def get_engineers():
-    try:
-        data = bc_get('/resources', {'pageSize': 200})
-        raw = data if isinstance(data, list) else (data.get('items') or [])
-        engineers = []
-        for i, e in enumerate(raw):
-            name = e.get('name') or f"{e.get('firstName','')} {e.get('lastName','')}".strip() or 'Engineer'
-            if is_group_entry(name): continue
-            if e.get('type', '').lower() in ['vehicle', 'asset']: continue
-            is_trainee = '(T)' in name or '(TS)' in name
-            engineers.append({
-                'id':        str(e.get('id') or i),
-                'name':      name.replace('(T)', '').replace('(TS)', '').strip(),
-                'isTrainee': is_trainee,
-                'region':    e.get('region') or e.get('homePostcode') or '—',
-            })
-        return jsonify({'engineers': engineers, 'total': len(engineers)})
-    except Exception as e:
-        return jsonify({'error': str(e)}), 500
 
 @app.route('/api/jobs/unassigned')
 def get_unassigned_jobs():
@@ -302,45 +277,6 @@ def assign_job(job_id):
         return jsonify({'success': True, 'result': result})
     except Exception as e:
         print(f"[ASSIGN] ERROR: {e}")
-        return jsonify({'error': str(e)}), 500
-
-@app.route('/api/jobs/<job_id>/constraints', methods=['GET'])
-def get_job_constraints(job_id):
-    try:
-        data  = bc_get(f'/jobs/{job_id}/constraints', {'pageSize': 100})
-        items = data if isinstance(data, list) else (data.get('items') or [])
-        constraints = [{'type': c.get('type'), 'constraintAt': c.get('constraintAt'), 'entityId': c.get('entityId')} for c in items]
-        return jsonify({'constraints': constraints})
-    except Exception as e:
-        return jsonify({'constraints': [], 'error': str(e)})
-
-@app.route('/api/debug/category-ids')
-def get_category_ids():
-    try:
-        from_date = (datetime.now() - timedelta(days=14)).strftime('%Y-%m-%dT00:00:00')
-        to_date   = (datetime.now() + timedelta(days=90)).strftime('%Y-%m-%dT23:59:59')
-        all_raw = []
-        for status_val in ['new', 'unscheduled']:
-            try:
-                data = bc_get('/jobs', {
-                    'StatusModifiedAtFrom': from_date,
-                    'StatusModifiedAtTo':   to_date,
-                    'status':               status_val,
-                    'pageSize':             1000,
-                })
-                # Note: BigChange API doesn't support categoryId filter directly
-                # so we filter after fetching
-                items = data if isinstance(data, list) else (data.get('items') or [])
-                all_raw.extend(items)
-            except: pass
-        cats = {}
-        for j in all_raw:
-            name = j.get('categoryName') or 'none'
-            cid  = j.get('categoryId')
-            if name not in cats:
-                cats[name] = cid
-        return jsonify({'categories': cats})
-    except Exception as e:
         return jsonify({'error': str(e)}), 500
 
 if __name__ == '__main__':
