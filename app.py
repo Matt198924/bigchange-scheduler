@@ -259,6 +259,20 @@ def get_today_schedule():
         print(f"[TODAY] ERROR: {e}")
         return jsonify({'error': str(e)}), 500
 
+@app.route('/api/jobs/<job_id>/flag')
+def get_job_flag(job_id):
+    try:
+        data = bc_get(f'/jobs/{job_id}/flags')
+        return jsonify({'flag': data})
+    except requests.exceptions.HTTPError as e:
+        if e.response is not None and e.response.status_code == 404:
+            return jsonify({'flag': None})
+        print(f"[FLAG] ERROR for job {job_id}: {e}")
+        return jsonify({'flag': None, 'error': str(e)})
+    except Exception as e:
+        print(f"[FLAG] ERROR for job {job_id}: {e}")
+        return jsonify({'flag': None, 'error': str(e)})
+
 @app.route('/api/jobs/<job_id>/assign', methods=['POST'])
 def assign_job(job_id):
     try:
