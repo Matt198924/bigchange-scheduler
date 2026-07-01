@@ -186,21 +186,24 @@ body{
 
 .flag-badge{
   font-family:'IBM Plex Mono',monospace;
-  font-size:9.5px;letter-spacing:0.02em;
+  font-size:10.5px;
   padding:2px 8px;border-radius:20px;
   background:var(--rust-bg);color:#B3272B;
-  margin-left:auto;flex-shrink:0;
+  margin-left:auto;flex-shrink:1;min-width:0;
+  overflow:hidden;text-overflow:ellipsis;white-space:nowrap;
 }
 .flag-detail{
   display:none;
-  padding:8px 16px;
+  padding:6px 16px;
   background:var(--rust-bg);
   border-bottom:1px solid var(--line);
-  font-size:11.5px;color:#8A1F22;
-  line-height:1.4;
+  font-size:9.5px;letter-spacing:0.02em;color:#B3272B;
+  font-family:'IBM Plex Mono',monospace;
 }
-.flag-detail b{font-weight:600;}
-.flag-detail .flag-owner{color:#B3272B;font-family:'IBM Plex Mono',monospace;font-size:10.5px;}
+.flag-detail .flag-pill{
+  display:inline-block;padding:2px 8px;border-radius:20px;
+  background:rgba(179,39,43,0.12);
+}
 
 /* Assign buttons */
 .btn-assign{
@@ -476,13 +479,20 @@ function applyFlagBadge(jobId, flag) {
   const detail = document.getElementById('flag-detail-' + jobId);
   const site = document.getElementById('site-' + jobId);
   if (!badge || !flag || !flag.flagName) return;
-  badge.textContent = '\u{1F6A9} ' + flag.flagName;
-  badge.style.display = 'inline-block';
   if (site) site.classList.add('flagged');
-  if (detail && flag.comments) {
-    detail.innerHTML = '<b>' + escHtml(flag.comments) + '</b>'
-      + (flag.ownerName ? ' <span class="flag-owner">&mdash; ' + escHtml(flag.ownerName) + '</span>' : '');
+
+  // Top strip: flag name pill
+  if (detail) {
+    detail.innerHTML = '<span class="flag-pill">\u{1F6A9} ' + escHtml(flag.flagName) + '</span>';
     detail.style.display = 'block';
+  }
+
+  // Header badge slot: comment + owner
+  const commentText = [flag.comments, flag.ownerName].filter(Boolean).join(' \u2014 ');
+  if (commentText) {
+    badge.textContent = commentText;
+    badge.title = commentText;
+    badge.style.display = 'inline-block';
   }
 }
 
