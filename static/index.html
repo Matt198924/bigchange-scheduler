@@ -124,6 +124,7 @@ body{
 }
 .match-pin{font-size:13px;}
 .match-site{font-size:12.5px;font-weight:600;color:var(--ink);}
+.match-site.flagged{color:#B3272B;}
 .match-body{
   display:grid;grid-template-columns:minmax(220px,1fr) auto minmax(240px,1.4fr);
   align-items:stretch;
@@ -394,8 +395,8 @@ function renderSameSite() {
   container.innerHTML = matches.map(m => {
     const u = m.unassigned;
     return '<div class="match-card">'
-      + '<div class="match-head"><span class="match-pin">&#128205;</span><span class="match-site">' + escHtml(u.client) + '</span><span class="flag-badge" id="flag-' + u.id + '" style="display:none;"></span></div>'
       + '<div class="flag-detail" id="flag-detail-' + u.id + '"></div>'
+      + '<div class="match-head"><span class="match-pin">&#128205;</span><span class="match-site" id="site-' + u.id + '">' + escHtml(u.client) + '</span><span class="flag-badge" id="flag-' + u.id + '" style="display:none;"></span></div>'
       + '<div class="match-body">'
 
       // Unassigned job
@@ -473,9 +474,11 @@ async function loadFlagsForMatches(jobIds) {
 function applyFlagBadge(jobId, flag) {
   const badge = document.getElementById('flag-' + jobId);
   const detail = document.getElementById('flag-detail-' + jobId);
+  const site = document.getElementById('site-' + jobId);
   if (!badge || !flag || !flag.flagName) return;
   badge.textContent = '\u{1F6A9} ' + flag.flagName;
   badge.style.display = 'inline-block';
+  if (site) site.classList.add('flagged');
   if (detail && flag.comments) {
     detail.innerHTML = '<b>' + escHtml(flag.comments) + '</b>'
       + (flag.ownerName ? ' <span class="flag-owner">&mdash; ' + escHtml(flag.ownerName) + '</span>' : '');
