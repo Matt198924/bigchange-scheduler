@@ -183,6 +183,24 @@ body{
 .status-issue{background:var(--amber-bg);color:#B8730E;}
 .status-live{background:var(--cyan-bg);color:#0A7A9C;}
 
+.flag-badge{
+  font-family:'IBM Plex Mono',monospace;
+  font-size:9.5px;letter-spacing:0.02em;
+  padding:2px 8px;border-radius:20px;
+  background:var(--rust-bg);color:#B3272B;
+  margin-left:auto;flex-shrink:0;
+}
+.flag-detail{
+  display:none;
+  padding:8px 16px;
+  background:var(--rust-bg);
+  border-bottom:1px solid var(--line);
+  font-size:11.5px;color:#8A1F22;
+  line-height:1.4;
+}
+.flag-detail b{font-weight:600;}
+.flag-detail .flag-owner{color:#B3272B;font-family:'IBM Plex Mono',monospace;font-size:10.5px;}
+
 /* Assign buttons */
 .btn-assign{
   font-family:'IBM Plex Sans',sans-serif;
@@ -376,7 +394,8 @@ function renderSameSite() {
   container.innerHTML = matches.map(m => {
     const u = m.unassigned;
     return '<div class="match-card">'
-      + '<div class="match-head"><span class="match-pin">&#128205;</span><span class="match-site">' + escHtml(u.client) + '</span></div>'
+      + '<div class="match-head"><span class="match-pin">&#128205;</span><span class="match-site">' + escHtml(u.client) + '</span><span class="flag-badge" id="flag-' + u.id + '" style="display:none;"></span></div>'
+      + '<div class="flag-detail" id="flag-detail-' + u.id + '"></div>'
       + '<div class="match-body">'
 
       // Unassigned job
@@ -430,6 +449,38 @@ function renderSameSite() {
 
       + '</div></div>';
   }).join('');
+
+  loadFlagsForMatches(matches.map(m => m.unassigned.id));
+}
+
+const flagCache = {};
+async function loadFlagsForMatches(jobIds) {
+  await Promise.all(jobIds.map(async id => {
+    if (flagCache[id] !== undefined) {
+      applyFlagBadge(id, flagCache[id]);
+      return;
+    }
+    try {
+      const data = await api('/api/jobs/' + id + '/flag');
+      flagCache[id] = data.flag || null;
+    } catch(e) {
+      flagCache[id] = null;
+    }
+    applyFlagBadge(id, flagCache[id]);
+  }));
+}
+
+function applyFlagBadge(jobId, flag) {
+  const badge = document.getElementById('flag-' + jobId);
+  const detail = document.getElementById('flag-detail-' + jobId);
+  if (!badge || !flag || !flag.flagName) return;
+  badge.textContent = '\u{1F6A9} ' + flag.flagName;
+  badge.style.display = 'inline-block';
+  if (detail && flag.comments) {
+    detail.innerHTML = '<b>' + escHtml(flag.comments) + '</b>'
+      + (flag.ownerName ? ' <span class="flag-owner">&mdash; ' + escHtml(flag.ownerName) + '</span>' : '');
+    detail.style.display = 'block';
+  }
 }
 
 // Assign button clicks via delegation
