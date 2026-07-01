@@ -103,7 +103,7 @@ def format_job(j):
     return {
         'id':              str(j.get('id', '')),
         'ref':             str(j.get('reference') or j.get('id', '')),
-        'desc':            (j.get('description') or 'Job')[:100],
+        'desc':            (j.get('description') or 'Job')[:400],
         'client':          j.get('contactName') or j.get('customerName') or '—',
         'area':            j.get('contactAddress') or '—',
         'type':            j.get('typeName') or 'Reactive',
