@@ -273,7 +273,6 @@ body{
   <div class="metric c-blue"><div class="m-label">Engineers today</div><div class="m-value blue mono" id="m-today-engs">—</div></div>
   <div class="metric c-blue"><div class="m-label">Engineers tomorrow</div><div class="m-value blue mono" id="m-engs">—</div></div>
   <div class="metric c-blue"><div class="m-label">Jobs tomorrow</div><div class="m-value blue mono" id="m-tomorrow">—</div></div>
-  <div class="metric c-green"><div class="m-label">Assigned today</div><div class="m-value green mono" id="m-done">0</div></div>
 </div>
 
 <div id="samesite-view">
@@ -286,7 +285,6 @@ body{
 
 <script>
 let jobs = [], schedule = {}, engNames = {}, todaySchedule = {}, todayEngNames = {};
-let assignedToday = 0;
 
 const todayDate = new Date();
 const tomorrowDate = new Date(); tomorrowDate.setDate(tomorrowDate.getDate() + 1);
@@ -336,7 +334,9 @@ async function loadSchedule(day) {
     todaySchedule = data.byEngineer || {};
     todayEngNames = data.engNames || {};
     document.getElementById('m-today-engs').textContent = Object.keys(todaySchedule).length;
-    const allTodayJobs = Object.values(todaySchedule).flat();
+    const EXCLUDED_PENDING_TYPES = ['parts to be returned', 'vehicle service/repair', 'engineer ad-hoc job / waiting / lunch'];
+    const allTodayJobs = Object.values(todaySchedule).flat()
+      .filter(j => (j.status||'').toLowerCase() !== 'cancelled');
     const totalToday = allTodayJobs.length;
     const completedOk = allTodayJobs.filter(j => (j.status||'').toLowerCase() === 'completedok').length;
     const completedIssues = allTodayJobs.filter(j => (j.status||'').toLowerCase() === 'completedwithissues').length;
@@ -345,7 +345,10 @@ async function loadSchedule(day) {
     document.getElementById('m-today-ok').textContent = completedOk;
     document.getElementById('m-today-issues').textContent = completedIssues;
     document.getElementById('m-today-active').textContent = active;
-    const pending = allTodayJobs.filter(j => ['new','scheduled','sent','read','accepted','refused'].includes((j.status||'').toLowerCase())).length;
+    const pending = allTodayJobs.filter(j =>
+      ['new','scheduled','sent','read','accepted','refused'].includes((j.status||'').toLowerCase())
+      && !EXCLUDED_PENDING_TYPES.includes((j.type||'').trim().toLowerCase())
+    ).length;
     document.getElementById('m-today-pending').textContent = pending;
   } else {
     schedule = data.byEngineer || {};
@@ -520,9 +523,7 @@ async function assignJob(jobId, jobRef, engId, engName, startMins, day) {
       body: JSON.stringify({resourceId: engId, plannedStart: d.toISOString()})
     });
     jobs = jobs.filter(j => j.id !== jobId);
-    assignedToday++;
     document.getElementById('m-unassigned').textContent = jobs.length;
-    document.getElementById('m-done').textContent = assignedToday;
     showToast(jobRef + ' assigned to ' + engName);
     await loadSchedule(day);
     renderSameSite();
