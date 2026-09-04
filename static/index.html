@@ -226,6 +226,21 @@ body{
 .btn-assign.full{width:100%;text-align:left;background:var(--surface);color:var(--ink);border:1px solid var(--line);}
 .btn-assign.full:hover{background:var(--cyan-bg);border-color:var(--cyan);}
 
+/* Day filter chips */
+.day-filter{
+  display:flex;gap:6px;flex-wrap:wrap;margin-bottom:1rem;
+}
+.day-chip{
+  font-family:'IBM Plex Mono',monospace;font-size:11px;letter-spacing:0.03em;
+  padding:5px 11px;border-radius:20px;cursor:pointer;
+  background:var(--surface);color:var(--slate);border:1px solid var(--line);
+  transition:background 0.15s, border-color 0.15s, color 0.15s;
+}
+.day-chip:hover{background:var(--cyan-bg);border-color:var(--cyan);color:var(--ink);}
+.day-chip:focus-visible{outline:2px solid var(--cyan);outline-offset:2px;}
+.day-chip.active{background:var(--ink);border-color:var(--ink);color:#fff;}
+.day-chip.empty{opacity:0.45;}
+
 /* ── TOAST ──────────────────────────────────────────── */
 #toast{
   position:fixed;bottom:24px;left:50%;transform:translateX(-50%);
@@ -280,18 +295,22 @@ body{
   <div class="metric c-red"><div class="m-label">Yet to start</div><div class="m-value red mono" id="m-today-pending">—</div></div>
   <div class="metric c-blue"><div class="m-label">Engineers tomorrow</div><div class="m-value blue mono" id="m-engs">—</div></div>
   <div class="metric c-blue"><div class="m-label">Jobs tomorrow</div><div class="m-value blue mono" id="m-tomorrow">—</div></div>
+  <div class="metric c-cyan"><div class="m-label">Jobs in window</div><div class="m-value blue mono" id="m-window">—</div></div>
 </div>
 
 <div id="samesite-view">
   <div class="section-eyebrow">Same-site opportunities</div>
   <div class="section-sub" id="samesite-sub">Unassigned jobs at addresses where an engineer is already booked.</div>
+  <div class="day-filter" id="day-filter"></div>
   <div id="samesite-content"><div class="spinner"></div></div>
 </div>
 
 <div id="toast"></div>
 
 <script>
-let jobs = [], schedule = {}, engNames = {}, todaySchedule = {}, todayEngNames = {};
+let jobs = [];
+let upcoming = { dates: [], byDate: {}, engNames: {}, today: null, totalJobs: 0 };
+let activeDate = 'all';
 
 const todayDate = new Date();
 const tomorrowDate = new Date(); tomorrowDate.setDate(tomorrowDate.getDate() + 1);
@@ -315,11 +334,7 @@ function setBadge(state, text) {
 async function loadAll() {
   setBadge('loading','Loading');
   try {
-    await Promise.all([
-      loadJobs(),
-      loadSchedule('today'),
-      loadSchedule('tomorrow'),
-    ]);
+    await Promise.all([loadJobs(), loadUpcoming()]);
     setBadge('ok','Live');
   } catch(e) {
     setBadge('error','Error');
@@ -334,36 +349,58 @@ async function loadJobs() {
   document.getElementById('m-unassigned').textContent = jobs.length;
 }
 
-async function loadSchedule(day) {
-  const endpoint = day === 'today' ? '/api/schedule/today' : '/api/schedule/tomorrow';
-  const data = await api(endpoint);
-  if (day === 'today') {
-    todaySchedule = data.byEngineer || {};
-    todayEngNames = data.engNames || {};
-    document.getElementById('m-today-engs').textContent = Object.keys(todaySchedule).length;
-    const EXCLUDED_PENDING_TYPES = ['parts to be returned', 'vehicle service/repair', 'engineer ad-hoc job / waiting / lunch'];
-    const allTodayJobs = Object.values(todaySchedule).flat()
-      .filter(j => (j.status||'').toLowerCase() !== 'cancelled');
-    const totalToday = allTodayJobs.length;
-    const completedOk = allTodayJobs.filter(j => (j.status||'').toLowerCase() === 'completedok').length;
-    const completedIssues = allTodayJobs.filter(j => (j.status||'').toLowerCase() === 'completedwithissues').length;
-    const active = allTodayJobs.filter(j => ['started','ontheway','suspended'].includes((j.status||'').toLowerCase())).length;
-    document.getElementById('m-today-total').textContent = totalToday;
-    document.getElementById('m-today-ok').textContent = completedOk;
-    document.getElementById('m-today-issues').textContent = completedIssues;
-    document.getElementById('m-today-active').textContent = active;
-    const pending = allTodayJobs.filter(j =>
-      ['new','scheduled','sent','read','accepted','refused'].includes((j.status||'').toLowerCase())
-      && !EXCLUDED_PENDING_TYPES.includes((j.type||'').trim().toLowerCase())
-    ).length;
-    document.getElementById('m-today-pending').textContent = pending;
-  } else {
-    schedule = data.byEngineer || {};
-    engNames = data.engNames || {};
-    const total = Object.values(schedule).reduce((s,a)=>s+a.length,0);
-    document.getElementById('m-engs').textContent = Object.keys(schedule).length;
-    document.getElementById('m-tomorrow').textContent = total;
-  }
+async function loadUpcoming() {
+  const data = await api('/api/schedule/upcoming');
+  upcoming = data;
+
+  const dates  = data.dates || [];
+  const byDate = data.byDate || {};
+  const todayKey    = data.today || dates[0];
+  const tomorrowKey = dates[1];
+
+  // Today
+  const todayEng = (byDate[todayKey] || {}).byEngineer || {};
+  const EXCLUDED_PENDING_TYPES = ['parts to be returned', 'vehicle service/repair', 'engineer ad-hoc job / waiting / lunch'];
+  const allTodayJobs = Object.values(todayEng).flat()
+    .filter(j => (j.status||'').toLowerCase() !== 'cancelled');
+
+  document.getElementById('m-today-engs').textContent  = Object.keys(todayEng).length;
+  document.getElementById('m-today-total').textContent = allTodayJobs.length;
+  document.getElementById('m-today-ok').textContent =
+    allTodayJobs.filter(j => (j.status||'').toLowerCase() === 'completedok').length;
+  document.getElementById('m-today-issues').textContent =
+    allTodayJobs.filter(j => (j.status||'').toLowerCase() === 'completedwithissues').length;
+  document.getElementById('m-today-active').textContent =
+    allTodayJobs.filter(j => ['started','ontheway','suspended'].includes((j.status||'').toLowerCase())).length;
+  document.getElementById('m-today-pending').textContent = allTodayJobs.filter(j =>
+    ['new','scheduled','sent','read','accepted','refused'].includes((j.status||'').toLowerCase())
+    && !EXCLUDED_PENDING_TYPES.includes((j.type||'').trim().toLowerCase())
+  ).length;
+
+  // Tomorrow
+  const tomEng = (byDate[tomorrowKey] || {}).byEngineer || {};
+  document.getElementById('m-engs').textContent     = Object.keys(tomEng).length;
+  document.getElementById('m-tomorrow').textContent = Object.values(tomEng).reduce((s,a)=>s+a.length,0);
+
+  // Whole window
+  const win = document.getElementById('m-window');
+  if (win) win.textContent = data.totalJobs != null ? data.totalJobs : '—';
+}
+
+// ── DAY LABELS ───────────────────────────────────────────
+function isoDate(d) {
+  return d.getFullYear() + '-'
+    + String(d.getMonth()+1).padStart(2,'0') + '-'
+    + String(d.getDate()).padStart(2,'0');
+}
+
+function dayLabel(dateStr) {
+  const dates = upcoming.dates || [];
+  if (dateStr === (upcoming.today || dates[0])) return 'Today';
+  if (dateStr === dates[1]) return 'Tomorrow';
+  const d = new Date(dateStr + 'T00:00:00');
+  if (isNaN(d)) return dateStr;
+  return d.toLocaleDateString('en-GB', {weekday:'short', day:'numeric', month:'short'});
 }
 
 // ── SAME SITE OPPORTUNITIES ─────────────────────────────
@@ -371,41 +408,57 @@ function renderSameSite() {
   const container = document.getElementById('samesite-content');
   const SHOW_STATUSES = ['new','scheduled','sent','read','accepted','refused','ontheway','started','suspended'];
 
+  // Group scheduled work by contact, keeping the date on every entry.
   const scheduledByContact = {};
-  const addJobs = (sched, names, dayLabel) => {
-    Object.entries(sched).forEach(([engId, engJobs]) => {
-      const engName = names[engId] || ('Engineer ' + engId);
+  (upcoming.dates || []).forEach(dateStr => {
+    const day = (upcoming.byDate || {})[dateStr];
+    if (!day) return;
+    const names = day.engNames || {};
+    Object.entries(day.byEngineer || {}).forEach(([engId, engJobs]) => {
+      const engName = names[engId] || (upcoming.engNames || {})[engId] || ('Engineer ' + engId);
       engJobs.forEach(j => {
         const contact = (j.client || '').trim().toLowerCase();
         if (!contact || contact === '—') return;
         if (!SHOW_STATUSES.includes((j.status||'').toLowerCase())) return;
         if (!scheduledByContact[contact]) scheduledByContact[contact] = [];
-        scheduledByContact[contact].push({ ...j, engName, engId, dayLabel });
+        scheduledByContact[contact].push({ ...j, engName, engId, date: dateStr });
       });
     });
-  };
-
-  addJobs(todaySchedule, todayEngNames, 'Today');
-  addJobs(schedule, engNames, 'Tomorrow');
+  });
 
   const matches = [];
   jobs.forEach(u => {
     const contact = (u.client || '').trim().toLowerCase();
     if (!contact || contact === '—') return;
-    const scheduled = scheduledByContact[contact];
-    if (scheduled && scheduled.length > 0) matches.push({ unassigned: u, scheduled });
+    const sched = scheduledByContact[contact];
+    if (!sched || !sched.length) return;
+    const sorted = sched.slice().sort((a,b) =>
+      (a.date + (a.startTime||'')).localeCompare(b.date + (b.startTime||''))
+    );
+    matches.push({ unassigned: u, scheduled: sorted, firstDate: sorted[0].date });
   });
+  matches.sort((a,b) => a.firstDate.localeCompare(b.firstDate));
+
+  renderDayFilter(matches);
+
+  const visible = activeDate === 'all'
+    ? matches
+    : matches.filter(m => m.scheduled.some(s => s.date === activeDate));
 
   document.getElementById('samesite-sub').innerHTML = matches.length
-    ? '<b>' + matches.length + '</b> unassigned job' + (matches.length !== 1 ? 's' : '') + ' at a site that already has work scheduled'
+    ? '<b>' + matches.length + '</b> unassigned job' + (matches.length !== 1 ? 's' : '')
+      + ' at a site with work booked in the next ' + ((upcoming.dates||[]).length - 1) + ' days'
     : 'Unassigned jobs at addresses where an engineer is already booked.';
 
-  if (!matches.length) {
-    container.innerHTML = '<div class="empty-state">No same-site opportunities right now — check back after the next refresh.</div>';
+  if (!visible.length) {
+    container.innerHTML = '<div class="empty-state">'
+      + (matches.length ? 'Nothing on ' + dayLabel(activeDate) + ' — try another day.'
+                        : 'No same-site opportunities right now — check back after the next refresh.')
+      + '</div>';
     return;
   }
 
-  container.innerHTML = matches.map(m => {
+  container.innerHTML = visible.map(m => {
     const u = m.unassigned;
     return '<div class="match-card" id="card-' + u.id + '">'
       + '<div class="flag-detail" id="flag-detail-' + u.id + '"></div>'
@@ -428,8 +481,8 @@ function renderSameSite() {
           + ' data-engid="' + s.engId + '"'
           + ' data-engname="' + escHtml(s.engName) + '"'
           + ' data-start="' + (s.endTime ? timeToMins(s.endTime) : s.startTime ? timeToMins(s.startTime) : 5*60) + '"'
-          + ' data-day="' + s.dayLabel.toLowerCase() + '">'
-          + '&#8594; ' + escHtml(s.engName) + ' (' + s.dayLabel + ' after ' + (s.endTime ? fmtTime(s.endTime) : '?') + ')'
+          + ' data-date="' + s.date + '">'
+          + '&#8594; ' + escHtml(s.engName) + ' (' + dayLabel(s.date) + ' after ' + (s.endTime ? fmtTime(s.endTime) : '?') + ')'
           + '</button>'
         ).join('')
       + '</div>'
@@ -446,7 +499,7 @@ function renderSameSite() {
           return '<div class="stop-row">'
             + '<div class="stop-info">'
             + '<div class="stop-eng">' + escHtml(s.engName) + '</div>'
-            + '<div class="stop-time mono">' + s.dayLabel + ' · ' + (s.startTime ? fmtTime(s.startTime) : 'TBC') + '</div>'
+            + '<div class="stop-time mono">' + dayLabel(s.date) + ' · ' + (s.startTime ? fmtTime(s.startTime) : 'TBC') + '</div>'
             + '</div>'
             + '<span class="status-pill ' + pillClass + '">' + (s.status || 'scheduled') + '</span>'
             + '<button class="btn-assign"'
@@ -455,7 +508,7 @@ function renderSameSite() {
             + ' data-engid="' + s.engId + '"'
             + ' data-engname="' + escHtml(s.engName) + '"'
             + ' data-start="' + (s.endTime ? timeToMins(s.endTime) : s.startTime ? timeToMins(s.startTime) : 5*60) + '"'
-            + ' data-day="' + s.dayLabel.toLowerCase() + '">'
+            + ' data-date="' + s.date + '">'
             + 'Assign</button>'
             + '</div>';
         }).join('')
@@ -464,8 +517,30 @@ function renderSameSite() {
       + '</div></div>';
   }).join('');
 
-  loadFlagsForMatches(matches.map(m => m.unassigned.id));
+  loadFlagsForMatches(visible.map(m => m.unassigned.id));
 }
+
+function renderDayFilter(matches) {
+  const row = document.getElementById('day-filter');
+  if (!row) return;
+  const dates = upcoming.dates || [];
+  if (!dates.length) { row.innerHTML = ''; return; }
+
+  let html = '<button class="day-chip' + (activeDate==='all' ? ' active' : '') + '" data-date="all">All · ' + matches.length + '</button>';
+  html += dates.map(d => {
+    const n = matches.filter(m => m.scheduled.some(s => s.date === d)).length;
+    return '<button class="day-chip' + (activeDate===d ? ' active' : '') + (n ? '' : ' empty') + '" data-date="' + d + '">'
+      + dayLabel(d) + ' · ' + n + '</button>';
+  }).join('');
+  row.innerHTML = html;
+}
+
+document.getElementById('day-filter').addEventListener('click', function(e) {
+  const chip = e.target.closest('.day-chip');
+  if (!chip) return;
+  activeDate = chip.dataset.date;
+  renderSameSite();
+});
 
 const flagCache = {};
 async function loadFlagsForMatches(jobIds) {
@@ -495,21 +570,19 @@ function flagColorClass(flagName) {
 }
 
 function applyFlagBadge(jobId, flag) {
-  const badge = document.getElementById('flag-' + jobId);
+  const badge  = document.getElementById('flag-' + jobId);
   const detail = document.getElementById('flag-detail-' + jobId);
-  const site = document.getElementById('site-' + jobId);
-  const card = document.getElementById('card-' + jobId);
+  const site   = document.getElementById('site-' + jobId);
+  const card   = document.getElementById('card-' + jobId);
   if (!badge || !flag || !flag.flagName) return;
   if (site) site.classList.add('flagged');
   if (card) card.classList.add(flagColorClass(flag.flagName));
 
-  // Top strip: flag name pill
   if (detail) {
     detail.innerHTML = '<span class="flag-pill">\u{1F6A9} ' + escHtml(flag.flagName) + '</span>';
     detail.style.display = 'block';
   }
 
-  // Header badge slot: comment + owner
   const commentText = [flag.comments, flag.ownerName].filter(Boolean).join(' \u2014 ');
   if (commentText) {
     badge.textContent = commentText;
@@ -522,17 +595,19 @@ function applyFlagBadge(jobId, flag) {
 document.getElementById('samesite-view').addEventListener('click', function(e) {
   const btn = e.target.closest('.btn-assign');
   if (!btn) return;
-  const jobId   = btn.dataset.jobid;
-  const jobRef  = btn.dataset.jobref;
-  const engId   = btn.dataset.engid;
-  const engName = btn.dataset.engname;
-  const startMins = parseInt(btn.dataset.start);
-  const day     = btn.dataset.day;
-  assignJob(jobId, jobRef, engId, engName, startMins, day);
+  assignJob(
+    btn.dataset.jobid,
+    btn.dataset.jobref,
+    btn.dataset.engid,
+    btn.dataset.engname,
+    parseInt(btn.dataset.start),
+    btn.dataset.date
+  );
 });
 
-async function assignJob(jobId, jobRef, engId, engName, startMins, day) {
-  const d = day === 'today' ? new Date(todayDate) : new Date(tomorrowDate);
+async function assignJob(jobId, jobRef, engId, engName, startMins, dateStr) {
+  const d = new Date(dateStr + 'T00:00:00');
+  if (isNaN(d)) { showToast('Bad date on that job'); return; }
   d.setHours(Math.floor(startMins/60), startMins%60, 0, 0);
   showToast('Assigning ' + jobRef + '...');
   try {
@@ -543,8 +618,8 @@ async function assignJob(jobId, jobRef, engId, engName, startMins, day) {
     });
     jobs = jobs.filter(j => j.id !== jobId);
     document.getElementById('m-unassigned').textContent = jobs.length;
-    showToast(jobRef + ' assigned to ' + engName);
-    await loadSchedule(day);
+    showToast(jobRef + ' assigned to ' + engName + ' (' + dayLabel(dateStr) + ')');
+    await loadUpcoming();
     renderSameSite();
   } catch(err) {
     showToast('Failed: ' + err.message);
