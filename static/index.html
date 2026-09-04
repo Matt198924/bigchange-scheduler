@@ -295,7 +295,6 @@ body{
   <div class="metric c-red"><div class="m-label">Yet to start</div><div class="m-value red mono" id="m-today-pending">—</div></div>
   <div class="metric c-blue"><div class="m-label">Engineers tomorrow</div><div class="m-value blue mono" id="m-engs">—</div></div>
   <div class="metric c-blue"><div class="m-label">Jobs tomorrow</div><div class="m-value blue mono" id="m-tomorrow">—</div></div>
-  <div class="metric c-cyan"><div class="m-label">Jobs in window</div><div class="m-value blue mono" id="m-window">—</div></div>
 </div>
 
 <div id="samesite-view">
@@ -381,10 +380,6 @@ async function loadUpcoming() {
   const tomEng = (byDate[tomorrowKey] || {}).byEngineer || {};
   document.getElementById('m-engs').textContent     = Object.keys(tomEng).length;
   document.getElementById('m-tomorrow').textContent = Object.values(tomEng).reduce((s,a)=>s+a.length,0);
-
-  // Whole window
-  const win = document.getElementById('m-window');
-  if (win) win.textContent = data.totalJobs != null ? data.totalJobs : '—';
 }
 
 // ── DAY LABELS ───────────────────────────────────────────
