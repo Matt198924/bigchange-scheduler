@@ -14,7 +14,13 @@ CUSTOMER_ID   = os.environ.get('BIGCHANGE_CUSTOMER_ID', '1564')
 API_BASE      = 'https://api.bigchange.com/v1'
 TOKEN_URL     = 'https://api.bigchange.com/auth/tokens'
 
-VALID_CATEGORY_IDS = {77961, 82685, 82693, 82694, 82695, 82696, 82697}
+# Job categories the app works with. Override on Render with the
+# CATEGORY_IDS env var (comma-separated) - no code change needed.
+_DEFAULT_CATEGORY_IDS = '77961,82685,82693,82694,82695,82696,82697'
+VALID_CATEGORY_IDS = {
+    int(x) for x in os.environ.get('CATEGORY_IDS', _DEFAULT_CATEGORY_IDS).split(',')
+    if x.strip().isdigit()
+}
 COMPLETED_STATUSES = {'completedok', 'completedwithissues', 'cancelled'}
 
 # How many days ahead of today the schedule window covers.
@@ -329,6 +335,41 @@ def get_schedule_for_date(date_str):
         return jsonify(day_payload(day_jobs, date_str, is_today=(date_str == today_str)))
     except Exception as e:
         print(f"[DATE {date_str}] ERROR: {e}")
+        return jsonify({'error': str(e)}), 500
+
+@app.route('/api/categories')
+def list_categories():
+    """Every job category seen on unassigned jobs (last 180 days) and the
+    upcoming schedule window, with job counts. Use it to pick CATEGORY_IDS."""
+    try:
+        from_date = (datetime.now() - timedelta(days=180)).strftime('%Y-%m-%dT00:00:00')
+        to_date   = (datetime.now() + timedelta(days=90)).strftime('%Y-%m-%dT23:59:59')
+        raw = []
+        for status_val in ['new', 'unscheduled']:
+            raw.extend(fetch_paged({
+                'StatusModifiedAtFrom': from_date,
+                'StatusModifiedAtTo':   to_date,
+                'status':               status_val,
+            }))
+        raw.extend(fetch_window())
+        cats, seen = {}, set()
+        for j in raw:
+            jid = j.get('id')
+            if jid in seen: continue
+            seen.add(jid)
+            cid = j.get('categoryId')
+            if cid is None: continue
+            c = cats.setdefault(int(cid), {'id': int(cid),
+                                          'name': j.get('categoryName') or '',
+                                          'jobs': 0})
+            c['jobs'] += 1
+        out = sorted(cats.values(), key=lambda c: -c['jobs'])
+        for c in out:
+            c['included'] = c['id'] in VALID_CATEGORY_IDS
+        return jsonify({'categories': out,
+                        'currently_included': sorted(VALID_CATEGORY_IDS)})
+    except Exception as e:
+        print(f"[CATEGORIES] ERROR: {e}")
         return jsonify({'error': str(e)}), 500
 
 @app.route('/api/jobs/<job_id>/flag')
