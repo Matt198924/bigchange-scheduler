@@ -16,7 +16,7 @@ TOKEN_URL     = 'https://api.bigchange.com/auth/tokens'
 
 # Job categories the app works with. Override on Render with the
 # CATEGORY_IDS env var (comma-separated) - no code change needed.
-_DEFAULT_CATEGORY_IDS = '77961,82685,82693,82694,82695,82696,82697'
+_DEFAULT_CATEGORY_IDS = '142643,82693,82694,142645,82695,142736,142646'
 VALID_CATEGORY_IDS = {
     int(x) for x in os.environ.get('CATEGORY_IDS', _DEFAULT_CATEGORY_IDS).split(',')
     if x.strip().isdigit()
