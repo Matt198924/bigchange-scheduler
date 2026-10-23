@@ -1,0 +1,174 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="robots" content="noindex, nofollow">
+<title>Admin – Stock reorder levels</title>
+<style>
+  :root { --bg:#f5f6f8; --card:#fff; --ink:#1c2430; --mute:#6b7685; --line:#dfe3e8; --acc:#1f5fbf; --bad:#b3261e; --ok:#1b7a3e; }
+  * { box-sizing: border-box; }
+  body { margin:0; font:15px/1.45 system-ui,-apple-system,Segoe UI,sans-serif; background:var(--bg); color:var(--ink); }
+  header { display:flex; justify-content:space-between; align-items:center; padding:14px 20px; background:var(--card); border-bottom:1px solid var(--line); }
+  h1 { font-size:18px; margin:0; }
+  main { max-width:900px; margin:20px auto; padding:0 16px; display:grid; gap:16px; }
+  .card { background:var(--card); border:1px solid var(--line); border-radius:8px; padding:16px; }
+  h2 { font-size:15px; margin:0 0 10px; }
+  label { display:block; font-size:13px; color:var(--mute); margin-bottom:4px; }
+  input[type=text], input[type=password], input[type=number] { width:100%; padding:8px 10px; border:1px solid var(--line); border-radius:6px; font:inherit; }
+  .row { display:flex; gap:10px; align-items:flex-end; flex-wrap:wrap; }
+  .row > div { flex:1; min-width:140px; }
+  button { padding:8px 14px; border:0; border-radius:6px; background:var(--acc); color:#fff; font:inherit; cursor:pointer; }
+  button.alt { background:#e8ecf2; color:var(--ink); }
+  button.danger { background:var(--bad); }
+  button:disabled { opacity:.5; cursor:default; }
+  table { width:100%; border-collapse:collapse; font-size:14px; }
+  th, td { text-align:left; padding:6px 8px; border-bottom:1px solid var(--line); }
+  th { color:var(--mute); font-weight:600; }
+  .msg { margin-top:10px; font-size:14px; white-space:pre-wrap; }
+  .err { color:var(--bad); } .ok { color:var(--ok); }
+  .hidden { display:none; }
+  .check { display:flex; gap:8px; align-items:center; margin:10px 0; }
+  .check input { width:auto; }
+  #login { max-width:360px; margin:80px auto; }
+</style>
+</head>
+<body>
+
+<div id="login" class="card hidden">
+  <h2>Admin login</h2>
+  <label for="pw">Password</label>
+  <input id="pw" type="password" autocomplete="current-password">
+  <div style="margin-top:12px"><button id="loginBtn">Log in</button></div>
+  <div id="loginMsg" class="msg err"></div>
+</div>
+
+<div id="app" class="hidden">
+  <header>
+    <h1>Stock reorder levels</h1>
+    <div><button class="alt" id="pingBtn">Test BigChange login</button>
+         <button class="alt" id="logoutBtn">Log out</button></div>
+  </header>
+  <main>
+    <div id="pingMsg" class="msg"></div>
+
+    <section class="card">
+      <h2>View / export</h2>
+      <div class="row">
+        <div><label for="contactId">Contact ID (leave blank for all)</label>
+             <input id="contactId" type="text" inputmode="numeric"></div>
+        <div style="flex:0"><button id="loadBtn">Load</button></div>
+        <div style="flex:0"><button class="alt" id="csvBtn">Download CSV</button></div>
+      </div>
+      <div id="readMsg" class="msg"></div>
+      <table id="tbl" class="hidden">
+        <thead><tr><th>Reorder ID</th><th>Stock ID</th><th>Quantity</th><th>Entity ID</th><th>Type</th></tr></thead>
+        <tbody></tbody>
+      </table>
+    </section>
+
+    <section class="card">
+      <h2>Add / adjust a reorder level</h2>
+      <div class="row">
+        <div><label for="wStock">Stock ID</label><input id="wStock" type="text" inputmode="numeric"></div>
+        <div><label for="wType">Type</label>
+             <select id="wType" style="width:100%;padding:8px;border:1px solid var(--line);border-radius:6px;font:inherit">
+               <option value="1">Contact</option><option value="2">Asset</option></select></div>
+        <div><label for="wEntity">Entity ID</label><input id="wEntity" type="text" inputmode="numeric"></div>
+        <div><label for="wQty">Quantity</label><input id="wQty" type="text" inputmode="decimal"></div>
+      </div>
+      <div class="check"><input type="checkbox" id="dry" checked><label for="dry" style="margin:0;color:var(--ink)">Dry run (preview only – nothing is sent to BigChange)</label></div>
+      <button id="writeBtn">Preview</button>
+      <div id="writeMsg" class="msg"></div>
+    </section>
+
+    <section class="card">
+      <h2>Audit log (latest 100)</h2>
+      <button class="alt" id="auditBtn">Refresh</button>
+      <pre id="auditOut" class="msg" style="max-height:260px;overflow:auto;font-size:12px"></pre>
+    </section>
+  </main>
+</div>
+
+<script>
+const $ = id => document.getElementById(id);
+async function api(path, opts = {}) {
+  const res = await fetch('/admin/api/' + path, {
+    credentials: 'same-origin',
+    headers: opts.body ? {'Content-Type': 'application/json'} : {},
+    ...opts,
+  });
+  let data = {};
+  try { data = await res.json(); } catch (e) {}
+  if (res.status === 401 && path !== 'login') { showLogin(); }
+  return {ok: res.ok, status: res.status, data};
+}
+function showLogin() { $('app').classList.add('hidden'); $('login').classList.remove('hidden'); }
+function showApp() { $('login').classList.add('hidden'); $('app').classList.remove('hidden'); }
+
+$('loginBtn').onclick = async () => {
+  const r = await api('login', {method:'POST', body: JSON.stringify({password: $('pw').value})});
+  $('pw').value = '';
+  if (r.ok) { $('loginMsg').textContent = ''; showApp(); }
+  else { $('loginMsg').textContent = r.data.error || 'Login failed'; }
+};
+$('pw').addEventListener('keydown', e => { if (e.key === 'Enter') $('loginBtn').click(); });
+$('logoutBtn').onclick = async () => { await api('logout', {method:'POST', body:'{}'}); showLogin(); };
+
+$('pingBtn').onclick = async () => {
+  $('pingMsg').className = 'msg'; $('pingMsg').textContent = 'Checking…';
+  const r = await api('ping');
+  $('pingMsg').className = 'msg ' + (r.ok ? 'ok' : 'err');
+  $('pingMsg').textContent = r.ok ? 'BigChange web service login works.' : (r.data.message || r.data.error || 'Failed');
+};
+
+function qs() { const c = $('contactId').value.trim(); return c ? 'contactId=' + encodeURIComponent(c) : ''; }
+$('loadBtn').onclick = async () => {
+  $('readMsg').className = 'msg'; $('readMsg').textContent = 'Loading…';
+  const r = await api('reorder-levels?refresh=1' + (qs() ? '&' + qs() : ''));
+  if (!r.ok) { $('readMsg').className = 'msg err'; $('readMsg').textContent = r.data.error || 'Failed'; return; }
+  const body = $('tbl').querySelector('tbody'); body.innerHTML = '';
+  r.data.rows.forEach(x => {
+    const tr = document.createElement('tr');
+    [x.reorderId, x.stockId, x.quantity, x.entityId, x.entityType].forEach(v => {
+      const td = document.createElement('td'); td.textContent = v ?? ''; tr.appendChild(td);
+    });
+    body.appendChild(tr);
+  });
+  $('tbl').classList.toggle('hidden', r.data.rows.length === 0);
+  $('readMsg').textContent = r.data.total + ' reorder level(s)';
+};
+$('csvBtn').onclick = () => { window.location = '/admin/api/reorder-levels?format=csv' + (qs() ? '&' + qs() : ''); };
+
+$('dry').onchange = () => {
+  $('writeBtn').textContent = $('dry').checked ? 'Preview' : 'Send to BigChange';
+  $('writeBtn').className = $('dry').checked ? '' : 'danger';
+};
+$('writeBtn').onclick = async () => {
+  const dry = $('dry').checked;
+  const payload = {
+    stockId: $('wStock').value.trim(), entityType: $('wType').value,
+    entityId: $('wEntity').value.trim(), quantity: $('wQty').value.trim(), dryRun: dry,
+  };
+  if (!dry && !confirm('This will write to live BigChange data. Continue?')) return;
+  $('writeMsg').className = 'msg'; $('writeMsg').textContent = 'Working…';
+  const r = await api('reorder-levels', {method:'POST', body: JSON.stringify(payload)});
+  $('writeMsg').className = 'msg ' + (r.ok ? 'ok' : 'err');
+  $('writeMsg').textContent = r.ok ? JSON.stringify(r.data, null, 2) : (r.data.error || 'Failed');
+};
+
+$('auditBtn').onclick = async () => {
+  const r = await api('audit');
+  $('auditOut').textContent = r.ok
+    ? r.data.entries.map(e => JSON.stringify(e)).join('\n') || '(empty)'
+    : (r.data.error || 'Failed');
+};
+
+(async () => {
+  const r = await api('session');
+  if (r.data.configured === false) { showLogin(); $('loginMsg').textContent = 'Admin section is not configured on the server.'; return; }
+  r.data.loggedIn ? showApp() : showLogin();
+})();
+</script>
+</body>
+</html>

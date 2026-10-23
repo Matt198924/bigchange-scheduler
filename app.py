@@ -8,6 +8,19 @@ from datetime import datetime, timezone, timedelta
 app = Flask(__name__, static_folder='static')
 CORS(app)
 
+# --- Admin section (password protected, see admin.py) -----------------------
+# Session cookie signing key. Set FLASK_SECRET_KEY on Render; if it is missing
+# a random key is used, which just means admin logins reset on each restart.
+app.secret_key = os.environ.get('FLASK_SECRET_KEY') or os.urandom(32)
+app.config.update(
+    SESSION_COOKIE_HTTPONLY=True,
+    SESSION_COOKIE_SAMESITE='Strict',
+    SESSION_COOKIE_SECURE=os.environ.get('FLASK_ENV') != 'development',
+    PERMANENT_SESSION_LIFETIME=timedelta(hours=8),
+)
+from admin import admin_bp
+app.register_blueprint(admin_bp)
+
 CLIENT_ID     = os.environ.get('BIGCHANGE_CLIENT_ID', '')
 CLIENT_SECRET = os.environ.get('BIGCHANGE_CLIENT_SECRET', '')
 CUSTOMER_ID   = os.environ.get('BIGCHANGE_CUSTOMER_ID', '1564')
