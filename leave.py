@@ -48,7 +48,7 @@ BC_TYPE_ANNUAL = os.environ.get('BIGCHANGE_ABSENCE_TYPE_ID', '').strip()
 BC_TYPE_OTHER  = os.environ.get('BIGCHANGE_ABSENCE_TYPE_ID_OTHER', '').strip()
 BC_TYPE_SICK   = os.environ.get('BIGCHANGE_ABSENCE_TYPE_ID_SICK', '').strip()   # sick days logged by managers
 DEFAULT_SICK = float(os.environ.get('LEAVE_SICK_ALLOWANCE', '7'))
-bc_hooks = {'post': None, 'delete': None}   # filled in by app.py
+bc_hooks = {'post': None, 'delete': None, 'get': None}   # filled in by app.py
 UK = ZoneInfo('Europe/London')
 
 # Email (via Resend's HTTPS API - Render's free tier blocks normal SMTP).
@@ -949,6 +949,28 @@ def admin_put_settings():
         if not 0 <= a <= 60: return jsonify({'error': 'Sick allowance must be between 0 and 60'}), 400
         set_setting('sick_allowance', a)
     return jsonify({'success': True, 'defaultAllowance': default_allowance(), 'sickAllowance': sick_allowance()})
+
+@leave_bp.route('/api/leave/admin/bc-absences')
+def admin_bc_absences():
+    """Read recent absences from BigChange so the office can see which absenceTypeId values
+    exist (to set the env vars) and confirm synced leave really arrived."""
+    if not is_admin(): return _auth_error()
+    if not bc_hooks.get('get'): return jsonify({'error': 'BigChange is not connected'}), 400
+    since = (date.today() - timedelta(days=365)).isoformat() + 'T00:00:00Z'
+    try:
+        data = bc_hooks['get']('/absences', {'dateFrom': since, 'pageSize': 200, 'pageNumber': 1})
+    except Exception as ex:
+        return jsonify({'error': f'BigChange said: {ex}'}), 502
+    items = data if isinstance(data, list) else (data.get('items') or [])
+    types = {}
+    for a in items:
+        t = a.get('absenceTypeId')
+        if t is not None:
+            types.setdefault(str(t), {'count': 0, 'example': a.get('reason') or ''})['count'] += 1
+    return jsonify({'count': len(items), 'types': types,
+                    'recent': [{k: a.get(k) for k in ('id', 'resourceId', 'startAt', 'endAt', 'status', 'absenceTypeId', 'reason')}
+                               for a in items[-15:]],
+                    'configured': {'annual': BC_TYPE_ANNUAL, 'other': BC_TYPE_OTHER, 'sick': BC_TYPE_SICK}})
 
 @leave_bp.route('/api/leave/admin/email-status')
 def admin_email_status():

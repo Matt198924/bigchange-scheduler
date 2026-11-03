@@ -399,6 +399,9 @@ async function tabStaff() {
       <label style="display:flex;gap:6px;align-items:center"><input type="checkbox" id="bk-ismgr" style="width:auto"> These are managers (supervisors)</label>
       <button class="primary" onclick="bulkAdd()">Add all</button><div id="bk-msg"></div></details>
 
+    <details class="card"><summary>BigChange check</summary>
+      <p class="muted">Shows the absence type IDs BigChange already uses (copy them into the Render settings) and the latest absences, so you can confirm synced leave arrived.</p>
+      <button class="sm" onclick="bcCheck()">Check BigChange</button><div id="bc-out" style="margin-top:.6rem"></div></details>
     <details class="card"><summary>Email notifications ${es.enabled ? '<span class="pill approved">on</span>' : '<span class="pill pending">off</span>'}</summary>
       ${es.enabled ? `<p class="muted">Sending from ${esc(es.from)}. Staff get approved/rejected/cancelled emails; managers get new-request emails${es.office ? '; people with no manager go to ' + esc(es.office) : ' (set LEAVE_OFFICE_EMAIL so requests with no manager reach you)'}.</p>
       <button class="sm" style="margin-top:.6rem" onclick="testEmail()">Send test email</button>` : `<p class="muted">Off. Set RESEND_API_KEY and LEAVE_EMAIL_FROM on Render to switch on (see README).</p>`}</details>`;
@@ -406,6 +409,15 @@ async function tabStaff() {
 async function saveDefaultAllowance() {
   try { const j = await api('/admin/settings', 'PUT', {defaultAllowance: $('def-all').value}); $('al-msg').innerHTML = `<div class="info">New staff will start with ${j.defaultAllowance} days.</div>`; }
   catch (e) { $('al-msg').innerHTML = `<div class="err">${esc(e.message)}</div>`; }
+}
+async function bcCheck() {
+  $('bc-out').innerHTML = '<p class="muted">Asking BigChange...</p>';
+  try {
+    const j = await api('/admin/bc-absences'), c = j.configured;
+    $('bc-out').innerHTML = `<p class="muted">Set on Render: annual ${esc(c.annual || 'not set')}, other ${esc(c.other || 'not set')}, sick ${esc(c.sick || 'not set')}.</p>`
+      + (Object.keys(j.types).length ? '<div class="muted" style="margin:.4rem 0">Absence type IDs found in the last year:</div>' + Object.entries(j.types).map(([id, t]) => `<div class="item"><b>${esc(id)}</b><span class="muted">${t.count} absence${t.count === 1 ? '' : 's'}${t.example ? ' · e.g. ' + esc(t.example) : ''}</span></div>`).join('') : '<p class="muted">No absences found in BigChange yet, so no type IDs to show.</p>')
+      + (j.recent.length ? '<div class="muted" style="margin:.6rem 0 .2rem">Latest absences</div>' + j.recent.map(a => `<div class="muted">#${a.id} · resource ${a.resourceId} · ${esc(String(a.startAt).slice(0, 10))} → ${esc(String(a.endAt).slice(0, 10))} · ${esc(a.status || '')} · type ${a.absenceTypeId}</div>`).join('') : '');
+  } catch (e) { $('bc-out').innerHTML = `<div class="err">${esc(e.message)}</div>`; }
 }
 async function saveSick() {
   try { const j = await api('/admin/settings', 'PUT', {sickAllowance: $('sick-all').value}); $('al-msg').innerHTML = `<div class="info">Everyone now gets ${j.sickAllowance} sick days a year.</div>`; }
