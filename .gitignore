@@ -1,2 +1,4 @@
 leave.db
 __pycache__/
+.neon
+node_modules/

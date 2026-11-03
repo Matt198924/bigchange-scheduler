@@ -95,10 +95,10 @@ Runs inside this same app. Staff go to `/leave`, pick their name, enter their PI
 | `DATABASE_URL` | Postgres connection string (Render Postgres or Supabase). Required on Render - the free disk is wiped on each deploy, so SQLite would lose bookings. |
 | `LEAVE_ADMIN_PASSWORD` | Office admin password (admin sign-in is disabled if unset) |
 | `LEAVE_SECRET` | Any long random string (signs login sessions) |
-| `LEAVE_DEFAULT_ALLOWANCE` | Optional, default 20 days |
+| `LEAVE_DEFAULT_ALLOWANCE` | Optional, default 28 days (includes bank holidays) |
 | `LEAVE_YEAR_START_MONTH` | Optional, 1-12, default 1 (January) |
 
-Rules: Mon-Fri only, bank holidays (editable in admin) are not deducted, half days supported, requests can't be made in the past (office can book on someone's behalf), clashes with colleagues are flagged but don't block.
+Rules: Mon-Fri only, bank holidays (editable in admin) are booked automatically for all staff and deducted from the allowance, half days supported, requests can't be made in the past (office can book on someone's behalf), clashes with colleagues are flagged but don't block.
 
 API for other tools: `GET /api/leave/off?date=YYYY-MM-DD` (or `from`/`to`) returns approved leave with each person's `resourceId` (set the BigChange resource ID per employee in admin).
 
@@ -110,6 +110,8 @@ When leave is approved, the app creates an absence in BigChange (`POST /v1/absen
 |-----|-------|
 | `BIGCHANGE_ABSENCE_TYPE_ID` | BigChange absence type ID used for annual leave |
 | `BIGCHANGE_ABSENCE_TYPE_ID_OTHER` | Optional: absence type ID for unpaid/other leave (those are not synced if unset) |
+| `BIGCHANGE_ABSENCE_TYPE_ID_SICK` | Optional: absence type ID for sick days logged by managers (not synced if unset) |
+| `LEAVE_SICK_ALLOWANCE` | Default sick days per person per year (default 7; also editable on the admin Staff tab) |
 
 The BigChange API key needs the `resources:write` scope. Each person needs their BigChange resource ID set in the admin Staff tab. Sync problems show on the request in "All requests", with a Retry button.
 

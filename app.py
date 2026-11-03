@@ -434,7 +434,7 @@ def assign_job(job_id):
         return jsonify({'error': str(e)}), 500
 
 import leave as _leave
-_leave.bc_hooks.update(post=bc_post, delete=bc_delete)
+_leave.bc_hooks.update(post=bc_post, delete=bc_delete, get=bc_get)
 
 if __name__ == '__main__':
     port = int(os.environ.get('PORT', 5000))
