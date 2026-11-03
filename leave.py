@@ -488,7 +488,7 @@ def leave_page():
 def config():
     return jsonify({'types': LEAVE_TYPES, 'adminEnabled': bool(ADMIN_PASSWORD),
                     'bankHolidays': sorted(bank_holiday_set()),
-                    'yearStartMonth': YEAR_START_MONTH})
+                    'yearStartMonth': YEAR_START_MONTH, 'persistent': IS_PG})
 
 @leave_bp.route('/api/leave/employees')
 def list_employees_public():

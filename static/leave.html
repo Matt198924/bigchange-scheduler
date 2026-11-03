@@ -146,6 +146,7 @@ details.card[open] summary{margin-bottom:.4rem}
 
 <!-- ADMIN -->
 <div id="admin" class="hidden">
+  <div id="a-warn"></div>
   <div class="tabs" id="a-tabs"></div>
   <div id="a-body"></div>
 </div>
@@ -184,6 +185,9 @@ function signOut() { sessionStorage.clear(); TOKEN = ROLE = null; location.reloa
 function setSession(t, role) { TOKEN = t; ROLE = role; sessionStorage.setItem('leaveToken', t); sessionStorage.setItem('leaveRole', role); start(); }
 
 // ── login ──
+async function dbWarn() {
+  try { const c = await api('/config'); $('a-warn').innerHTML = c.persistent ? '' : '<div class="err" style="margin-bottom:.8rem"><b>Data is NOT being saved permanently.</b> No DATABASE_URL is set on Render, so staff and leave are wiped on every update. Add a Postgres database (see README) before adding staff.</div>'; } catch (e) {}
+}
 async function loadEmployees() {
   const j = await api('/employees');
   $('l-emp').innerHTML = j.employees.map(e => `<option value="${e.id}">${esc(e.name)}</option>`).join('');
@@ -547,7 +551,7 @@ async function start() {
   if (!TOKEN) { $('login').classList.remove('hidden'); $('signout').classList.add('hidden'); return loadEmployees(); }
   $('signout').classList.remove('hidden');
   try {
-    if (ROLE === 'admin') { $('admin').classList.remove('hidden'); showTab('pending'); }
+    if (ROLE === 'admin') { $('admin').classList.remove('hidden'); showTab('pending'); dbWarn(); }
     else { $('staff').classList.remove('hidden'); await loadStaff(); }
   } catch (e) { /* api() already signed out on 401 */ }
 }
