@@ -112,3 +112,16 @@ When leave is approved, the app creates an absence in BigChange (`POST /v1/absen
 | `BIGCHANGE_ABSENCE_TYPE_ID_OTHER` | Optional: absence type ID for unpaid/other leave (those are not synced if unset) |
 
 The BigChange API key needs the `resources:write` scope. Each person needs their BigChange resource ID set in the admin Staff tab. Sync problems show on the request in "All requests", with a Retry button.
+
+### Email notifications
+
+Staff get an email when leave is approved, rejected, cancelled or booked for them; managers get one when a request comes in. Uses [Resend](https://resend.com) (free tier is plenty) because Render's free tier blocks normal SMTP. Off unless both are set:
+
+| Key | Value |
+|-----|-------|
+| `RESEND_API_KEY` | API key from resend.com |
+| `LEAVE_EMAIL_FROM` | e.g. `R&S Leave <leave@randsservice.co.uk>` - the domain must be verified in Resend (add the DNS records it gives you) |
+| `LEAVE_OFFICE_EMAIL` | Optional: where requests from people with no manager are sent |
+| `LEAVE_EMAIL_REPLY_TO` | Optional |
+
+Emails are stored per person (import column `Email`, or the Email button in the Staff tab). Use the "Send test email" button in the Staff tab to check it works.

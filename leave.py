@@ -23,6 +23,8 @@ import hmac
 import secrets
 import time
 import sqlite3
+import threading
+import requests
 from datetime import date, datetime, timedelta
 from zoneinfo import ZoneInfo
 
@@ -46,6 +48,14 @@ BC_TYPE_ANNUAL = os.environ.get('BIGCHANGE_ABSENCE_TYPE_ID', '').strip()
 BC_TYPE_OTHER  = os.environ.get('BIGCHANGE_ABSENCE_TYPE_ID_OTHER', '').strip()
 bc_hooks = {'post': None, 'delete': None}   # filled in by app.py
 UK = ZoneInfo('Europe/London')
+
+# Email (via Resend's HTTPS API - Render's free tier blocks normal SMTP).
+# Switched on by RESEND_API_KEY + LEAVE_EMAIL_FROM, e.g. "R&S Leave <leave@randsservice.co.uk>".
+RESEND_API_KEY   = os.environ.get('RESEND_API_KEY', '').strip()
+EMAIL_FROM       = os.environ.get('LEAVE_EMAIL_FROM', '').strip()
+EMAIL_REPLY_TO   = os.environ.get('LEAVE_EMAIL_REPLY_TO', '').strip()
+OFFICE_EMAIL     = os.environ.get('LEAVE_OFFICE_EMAIL', '').strip()  # gets requests from people with no manager
+SYNC_EMAIL       = False   # tests set True; normally emails go out on a background thread
 
 LEAVE_TYPES = ['annual', 'unpaid', 'other']
 IS_PG = bool(DATABASE_URL)
@@ -118,6 +128,7 @@ def init_db():
         created_at TEXT NOT NULL, decided_at TEXT)''')
     for tbl, col, ddl in (('leave_employees', 'manager_id', 'INTEGER'),
                           ('leave_employees', 'is_manager', 'INTEGER NOT NULL DEFAULT 0'),
+                          ('leave_employees', 'email', 'TEXT'),
                           ('leave_requests', 'bc_absence_id', 'TEXT'),
                           ('leave_requests', 'bc_sync', 'TEXT')):
         try:
@@ -284,6 +295,79 @@ def fmt_request(r):
         'managerName': r.get('manager_name'),
         'bcSync': r.get('bc_sync')}
 
+def email_enabled():
+    return bool(RESEND_API_KEY and EMAIL_FROM)
+
+def send_email(to, subject, text):
+    """Send one email. Raises on failure (callers on the background path swallow it)."""
+    body = {'from': EMAIL_FROM, 'to': [to], 'subject': subject, 'text': text}
+    if EMAIL_REPLY_TO: body['reply_to'] = EMAIL_REPLY_TO
+    r = requests.post('https://api.resend.com/emails', json=body, timeout=15,
+                      headers={'Authorization': f'Bearer {RESEND_API_KEY}'})
+    print(f'[EMAIL] to={to} {r.status_code}: {r.text[:200]}')
+    if not r.ok:
+        raise RuntimeError(f'{r.status_code}: {r.text[:200]}')
+
+def _dispatch(messages):
+    """messages: list of (to, subject, text). Never blocks or breaks the request."""
+    messages = [m for m in messages if m[0] and '@' in m[0]]
+    if not messages or not email_enabled(): return
+    def run():
+        for to, subj, text in messages:
+            try: send_email(to, subj, text)
+            except Exception as ex: print(f'[EMAIL] failed to {to}: {ex}')
+    if SYNC_EMAIL: run()
+    else: threading.Thread(target=run, daemon=True).start()
+
+def _range_text(r):
+    """e.g. 'Mon 14 Dec 2026 to Fri 18 Dec 2026 (back at work Mon 21 Dec 2026) - 5 working days'"""
+    bhs = bank_holiday_set()
+    s, e = parse_date(r['start_date']), parse_date(r['end_date'])
+    f = lambda d: d.strftime('%a %d %b %Y')
+    off = lambda d: d.weekday() >= 5 or iso(d) in bhs
+    d = r['days']
+    days = f"{d:g} working day{'' if d == 1 else 's'}"
+    half = {'am': ' (morning only)', 'pm': ' (afternoon only)'}.get(r.get('half_day') or '', '')
+    if half:
+        return f'{f(s)}{half} - {days}'
+    last = e
+    while last > s and off(last): last -= timedelta(days=1)
+    back = e + timedelta(days=1)
+    while off(back): back += timedelta(days=1)
+    span = f(s) if s == last else f'{f(s)} to {f(last)}'
+    return f'{span} (back at work {f(back)}) - {days}'
+
+def notify_request(rid, event, base_url, note=''):
+    """event: submitted | approved | rejected | cancelled | booked"""
+    rows = query('''SELECT r.*, e.name, e.email, e.manager_id FROM leave_requests r
+                    JOIN leave_employees e ON e.id = r.employee_id WHERE r.id = ?''', (rid,))
+    if not rows: return
+    r = rows[0]
+    base = base_url.rstrip('/')
+    if base.startswith('http://') and 'localhost' not in base and '127.0.0.1' not in base:
+        base = 'https://' + base[len('http://'):]   # Render terminates TLS in front of the app
+    link = base + '/leave'
+    when = _range_text(r)
+    label = (r['type'] if r['type'] != 'annual' else 'annual leave')
+    if event == 'submitted':
+        mgr = query('SELECT email FROM leave_employees WHERE id = ?', (r['manager_id'],)) if r['manager_id'] else []
+        to = (mgr[0]['email'] if mgr else None) or OFFICE_EMAIL
+        _dispatch([(to, f"Leave request: {r['name']}",
+                    f"{r['name']} has requested {label}:\n\n{when}\n"
+                    + (f"Note: {r['note']}\n" if r['note'] else '')
+                    + f"\nReview it here: {link}\n")])
+        return
+    subject, intro = {
+        'approved':  ('Your holiday has been approved', f'Your {label} has been approved:'),
+        'booked':    ('Holiday booked for you', f'The office has booked {label} for you:'),
+        'rejected':  ('Your holiday request was not approved', f'Your {label} request was not approved:'),
+        'cancelled': ('Your holiday has been cancelled', f'Your {label} has been cancelled:'),
+    }[event]
+    text = f"Hi {r['name'].split()[0]},\n\n{intro}\n\n{when}\n"
+    if event == 'rejected' and note: text += f"\nReason: {note}\n"
+    text += f"\nYou can check your leave and balance here: {link}\n\nR&S Services"
+    _dispatch([(r['email'], subject, text)])
+
 def _uk_iso(d, hour=0):
     return datetime(d.year, d.month, d.day, hour, tzinfo=UK).isoformat()
 
@@ -447,6 +531,7 @@ def request_leave():
     if v['type'] == 'annual' and balance_for(emp, v['start'])['remaining'] < v['days']:
         return jsonify({'error': 'Not enough annual leave left for that request'}), 400
     rid = create_request(emp, v, body.get('note'))
+    notify_request(rid, 'submitted', request.host_url)
     return jsonify({'success': True, 'id': rid})
 
 @leave_bp.route('/api/leave/requests/<int:rid>/cancel', methods=['POST'])
@@ -519,6 +604,8 @@ def _decide(rid, body, actor=None):
             (new_status, (body.get('note') or '')[:300],
              datetime.utcnow().strftime('%Y-%m-%dT%H:%M:%S'), rid))
     sync = bc_sync_create(rid) if new_status == 'approved' else bc_sync_remove(rid)
+    notify_request(rid, {'approved': 'approved', 'rejected': 'rejected', 'cancelled': 'cancelled'}[new_status],
+                   request.host_url, (body.get('note') or '')[:300])
     return jsonify({'success': True, 'bcSync': sync})
 
 @leave_bp.route('/api/leave/admin/requests')
@@ -561,7 +648,9 @@ def admin_book():
     if overlaps_own(rows[0]['id'], v['start'], v['end']):
         return jsonify({'error': 'They already have leave booked or pending on those dates'}), 409
     rid = create_request(rows[0], v, body.get('note'), status='approved', admin_note='Booked by office')
-    return jsonify({'success': True, 'id': rid, 'bcSync': bc_sync_create(rid)})
+    sync = bc_sync_create(rid)
+    notify_request(rid, 'booked', request.host_url)
+    return jsonify({'success': True, 'id': rid, 'bcSync': sync})
 
 @leave_bp.route('/api/leave/admin/requests/<int:rid>/bc-sync', methods=['POST'])
 def admin_retry_sync(rid):
@@ -579,7 +668,7 @@ def admin_employees():
     for e in query('SELECT * FROM leave_employees ORDER BY active DESC, name'):
         out.append({'id': e['id'], 'name': e['name'], 'allowance': e['allowance'],
                     'managerId': e.get('manager_id'), 'isManager': bool(e.get('is_manager')),
-                    'bcResourceId': e['bc_resource_id'],
+                    'bcResourceId': e['bc_resource_id'], 'email': e.get('email') or '',
                     'active': bool(e['active']), 'hasPin': bool(e['pin_hash']),
                     'balance': balance_for(e)})
     return jsonify({'employees': out})
@@ -596,11 +685,12 @@ def admin_add_employee():
     if mid and not query('SELECT id FROM leave_employees WHERE id = ? AND is_manager = 1', (mid,)):
         return jsonify({'error': 'Pick a valid manager'}), 400
     eid = execute('''INSERT INTO leave_employees
-                     (name, pin_hash, allowance, bc_resource_id, manager_id, is_manager)
-                     VALUES (?,?,?,?,?,?)''',
+                     (name, pin_hash, allowance, bc_resource_id, manager_id, is_manager, email)
+                     VALUES (?,?,?,?,?,?,?)''',
                   (name, generate_password_hash(str(pin)) if pin else None,
                    float(b.get('allowance', DEFAULT_ALLOWANCE)),
-                   str(b.get('bcResourceId', '') or ''), mid, 1 if b.get('isManager') else 0),
+                   str(b.get('bcResourceId', '') or ''), mid, 1 if b.get('isManager') else 0,
+                   _clean(b.get('email')).lower()),
                   returning_id=True)
     return jsonify({'success': True, 'id': eid})
 
@@ -646,7 +736,8 @@ def admin_import():
         if not name or name.lower() in seen: continue
         seen.add(name.lower())
         rows.append({'name': name, 'manager': _clean(r.get('manager')),
-                     'allowance': _clean(r.get('allowance')), 'bc': _clean(r.get('bcResourceId'))})
+                     'allowance': _clean(r.get('allowance')), 'bc': _clean(r.get('bcResourceId')),
+                     'email': _clean(r.get('email')).lower()})
     if not rows: return jsonify({'error': 'No rows found'}), 400
     if len(rows) > 300: return jsonify({'error': 'Max 300 rows at a time'}), 400
 
@@ -659,10 +750,17 @@ def admin_import():
         except ValueError:
             allowance = DEFAULT_ALLOWANCE; problems.append(f"{r['name']}: bad allowance '{r['allowance']}', used default")
         pin = f'{secrets.randbelow(10000):04d}'
-        execute('''INSERT INTO leave_employees (name, pin_hash, allowance, bc_resource_id)
-                    VALUES (?,?,?,?)''', (r['name'], generate_password_hash(pin), allowance, r['bc']))
+        execute('''INSERT INTO leave_employees (name, pin_hash, allowance, bc_resource_id, email)
+                    VALUES (?,?,?,?,?)''', (r['name'], generate_password_hash(pin), allowance, r['bc'], r['email']))
         created.append({'name': r['name'], 'pin': pin, 'manager': r['manager']})
     ids = {e['name'].lower(): e['id'] for e in query('SELECT id, name FROM leave_employees')}
+    for r in rows:
+        if r['email'] and '@' not in r['email']:
+            problems.append(f"{r['name']}: '{r['email']}' does not look like an email address")
+            execute('UPDATE leave_employees SET email = NULL WHERE id = ?', (ids[r['name'].lower()],))
+        elif r['name'].lower() in existing:      # re-import fills in email / BigChange ID for existing people
+            if r['email']: execute('UPDATE leave_employees SET email = ? WHERE id = ?', (r['email'], ids[r['name'].lower()]))
+            if r['bc']: execute('UPDATE leave_employees SET bc_resource_id = ? WHERE id = ?', (r['bc'], ids[r['name'].lower()]))
     for r in rows:
         if not r['manager']: continue
         mid = ids.get(r['manager'].lower())
@@ -689,6 +787,7 @@ def admin_update_employee(eid):
     sets, params = [], []
     for field, col, cast in (('name', 'name', lambda x: str(x).strip()),
                              ('allowance', 'allowance', float),
+                             ('email', 'email', lambda x: _clean(x).lower()),
                              ('managerId', 'manager_id', lambda x: int(x) if x not in (None, '') else None),
                              ('isManager', 'is_manager', lambda x: 1 if x else 0),
                              ('bcResourceId', 'bc_resource_id', str),
@@ -725,6 +824,21 @@ def admin_delete_all_employees():
     execute('DELETE FROM leave_requests')
     execute('DELETE FROM leave_employees')
     return jsonify({'success': True, 'deleted': n})
+
+@leave_bp.route('/api/leave/admin/email-status')
+def admin_email_status():
+    if not is_admin(): return _auth_error()
+    return jsonify({'enabled': email_enabled(), 'from': EMAIL_FROM, 'office': OFFICE_EMAIL})
+
+@leave_bp.route('/api/leave/admin/test-email', methods=['POST'])
+def admin_test_email():
+    if not is_admin(): return _auth_error()
+    to = _clean((request.get_json(silent=True) or {}).get('to'))
+    if '@' not in to: return jsonify({'error': 'Enter a valid email address'}), 400
+    if not email_enabled(): return jsonify({'error': 'Email is not set up (RESEND_API_KEY / LEAVE_EMAIL_FROM missing)'}), 400
+    try: send_email(to, 'R&S leave system test', 'If you can read this, leave emails are working.')
+    except Exception as ex: return jsonify({'error': f'Email provider said: {ex}'}), 502
+    return jsonify({'success': True})
 
 @leave_bp.route('/api/leave/admin/bank-holidays', methods=['POST'])
 def admin_add_bh():
