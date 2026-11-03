@@ -24,6 +24,7 @@ import secrets
 import time
 import sqlite3
 from datetime import date, datetime, timedelta
+from zoneinfo import ZoneInfo
 
 from flask import Blueprint, jsonify, request, send_from_directory
 from itsdangerous import URLSafeTimedSerializer, BadSignature, SignatureExpired
@@ -38,6 +39,13 @@ SECRET           = (os.environ.get('LEAVE_SECRET')
                     or os.environ.get('BIGCHANGE_CLIENT_SECRET') or 'dev-secret-change-me')
 DEFAULT_ALLOWANCE = float(os.environ.get('LEAVE_DEFAULT_ALLOWANCE', '20'))
 YEAR_START_MONTH = min(12, max(1, int(os.environ.get('LEAVE_YEAR_START_MONTH', '1'))))
+
+# BigChange absence sync. Set BIGCHANGE_ABSENCE_TYPE_ID (annual leave) to switch it on;
+# BIGCHANGE_ABSENCE_TYPE_ID_OTHER is used for unpaid/other leave (skipped if unset).
+BC_TYPE_ANNUAL = os.environ.get('BIGCHANGE_ABSENCE_TYPE_ID', '').strip()
+BC_TYPE_OTHER  = os.environ.get('BIGCHANGE_ABSENCE_TYPE_ID_OTHER', '').strip()
+bc_hooks = {'post': None, 'delete': None}   # filled in by app.py
+UK = ZoneInfo('Europe/London')
 
 LEAVE_TYPES = ['annual', 'unpaid', 'other']
 IS_PG = bool(DATABASE_URL)
@@ -108,9 +116,12 @@ def init_db():
         days REAL NOT NULL, type TEXT NOT NULL DEFAULT 'annual', note TEXT DEFAULT '',
         status TEXT NOT NULL DEFAULT 'pending', admin_note TEXT DEFAULT '',
         created_at TEXT NOT NULL, decided_at TEXT)''')
-    for col, ddl in (('manager_id', 'INTEGER'), ('is_manager', 'INTEGER NOT NULL DEFAULT 0')):
+    for tbl, col, ddl in (('leave_employees', 'manager_id', 'INTEGER'),
+                          ('leave_employees', 'is_manager', 'INTEGER NOT NULL DEFAULT 0'),
+                          ('leave_requests', 'bc_absence_id', 'TEXT'),
+                          ('leave_requests', 'bc_sync', 'TEXT')):
         try:
-            execute(f'ALTER TABLE leave_employees ADD COLUMN {col} {ddl}')
+            execute(f'ALTER TABLE {tbl} ADD COLUMN {col} {ddl}')
         except Exception:
             pass  # column already exists
     execute('CREATE TABLE IF NOT EXISTS leave_bank_holidays (date TEXT PRIMARY KEY, name TEXT NOT NULL)')
@@ -270,7 +281,57 @@ def fmt_request(r):
     return {k: r[k] for k in ('id', 'start_date', 'end_date', 'half_day', 'days', 'type',
                                'note', 'status', 'admin_note', 'created_at', 'decided_at')} | {
         'employeeId': r['employee_id'], 'employeeName': r.get('name'),
-        'managerName': r.get('manager_name')}
+        'managerName': r.get('manager_name'),
+        'bcSync': r.get('bc_sync')}
+
+def _uk_iso(d, hour=0):
+    return datetime(d.year, d.month, d.day, hour, tzinfo=UK).isoformat()
+
+def _set_sync(rid, absence_id, msg):
+    execute('UPDATE leave_requests SET bc_absence_id = ?, bc_sync = ? WHERE id = ?', (absence_id, msg[:300], rid))
+
+def bc_sync_create(rid):
+    """Create the matching absence in BigChange for an approved request.
+    Never raises - the result is stored on the request so the office can see it."""
+    rows = query('''SELECT r.*, e.bc_resource_id FROM leave_requests r
+                    JOIN leave_employees e ON e.id = r.employee_id WHERE r.id = ?''', (rid,))
+    if not rows: return None
+    r = rows[0]
+    type_id = BC_TYPE_ANNUAL if r['type'] == 'annual' else BC_TYPE_OTHER
+    if r.get('bc_absence_id') or not bc_hooks['post'] or not type_id:
+        return r.get('bc_sync')            # already synced, or sync switched off
+    resource = str(r.get('bc_resource_id') or '').strip()
+    if not resource.isdigit():
+        _set_sync(rid, None, 'skipped: no BigChange ID set for this person')
+        return 'skipped'
+    start, end = parse_date(r['start_date']), parse_date(r['end_date'])
+    if r['half_day'] == 'am':   s, e = _uk_iso(start, 0), _uk_iso(start, 12)
+    elif r['half_day'] == 'pm': s, e = _uk_iso(start, 12), _uk_iso(start + timedelta(days=1))
+    else:                       s, e = _uk_iso(start), _uk_iso(end + timedelta(days=1))
+    body = {'resourceId': int(resource), 'startAt': s, 'endAt': e, 'absenceTypeId': int(type_id),
+            'daysRequested': r['days'], 'reason': ((r['type'].capitalize() + ' leave') + (f" - {r['note']}" if r['note'] else ''))[:200],
+            'isPaidLeave': r['type'] == 'annual'}
+    try:
+        res = bc_hooks['post']('/absences', body)
+        _set_sync(rid, str(res.get('id') or ''), 'synced to BigChange')
+        return 'synced'
+    except Exception as ex:
+        _set_sync(rid, None, f'failed: {ex}')
+        return 'failed'
+
+def bc_sync_remove(rid):
+    """Remove the BigChange absence when approved leave is cancelled/rejected."""
+    rows = query('SELECT bc_absence_id FROM leave_requests WHERE id = ?', (rid,))
+    if not rows or not rows[0].get('bc_absence_id') or not bc_hooks['delete']:
+        return None
+    try:
+        bc_hooks['delete'](f"/absences/{rows[0]['bc_absence_id']}")
+        _set_sync(rid, None, 'removed from BigChange')
+        return 'removed'
+    except Exception as ex:
+        execute('UPDATE leave_requests SET bc_sync = ? WHERE id = ?',
+                (f'failed to remove - delete it in BigChange manually ({ex})'[:300], rid))
+        return 'failed'
 
 def create_request(emp, v, note, status='pending', admin_note=''):
     now = datetime.utcnow().strftime('%Y-%m-%dT%H:%M:%S')
@@ -401,6 +462,7 @@ def cancel_own(rid):
         return jsonify({'error': 'Leave has started - call the office'}), 400
     execute("UPDATE leave_requests SET status = 'cancelled', decided_at = ? WHERE id = ?",
             (datetime.utcnow().strftime('%Y-%m-%dT%H:%M:%S'), rid))
+    bc_sync_remove(rid)
     return jsonify({'success': True})
 
 @leave_bp.route('/api/leave/calendar')
@@ -456,7 +518,8 @@ def _decide(rid, body, actor=None):
     execute('UPDATE leave_requests SET status = ?, admin_note = ?, decided_at = ? WHERE id = ?',
             (new_status, (body.get('note') or '')[:300],
              datetime.utcnow().strftime('%Y-%m-%dT%H:%M:%S'), rid))
-    return jsonify({'success': True})
+    sync = bc_sync_create(rid) if new_status == 'approved' else bc_sync_remove(rid)
+    return jsonify({'success': True, 'bcSync': sync})
 
 @leave_bp.route('/api/leave/admin/requests')
 def admin_requests():
@@ -498,7 +561,16 @@ def admin_book():
     if overlaps_own(rows[0]['id'], v['start'], v['end']):
         return jsonify({'error': 'They already have leave booked or pending on those dates'}), 409
     rid = create_request(rows[0], v, body.get('note'), status='approved', admin_note='Booked by office')
-    return jsonify({'success': True, 'id': rid})
+    return jsonify({'success': True, 'id': rid, 'bcSync': bc_sync_create(rid)})
+
+@leave_bp.route('/api/leave/admin/requests/<int:rid>/bc-sync', methods=['POST'])
+def admin_retry_sync(rid):
+    if not is_admin(): return _auth_error()
+    rows = query('SELECT status FROM leave_requests WHERE id = ?', (rid,))
+    if not rows: return jsonify({'error': 'Not found'}), 404
+    if rows[0]['status'] != 'approved': return jsonify({'error': 'Only approved leave is synced'}), 400
+    execute('UPDATE leave_requests SET bc_absence_id = NULL WHERE id = ?', (rid,))
+    return jsonify({'success': True, 'bcSync': bc_sync_create(rid)})
 
 @leave_bp.route('/api/leave/admin/employees')
 def admin_employees():

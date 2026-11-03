@@ -101,3 +101,14 @@ Runs inside this same app. Staff go to `/leave`, pick their name, enter their PI
 Rules: Mon-Fri only, bank holidays (editable in admin) are not deducted, half days supported, requests can't be made in the past (office can book on someone's behalf), clashes with colleagues are flagged but don't block.
 
 API for other tools: `GET /api/leave/off?date=YYYY-MM-DD` (or `from`/`to`) returns approved leave with each person's `resourceId` (set the BigChange resource ID per employee in admin).
+
+### BigChange absence sync
+
+When leave is approved, the app creates an absence in BigChange (`POST /v1/absences`) for that person's BigChange resource, and removes it if the leave is later cancelled. Switched off unless `BIGCHANGE_ABSENCE_TYPE_ID` is set.
+
+| Key | Value |
+|-----|-------|
+| `BIGCHANGE_ABSENCE_TYPE_ID` | BigChange absence type ID used for annual leave |
+| `BIGCHANGE_ABSENCE_TYPE_ID_OTHER` | Optional: absence type ID for unpaid/other leave (those are not synced if unset) |
+
+The BigChange API key needs the `resources:write` scope. Each person needs their BigChange resource ID set in the admin Staff tab. Sync problems show on the request in "All requests", with a Retry button.
