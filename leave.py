@@ -161,7 +161,14 @@ def init_db():
 
 @leave_bp.before_request
 def _ensure_db():
-    init_db()
+    if request.endpoint == 'leave.leave_page':
+        return                      # the page itself needs no database
+    try:
+        init_db()
+    except Exception as ex:
+        print(f'[LEAVE] database error: {type(ex).__name__}: {ex}')
+        msg = str(ex).strip().splitlines()[0][:200] if str(ex).strip() else type(ex).__name__
+        return jsonify({'error': f'Database connection problem: {msg}'}), 503
 
 # ── Dates / day counting ──────────────────────────────────────────────────
 def parse_date(s):
