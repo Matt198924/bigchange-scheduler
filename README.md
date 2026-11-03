@@ -81,3 +81,23 @@ To avoid this, upgrade to Render's $7/month plan or use a free uptime monitor li
 ## Need help?
 
 Contact your developer or go back to Claude and share any error messages.
+
+---
+
+## Annual leave booking (`/leave`)
+
+Runs inside this same app. Staff go to `/leave`, pick their name, enter their PIN and request leave; the office approves from the admin tab. The scheduler topbar shows an "N on leave" badge and an "Annual leave" link.
+
+**Extra environment variables on Render**
+
+| Key | Value |
+|-----|-------|
+| `DATABASE_URL` | Postgres connection string (Render Postgres or Supabase). Required on Render - the free disk is wiped on each deploy, so SQLite would lose bookings. |
+| `LEAVE_ADMIN_PASSWORD` | Office admin password (admin sign-in is disabled if unset) |
+| `LEAVE_SECRET` | Any long random string (signs login sessions) |
+| `LEAVE_DEFAULT_ALLOWANCE` | Optional, default 20 days |
+| `LEAVE_YEAR_START_MONTH` | Optional, 1-12, default 1 (January) |
+
+Rules: Mon-Fri only, bank holidays (editable in admin) are not deducted, half days supported, requests can't be made in the past (office can book on someone's behalf), clashes with colleagues are flagged but don't block.
+
+API for other tools: `GET /api/leave/off?date=YYYY-MM-DD` (or `from`/`to`) returns approved leave with each person's `resourceId` (set the BigChange resource ID per employee in admin).
