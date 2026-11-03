@@ -58,7 +58,7 @@ bigchange-app/
 
 ### Step 3 — Share with your team
 
-Send that URL to your 4 schedulers. They open it in any browser — no login, no install.
+Send that URL to your 4 schedulers (it opens the staff hub; the scheduler itself is at `/scheduler`, annual leave at `/leave`. To add another tool to the hub, add one line to the `APPS` list in `static/home.html`). They open it in any browser — no login, no install.
 
 The dashboard:
 - Auto-refreshes every 60 seconds

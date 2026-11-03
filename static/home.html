@@ -1,0 +1,46 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>R&amp;S Staff Hub</title>
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500&display=swap" rel="stylesheet">
+<style>
+:root{--ink:#0B2A4A;--cyan:#00C2FF;--paper:#F6F7F6;--surface:#fff;--slate:#5B6B7A;--line:#E2E6E7;--cyan-bg:#E6F9FF}
+*{box-sizing:border-box;margin:0;padding:0}
+body{font-family:'IBM Plex Sans',system-ui,sans-serif;background:var(--paper);color:var(--ink);min-height:100vh}
+.topbar{background:var(--ink);height:56px;padding:0 1.25rem;display:flex;align-items:center;border-bottom:2px solid var(--cyan)}
+.topbar span{color:#fff;font-weight:600;font-size:14px}
+.wrap{max-width:860px;margin:0 auto;padding:2rem 1rem}
+h1{font-size:22px;margin-bottom:.25rem}
+.sub{color:var(--slate);margin-bottom:1.5rem}
+.grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(240px,1fr));gap:1rem}
+.tile{display:block;background:var(--surface);border:1px solid var(--line);border-radius:12px;padding:1.25rem;text-decoration:none;color:inherit;transition:border-color .15s,box-shadow .15s}
+.tile:hover,.tile:focus-visible{border-color:var(--cyan);box-shadow:0 2px 10px rgba(11,42,74,.08);outline:none}
+.icon{width:44px;height:44px;border-radius:10px;background:var(--cyan-bg);display:flex;align-items:center;justify-content:center;font-size:22px;margin-bottom:.75rem}
+.tile b{display:block;font-size:15px;margin-bottom:.25rem}
+.tile p{font-size:13px;color:var(--slate);line-height:1.4}
+.soon{opacity:.55;pointer-events:none}
+.badge{display:inline-block;font:500 10px 'IBM Plex Mono',monospace;text-transform:uppercase;letter-spacing:.05em;background:var(--paper);border-radius:20px;padding:2px 8px;margin-top:.5rem;color:var(--slate)}
+</style>
+</head>
+<body>
+<div class="topbar"><span>R&amp;S Staff Hub</span></div>
+<div class="wrap">
+  <h1>What do you need?</h1>
+  <p class="sub">Pick a tool below.</p>
+  <div class="grid" id="grid"></div>
+</div>
+<script>
+// To add a tool, add one line here. Set soon:true to show it greyed out as "Coming soon".
+const APPS = [
+  {name: 'Scheduler',    icon: '🗓️', url: '/scheduler', desc: 'Job scheduling and engineer assignment (BigChange).'},
+  {name: 'Annual leave', icon: '🌴', url: '/leave',     desc: 'Request leave, check your balance, approve your team.'},
+];
+document.getElementById('grid').innerHTML = APPS.map(a => `
+  <a class="tile ${a.soon ? 'soon' : ''}" ${a.soon ? '' : `href="${a.url}"`}>
+    <div class="icon">${a.icon}</div><b>${a.name}</b><p>${a.desc}</p>${a.soon ? '<span class="badge">Coming soon</span>' : ''}
+  </a>`).join('');
+</script>
+</body>
+</html>
