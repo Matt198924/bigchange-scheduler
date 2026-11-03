@@ -101,6 +101,7 @@ let TOKEN = sessionStorage.getItem('leaveToken'), ROLE = sessionStorage.getItem(
 const $ = id => document.getElementById(id);
 const esc = s => String(s ?? '').replace(/[&<>"]/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
 const fmtD = d => new Date(d + 'T12:00:00').toLocaleDateString('en-GB', {weekday:'short', day:'numeric', month:'short', year:'numeric'});
+const typeLabel = t => t === 'bankholiday' ? 'bank holiday' : t;
 let BH = [];
 fetch('/api/leave/config').then(r => r.json()).then(j => { BH = j.bankHolidays || []; }).catch(() => {});
 const ymd = d => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
@@ -172,9 +173,9 @@ async function loadStaff() {
     .map(([k, l]) => `<div class="stat"><b>${b[k]}</b><span>${l}</span></div>`).join('');
   $('s-year').textContent = `Leave year ${fmtD(b.yearStart)} – ${fmtD(b.yearEnd)}. Weekends and bank holidays are not counted.`;
   $('s-list').innerHTML = j.requests.length ? j.requests.map(r => `<div class="item"><div><b>${range(r)}</b>
-    <div class="muted">${r.days} day${r.days === 1 ? '' : 's'} · ${r.type}${r.note ? ' · ' + esc(r.note) : ''}${r.admin_note ? ' · Office: ' + esc(r.admin_note) : ''}</div></div>
+    <div class="muted">${r.days} day${r.days === 1 ? '' : 's'} · ${typeLabel(r.type)}${r.note ? ' · ' + esc(r.note) : ''}${r.admin_note && r.type !== 'bankholiday' ? ' · Office: ' + esc(r.admin_note) : ''}</div></div>
     <div style="text-align:right"><span class="pill ${r.status}">${r.status}</span>
-    ${(r.status === 'pending' || (r.status === 'approved' && r.start_date > new Date().toISOString().slice(0,10))) ? `<div><button class="sm" style="margin-top:4px" onclick="cancelReq(${r.id})">Cancel</button></div>` : ''}</div></div>`).join('') : '<p class="muted">No requests yet.</p>';
+    ${(r.type !== 'bankholiday' && (r.status === 'pending' || (r.status === 'approved' && r.start_date > new Date().toISOString().slice(0,10)))) ? `<div><button class="sm" style="margin-top:4px" onclick="cancelReq(${r.id})">Cancel</button></div>` : ''}</div></div>`).join('') : '<p class="muted">No requests yet.</p>';
   renderCal('s-cal', calMonth);
 }
 async function loadTeam() {
@@ -279,7 +280,7 @@ async function tabStaff() {
     <button class="sm" onclick="testEmail()">Send test email</button>` : `<p class="muted">Off. Set RESEND_API_KEY and LEAVE_EMAIL_FROM on Render to switch on (see README).</p>`}</div>
     <div class="card"><h2>Add employee</h2><div class="row"><div><label>Name</label><input id="n-name"></div><div><label>PIN (4-6 digits)</label><input id="n-pin" inputmode="numeric" maxlength="6"></div></div>
     <div class="row"><div><label>Approved by</label><select id="n-mgr">${mgrOpts(null)}</select></div><div><label>Is a manager?</label><select id="n-ismgr"><option value="">No</option><option value="1">Yes - approves their team's leave</option></select></div></div>
-    <div class="row"><div><label>Allowance (days)</label><input id="n-all" type="number" step="0.5" value="20"></div><div><label>BigChange resource ID (optional)</label><input id="n-bc"></div></div>
+    <div class="row"><div><label>Allowance (days)</label><input id="n-all" type="number" step="0.5" value="28"></div><div><label>BigChange resource ID (optional)</label><input id="n-bc"></div></div>
     <label>Email (for leave notifications)</label><input id="n-email" type="email">
     <button class="primary" onclick="addEmp()">Add</button><div id="n-msg"></div></div>
     <div class="card"><h2>Import spreadsheet</h2>
@@ -289,13 +290,17 @@ async function tabStaff() {
     <button class="primary" onclick="importSheet()">Import</button><div id="im-msg"></div></div>
     <div class="card"><h2>Bulk add (paste names, one per line)</h2>
     <label>Names</label><textarea id="bk-names" rows="6" placeholder="Jane Smith&#10;John Brown"></textarea>
-    <div class="row"><div><label>Approved by</label><select id="bk-mgr">${mgrOpts(null)}</select></div><div><label>Allowance (days)</label><input id="bk-all" type="number" step="0.5" value="20"></div></div>
+    <div class="row"><div><label>Approved by</label><select id="bk-mgr">${mgrOpts(null)}</select></div><div><label>Allowance (days)</label><input id="bk-all" type="number" step="0.5" value="28"></div></div>
     <label style="display:flex;gap:6px;align-items:center"><input type="checkbox" id="bk-ismgr" style="width:auto"> These are managers (supervisors)</label>
     <button class="primary" onclick="bulkAdd()">Add all</button><div id="bk-msg"></div></div>
     <div class="card"><h2>Staff</h2>` + j.employees.map(e => `<div class="item" style="${e.active ? '' : 'opacity:.5'}"><div><b>${esc(e.name)}</b>
     <div class="muted">${e.balance.remaining} of ${e.allowance} left · ${e.hasPin ? 'PIN set' : 'no PIN'}${e.isManager ? ' · manager' : ''}${e.email ? ' · ' + esc(e.email) : ' · no email'}${e.bcResourceId ? ' · BC ' + esc(e.bcResourceId) : ''}</div></div>
-    <div style="display:flex;gap:4px;flex-wrap:wrap;justify-content:flex-end"><select class="sm" style="width:auto" onchange="upd(${e.id},{managerId:this.value})" title="Who approves their leave">${mgrOpts(e.managerId)}</select><button class="sm" onclick="upd(${e.id},{isManager:${!e.isManager}})">${e.isManager ? 'Remove manager' : 'Make manager'}</button><button class="sm" onclick="setEmail(${e.id},'${esc(e.email).replace(/'/g, "\\'")}')">Email</button><button class="sm" onclick="setPin(${e.id})">Set PIN</button><button class="sm" onclick="setAllow(${e.id},${e.allowance})">Allowance</button><button class="sm" onclick="setBC(${e.id},'${esc(e.bcResourceId)}')">BC ID</button><button class="sm" onclick="toggleEmp(${e.id},${!e.active})">${e.active ? 'Deactivate' : 'Reactivate'}</button><button class="sm no" onclick="delEmp(${e.id},'${esc(e.name).replace(/'/g, "\\'")}')">Delete</button></div></div>`).join('') + `<div style="margin-top:1rem;border-top:1px solid var(--line);padding-top:1rem"><button class="sm no" onclick="delAll()">Delete ALL staff</button>
+    <div style="display:flex;gap:4px;flex-wrap:wrap;justify-content:flex-end"><select class="sm" style="width:auto" onchange="upd(${e.id},{managerId:this.value})" title="Who approves their leave">${mgrOpts(e.managerId)}</select><button class="sm" onclick="upd(${e.id},{isManager:${!e.isManager}})">${e.isManager ? 'Remove manager' : 'Make manager'}</button><button class="sm" onclick="setEmail(${e.id},'${esc(e.email).replace(/'/g, "\\'")}')">Email</button><button class="sm" onclick="setPin(${e.id})">Set PIN</button><button class="sm" onclick="setAllow(${e.id},${e.allowance})">Allowance</button><button class="sm" onclick="setBC(${e.id},'${esc(e.bcResourceId)}')">BC ID</button><button class="sm" onclick="toggleEmp(${e.id},${!e.active})">${e.active ? 'Deactivate' : 'Reactivate'}</button><button class="sm no" onclick="delEmp(${e.id},'${esc(e.name).replace(/'/g, "\\'")}')">Delete</button></div></div>`).join('') + `<div style="margin-top:1rem;border-top:1px solid var(--line);padding-top:1rem"><button class="sm" onclick="setAllowAll()">Set allowance for everyone</button> <button class="sm no" onclick="delAll()">Delete ALL staff</button>
     <span class="muted"> Removes every employee and all leave records. Bank holidays are kept.</span></div></div>`;
+}
+async function setAllowAll() {
+  const a = prompt('Set EVERYONE\'s yearly allowance (days, including bank holidays):', '28'); if (a === null || a === '') return;
+  try { const j = await api('/admin/employees/set-allowance', 'POST', {allowance: +a}); alert(j.updated + ' staff updated.'); tabStaff(); } catch (e) { alert(e.message); }
 }
 async function delEmp(id, name) {
   if (!confirm(`Delete ${name} and all their leave records permanently?\n\n(Use Deactivate instead if you just want them to stop appearing.)`)) return;
@@ -368,8 +373,16 @@ async function tabBH() {
   const j = await api('/admin/bank-holidays');
   $('a-body').innerHTML = `<div class="card"><h2>Bank holidays (not deducted from allowance)</h2>
     <div class="row"><div><label>Date</label><input type="date" id="h-date"></div><div><label>Name</label><input id="h-name"></div></div>
-    <button class="primary" onclick="addBH()">Add</button></div><div class="card">` +
+    <button class="primary" onclick="addBH()">Add</button></div>
+    <div class="card"><h2>Book for all staff</h2>
+    <p class="muted">Books every bank holiday below (this leave year onwards) as approved leave for every active employee, and deducts it from their allowance. Set allowances to 28 first (Staff tab). Safe to click again - nothing is booked twice. New staff and newly added bank holidays are booked automatically.</p>
+    <button class="primary" onclick="bookAllBH()">Book bank holidays for everyone</button><div id="bh-msg"></div></div><div class="card">` +
     j.bankHolidays.map(h => `<div class="item"><div><b>${fmtD(h.date)}</b> <span class="muted">${esc(h.name)}</span></div><button class="sm" onclick="delBH('${h.date}')">Remove</button></div>`).join('') + '</div>';
+}
+async function bookAllBH() {
+  if (!confirm('Book all bank holidays for every active employee and deduct them from allowances?')) return;
+  try { const j = await api('/admin/bank-holidays/book-all', 'POST'); $('bh-msg').innerHTML = `<div class="info">${j.booked} bookings made for ${j.staff} staff (from ${fmtD(j.since)}).</div>`; }
+  catch (e) { $('bh-msg').innerHTML = `<div class="err">${esc(e.message)}</div>`; }
 }
 async function addBH() { if ($('h-date').value) { await api('/admin/bank-holidays', 'POST', {date: $('h-date').value, name: $('h-name').value}); tabBH(); } }
 async function delBH(d) { await api('/admin/bank-holidays/' + d, 'DELETE'); tabBH(); }
