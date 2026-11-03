@@ -401,7 +401,10 @@ async function tabStaff() {
 
     <details class="card"><summary>BigChange check</summary>
       <p class="muted">Shows the absence type IDs BigChange already uses (copy them into the Render settings) and the latest absences, so you can confirm synced leave arrived.</p>
-      <button class="sm" onclick="bcCheck()">Check BigChange</button><div id="bc-out" style="margin-top:.6rem"></div></details>
+      <button class="sm" onclick="bcCheck()">Check BigChange</button><div id="bc-out" style="margin-top:.6rem"></div>
+      <h2 style="margin-top:1.2rem">Import existing BigChange absences</h2>
+      <p class="muted">Pulls this leave year's approved absences from BigChange into the leave system (matched by BigChange ID, so add IDs first). Already-imported and overlapping ones are skipped.</p>
+      <button class="sm" onclick="bcImportPreview()">Preview import</button><div id="bci-out" style="margin-top:.6rem"></div></details>
     <details class="card"><summary>Email notifications ${es.enabled ? '<span class="pill approved">on</span>' : '<span class="pill pending">off</span>'}</summary>
       ${es.enabled ? `<p class="muted">Sending from ${esc(es.from)}. Staff get approved/rejected/cancelled emails; managers get new-request emails${es.office ? '; people with no manager go to ' + esc(es.office) : ' (set LEAVE_OFFICE_EMAIL so requests with no manager reach you)'}.</p>
       <button class="sm" style="margin-top:.6rem" onclick="testEmail()">Send test email</button>` : `<p class="muted">Off. Set RESEND_API_KEY and LEAVE_EMAIL_FROM on Render to switch on (see README).</p>`}</details>`;
@@ -409,6 +412,30 @@ async function tabStaff() {
 async function saveDefaultAllowance() {
   try { const j = await api('/admin/settings', 'PUT', {defaultAllowance: $('def-all').value}); $('al-msg').innerHTML = `<div class="info">New staff will start with ${j.defaultAllowance} days.</div>`; }
   catch (e) { $('al-msg').innerHTML = `<div class="err">${esc(e.message)}</div>`; }
+}
+async function bcImportPreview(chosen) {
+  $('bci-out').innerHTML = '<p class="muted">Asking BigChange...</p>';
+  try {
+    const j = await api('/admin/bc-import' + (chosen ? '?types=' + encodeURIComponent(JSON.stringify(chosen)) : '')), opts = t => ['annual','sick','unpaid','other','skip'].map(o => `<option value="${o}" ${o === t ? 'selected' : ''}>${o === 'skip' ? "don't import" : o}</option>`).join('');
+    const ready = j.rows.filter(r => r.action === 'import'), skipped = j.rows.filter(r => r.action !== 'import');
+    $('bci-out').innerHTML = '<div class="muted" style="margin-bottom:.3rem">What should each BigChange absence type count as?</div>'
+      + Object.entries(j.types).map(([id, t]) => `<div class="item"><span>Type <b>${esc(id)}</b> <span class="muted">· ${t.count} absence${t.count === 1 ? '' : 's'}${t.example ? ' · e.g. ' + esc(t.example) : ''}</span></span><select data-bctype="${esc(id)}" onchange="bcImportRefresh()">${opts(t.type)}</select></div>`).join('')
+      + `<p style="margin:.6rem 0 .2rem"><b>${ready.length}</b> ready to import</p>`
+      + ready.slice(0, 60).map(r => `<div class="muted">${esc(r.name)} · ${fmtD(r.start)}${r.end !== r.start ? ' → ' + fmtD(r.end) : ''} · ${r.days} day${r.days === 1 ? '' : 's'} · ${r.type}</div>`).join('')
+      + (ready.length > 60 ? `<div class="muted">…and ${ready.length - 60} more</div>` : '')
+      + (skipped.length ? `<details style="margin:.5rem 0"><summary class="muted">${skipped.length} will be skipped</summary>` + skipped.map(r => `<div class="muted">${esc(r.name || 'resource ' + r.resourceId)} · ${esc(r.start || '')} · ${esc(r.why)}</div>`).join('') + '</details>' : '')
+      + `<button class="primary" style="margin-top:.6rem" onclick="bcImportGo()" ${ready.length ? '' : 'disabled'}>Import ${ready.length} absence${ready.length === 1 ? '' : 's'}</button>`;
+  } catch (e) { $('bci-out').innerHTML = `<div class="err">${esc(e.message)}</div>`; }
+}
+function bcImportTypes() { const t = {}; document.querySelectorAll('[data-bctype]').forEach(s => t[s.dataset.bctype] = s.value); return t; }
+async function bcImportRefresh() {
+  // re-run the preview with the chosen types so the counts stay honest
+  await bcImportPreview(bcImportTypes());
+}
+async function bcImportGo() {
+  if (!confirm('Import these absences into the leave system? They will count against allowances.')) return;
+  try { const j = await api('/admin/bc-import', 'POST', {types: bcImportTypes()}); $('bci-out').innerHTML = `<div class="info">Imported ${j.imported} absence${j.imported === 1 ? '' : 's'} (${j.skipped} skipped).</div>`; }
+  catch (e) { $('bci-out').innerHTML = `<div class="err">${esc(e.message)}</div>`; }
 }
 async function bcCheck() {
   $('bc-out').innerHTML = '<p class="muted">Asking BigChange...</p>';

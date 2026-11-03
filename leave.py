@@ -18,6 +18,7 @@ Env vars
   LEAVE_DEFAULT_ALLOWANCE default days for new employees (default 28, incl. bank holidays)
   LEAVE_YEAR_START_MONTH  1-12, month the leave year starts (default 1)
 """
+import json
 import os
 import hmac
 import secrets
@@ -25,7 +26,7 @@ import time
 import sqlite3
 import threading
 import requests
-from datetime import date, datetime, timedelta
+from datetime import date, datetime, timedelta, timezone
 from zoneinfo import ZoneInfo
 
 from flask import Blueprint, jsonify, request, send_from_directory
@@ -971,6 +972,96 @@ def admin_bc_absences():
                     'recent': [{k: a.get(k) for k in ('id', 'resourceId', 'startAt', 'endAt', 'status', 'absenceTypeId', 'reason')}
                                for a in items[-15:]],
                     'configured': {'annual': BC_TYPE_ANNUAL, 'other': BC_TYPE_OTHER, 'sick': BC_TYPE_SICK}})
+
+
+# ── Import existing absences from BigChange ───────────────────────────────
+def _uk_date(ts, minus_second=False):
+    dt = datetime.fromisoformat(str(ts).replace('Z', '+00:00'))
+    if dt.tzinfo is None: dt = dt.replace(tzinfo=timezone.utc)
+    if minus_second: dt -= timedelta(seconds=1)
+    return dt.astimezone(UK)
+
+def _bc_fetch_absences():
+    lo, _ = year_bounds(date.today())
+    out, page = [], 1
+    while page <= 10:
+        data = bc_hooks['get']('/absences', {'dateFrom': lo.isoformat() + 'T00:00:00Z',
+                                             'pageSize': 500, 'pageNumber': page})
+        items = data if isinstance(data, list) else (data.get('items') or [])
+        out.extend(items)
+        if len(items) < 500: break
+        page += 1
+    return out
+
+def _bc_import_plan(type_map=None):
+    """Work out what each BigChange absence would become. Nothing is written."""
+    type_map = type_map or {}
+    emps = {str(e['bc_resource_id']).strip(): e for e in query('SELECT * FROM leave_employees WHERE active = 1')
+            if str(e.get('bc_resource_id') or '').strip()}
+    have = {str(r['bc_absence_id']) for r in query("SELECT bc_absence_id FROM leave_requests WHERE bc_absence_id IS NOT NULL")}
+    bhs = bank_holiday_set()
+    rows = []
+    for a in _bc_fetch_absences():
+        tid = str(a.get('absenceTypeId'))
+        default = 'annual' if tid == BC_TYPE_ANNUAL else 'sick' if tid == BC_TYPE_SICK else 'other'
+        typ = type_map.get(tid, default)
+        row = {'id': str(a.get('id')), 'resourceId': str(a.get('resourceId')), 'typeId': tid,
+               'status': a.get('status'), 'type': typ, 'action': 'import', 'why': ''}
+        emp = emps.get(row['resourceId'])
+        try:
+            s_dt, e_dt = _uk_date(a['startAt']), _uk_date(a['endAt'], True)
+            start, end = s_dt.date(), max(s_dt.date(), e_dt.date())
+        except Exception:
+            row.update(action='skip', why='unreadable dates'); rows.append(row); continue
+        half = ''
+        if start == end and (a.get('daysRequested') or 1) <= 0.5:
+            half = 'am' if e_dt.hour <= 12 else 'pm'
+        days = working_days(start, end, half, bhs)
+        row.update(name=emp['name'] if emp else None, start=iso(start), end=iso(end), half=half, days=days,
+                   note=(a.get('reason') or '')[:200])
+        if row['id'] in have: row.update(action='skip', why='already in the leave system')
+        elif a.get('status') != 'approved': row.update(action='skip', why=f"status is {a.get('status')}")
+        elif not emp: row.update(action='skip', why='no employee has this BigChange ID')
+        elif typ == 'skip': row.update(action='skip', why='type set to skip')
+        elif days == 0: row.update(action='skip', why='no working days')
+        elif overlaps_own(emp['id'], start, end): row.update(action='skip', why='overlaps leave already booked')
+        row['_emp'] = emp['id'] if emp else None
+        rows.append(row)
+    return rows
+
+@leave_bp.route('/api/leave/admin/bc-import')
+def admin_bc_import_preview():
+    if not is_admin(): return _auth_error()
+    if not bc_hooks.get('get'): return jsonify({'error': 'BigChange is not connected'}), 400
+    try:
+        tm = json.loads(request.args.get('types') or '{}')
+        rows = _bc_import_plan({str(k): v for k, v in tm.items() if v in LEAVE_TYPES + ['skip']})
+    except Exception as ex: return jsonify({'error': f'BigChange said: {ex}'}), 502
+    types = {}
+    for r in rows:
+        t = types.setdefault(r['typeId'], {'count': 0, 'type': r['type'], 'example': r.get('note', '')})
+        t['count'] += 1
+    return jsonify({'types': types, 'rows': [{k: v for k, v in r.items() if k != '_emp'} for r in rows]})
+
+@leave_bp.route('/api/leave/admin/bc-import', methods=['POST'])
+def admin_bc_import():
+    if not is_admin(): return _auth_error()
+    if not bc_hooks.get('get'): return jsonify({'error': 'BigChange is not connected'}), 400
+    tm = {str(k): v for k, v in ((request.get_json(silent=True) or {}).get('types') or {}).items()
+          if v in LEAVE_TYPES + ['skip']}
+    try: rows = _bc_import_plan(tm)
+    except Exception as ex: return jsonify({'error': f'BigChange said: {ex}'}), 502
+    now = datetime.utcnow().strftime('%Y-%m-%dT%H:%M:%S')
+    new, skipped = [], 0
+    for r in rows:
+        if r['action'] != 'import': skipped += 1; continue
+        new.append((r['_emp'], r['start'], r['end'], r['half'], r['days'], r['type'], r['note'], 'approved',
+                    'Imported from BigChange', now, now, r['id'], 'imported from BigChange'))
+    if new:
+        execute_many('''INSERT INTO leave_requests
+            (employee_id, start_date, end_date, half_day, days, type, note, status, admin_note,
+             created_at, decided_at, bc_absence_id, bc_sync) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?)''', new)
+    return jsonify({'success': True, 'imported': len(new), 'skipped': skipped})
 
 @leave_bp.route('/api/leave/admin/email-status')
 def admin_email_status():
