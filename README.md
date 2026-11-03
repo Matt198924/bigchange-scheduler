@@ -86,7 +86,7 @@ Contact your developer or go back to Claude and share any error messages.
 
 ## Annual leave booking (`/leave`)
 
-Runs inside this same app. Staff go to `/leave`, pick their name, enter their PIN and request leave; the office approves from the admin tab. The scheduler topbar shows an "N on leave" badge and an "Annual leave" link.
+Runs inside this same app. Staff go to `/leave`, pick their name, enter their PIN and request leave; the request goes to that employee's manager (set in the admin Staff tab; mark supervisors as managers first). Anyone without a manager goes to the office, and the office can approve anything from the admin tab. The scheduler topbar shows an "N on leave" badge and an "Annual leave" link.
 
 **Extra environment variables on Render**
 

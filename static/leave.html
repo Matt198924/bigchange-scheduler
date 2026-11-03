@@ -73,7 +73,9 @@ button.no{background:var(--rust);color:#fff;border-color:var(--rust)}
   <div class="card"><h2 id="s-name"></h2>
     <div class="stats" id="s-stats"></div>
     <p class="muted" id="s-year" style="margin-top:.6rem"></p></div>
+  <div class="card hidden" id="s-team"><h2>Team requests waiting for you</h2><div id="s-team-list"></div></div>
   <div class="card"><h2>Request leave</h2>
+    <p class="muted" id="r-goesto" style="margin-bottom:.4rem"></p>
     <div class="row"><div><label>From</label><input type="date" id="r-start"></div>
       <div><label>To</label><input type="date" id="r-end"></div></div>
     <div class="row"><div><label>Type</label><select id="r-type"><option value="annual">Annual leave</option><option value="unpaid">Unpaid</option><option value="other">Other</option></select></div>
@@ -150,6 +152,9 @@ function shiftCal(el, n) { const [y, m] = calMonth.split('-').map(Number); rende
 async function loadStaff() {
   const j = await api('/me'), b = j.balance;
   $('s-name').textContent = j.name;
+  $('r-goesto').textContent = 'Your request goes to: ' + (j.managerName || 'the office');
+  $('s-team').classList.toggle('hidden', !j.isManager);
+  if (j.isManager) loadTeam();
   $('s-stats').innerHTML = [['allowance','Allowance'],['taken','Booked'],['pending','Pending'],['remaining','Remaining']]
     .map(([k, l]) => `<div class="stat"><b>${b[k]}</b><span>${l}</span></div>`).join('');
   $('s-year').textContent = `Leave year ${fmtD(b.yearStart)} – ${fmtD(b.yearEnd)}. Weekends and bank holidays are not counted.`;
@@ -158,6 +163,19 @@ async function loadStaff() {
     <div style="text-align:right"><span class="pill ${r.status}">${r.status}</span>
     ${(r.status === 'pending' || (r.status === 'approved' && r.start_date > new Date().toISOString().slice(0,10))) ? `<div><button class="sm" style="margin-top:4px" onclick="cancelReq(${r.id})">Cancel</button></div>` : ''}</div></div>`).join('') : '<p class="muted">No requests yet.</p>';
   renderCal('s-cal', calMonth);
+}
+async function loadTeam() {
+  const j = await api('/team/requests?status=pending');
+  $('s-team-list').innerHTML = j.requests.length ? j.requests.map(r => `<div class="item"><div><b>${esc(r.employeeName)}</b> · ${range(r)}
+    <div class="muted">${r.days} day${r.days === 1 ? '' : 's'} · ${r.type}${r.note ? ' · ' + esc(r.note) : ''}</div>
+    ${r.balance && r.type === 'annual' ? `<div class="muted">Left after this: ${r.balance.remaining}</div>` : ''}
+    ${r.clash && r.clash.names.length ? `<div class="warn">Also off: ${r.clash.names.map(esc).join(', ')}</div>` : ''}</div>
+    <div style="display:flex;gap:4px"><button class="sm ok" onclick="teamDecide(${r.id},'approve')">Approve</button><button class="sm no" onclick="teamDecide(${r.id},'reject')">Reject</button></div></div>`).join('') : '<p class="muted">Nothing waiting.</p>';
+}
+async function teamDecide(id, action) {
+  const note = action === 'reject' ? prompt('Reason (shown to the employee):') : '';
+  if (action === 'reject' && note === null) return;
+  try { await api(`/team/requests/${id}/decide`, 'POST', {action, note}); loadStaff(); } catch (e) { alert(e.message); }
 }
 async function preview() {
   const s = $('r-start').value, e = $('r-end').value || s;
@@ -191,13 +209,14 @@ function reqRow(r, actions) {
     <div class="muted">${r.days} day${r.days === 1 ? '' : 's'} · ${r.type}${r.note ? ' · ' + esc(r.note) : ''}</div>
     ${r.balance && r.type === 'annual' ? `<div class="muted">Remaining before: ${r.balance.remaining + r.days} → after: ${r.balance.remaining}</div>` : ''}
     ${r.clash && r.clash.names.length ? `<div class="warn">Also off: ${r.clash.names.map(esc).join(', ')} (max ${r.clash.maxOff} at once)</div>` : ''}
+    ${r.status === 'pending' ? `<div class="muted">Goes to: ${esc(r.managerName || 'Office')}</div>` : ''}
     ${r.admin_note ? `<div class="muted">Note: ${esc(r.admin_note)}</div>` : ''}</div>
     <div style="text-align:right"><span class="pill ${r.status}">${r.status}</span><div style="margin-top:4px;display:flex;gap:4px;justify-content:flex-end">${actions}</div></div></div>`;
 }
 async function tabPending() {
   const j = await api('/admin/requests?status=pending');
   $('a-body').innerHTML = `<div class="card"><h2>Waiting for a decision (${j.requests.length})</h2>` + (j.requests.map(r =>
-    reqRow(r, `<button class="sm ok" onclick="decide(${r.id},'approve')">Approve</button><button class="sm no" onclick="decide(${r.id},'reject')">Reject</button>`).join('') || '<p class="muted">Nothing pending.</p>') + '</div>';
+    reqRow(r, `<button class="sm ok" onclick="decide(${r.id},'approve')">Approve</button><button class="sm no" onclick="decide(${r.id},'reject')">Reject</button>`)).join('') || '<p class="muted">Nothing pending.</p>') + '</div>';
 }
 async function decide(id, action) {
   const note = action === 'reject' ? prompt('Reason (shown to the employee):') : '';
@@ -225,15 +244,18 @@ async function adminBook() {
 }
 async function tabStaff() {
   const j = await api('/admin/employees');
+  const mgrs = j.employees.filter(e => e.isManager && e.active);
+  const mgrOpts = sel => `<option value="">Office (no manager)</option>` + mgrs.map(m => `<option value="${m.id}" ${m.id === sel ? 'selected' : ''}>${esc(m.name)}</option>`).join('');
   $('a-body').innerHTML = `<div class="card"><h2>Add employee</h2><div class="row"><div><label>Name</label><input id="n-name"></div><div><label>PIN (4-6 digits)</label><input id="n-pin" inputmode="numeric" maxlength="6"></div></div>
+    <div class="row"><div><label>Approved by</label><select id="n-mgr">${mgrOpts(null)}</select></div><div><label>Is a manager?</label><select id="n-ismgr"><option value="">No</option><option value="1">Yes - approves their team's leave</option></select></div></div>
     <div class="row"><div><label>Allowance (days)</label><input id="n-all" type="number" step="0.5" value="20"></div><div><label>BigChange resource ID (optional)</label><input id="n-bc"></div></div>
     <button class="primary" onclick="addEmp()">Add</button><div id="n-msg"></div></div>
     <div class="card"><h2>Staff</h2>` + j.employees.map(e => `<div class="item" style="${e.active ? '' : 'opacity:.5'}"><div><b>${esc(e.name)}</b>
-    <div class="muted">${e.balance.remaining} of ${e.allowance} left · ${e.hasPin ? 'PIN set' : 'no PIN'}${e.bcResourceId ? ' · BC ' + esc(e.bcResourceId) : ''}</div></div>
-    <div style="display:flex;gap:4px;flex-wrap:wrap;justify-content:flex-end"><button class="sm" onclick="setPin(${e.id})">Set PIN</button><button class="sm" onclick="setAllow(${e.id},${e.allowance})">Allowance</button><button class="sm" onclick="setBC(${e.id},'${esc(e.bcResourceId)}')">BC ID</button><button class="sm" onclick="toggleEmp(${e.id},${!e.active})">${e.active ? 'Deactivate' : 'Reactivate'}</button></div></div>`).join('') + '</div>';
+    <div class="muted">${e.balance.remaining} of ${e.allowance} left · ${e.hasPin ? 'PIN set' : 'no PIN'}${e.isManager ? ' · manager' : ''}${e.bcResourceId ? ' · BC ' + esc(e.bcResourceId) : ''}</div></div>
+    <div style="display:flex;gap:4px;flex-wrap:wrap;justify-content:flex-end"><select class="sm" style="width:auto" onchange="upd(${e.id},{managerId:this.value})" title="Who approves their leave">${mgrOpts(e.managerId)}</select><button class="sm" onclick="upd(${e.id},{isManager:${!e.isManager}})">${e.isManager ? 'Remove manager' : 'Make manager'}</button><button class="sm" onclick="setPin(${e.id})">Set PIN</button><button class="sm" onclick="setAllow(${e.id},${e.allowance})">Allowance</button><button class="sm" onclick="setBC(${e.id},'${esc(e.bcResourceId)}')">BC ID</button><button class="sm" onclick="toggleEmp(${e.id},${!e.active})">${e.active ? 'Deactivate' : 'Reactivate'}</button></div></div>`).join('') + '</div>';
 }
 async function addEmp() {
-  try { await api('/admin/employees', 'POST', {name: $('n-name').value, pin: $('n-pin').value || undefined, allowance: +$('n-all').value, bcResourceId: $('n-bc').value}); tabStaff(); }
+  try { await api('/admin/employees', 'POST', {name: $('n-name').value, pin: $('n-pin').value || undefined, allowance: +$('n-all').value, bcResourceId: $('n-bc').value, managerId: $('n-mgr').value || null, isManager: !!$('n-ismgr').value}); tabStaff(); }
   catch (e) { $('n-msg').innerHTML = `<div class="err">${esc(e.message)}</div>`; }
 }
 async function upd(id, body) { try { await api('/admin/employees/' + id, 'PUT', body); tabStaff(); } catch (e) { alert(e.message); } }

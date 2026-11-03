@@ -1,7 +1,9 @@
 """Annual leave booking - runs inside the scheduler app as a Flask blueprint.
 
-Staff open /leave, pick their name, enter a PIN, request leave. The office
-approves or rejects from the admin tab (password in LEAVE_ADMIN_PASSWORD).
+Staff open /leave, pick their name, enter a PIN, request leave. Each employee
+has a manager (is_manager employee) who approves their requests from their own
+login; employees with no manager go to the office, who can also decide anything
+from the admin tab (password in LEAVE_ADMIN_PASSWORD).
 The scheduler can ask /api/leave/off?date=YYYY-MM-DD who is away.
 
 Storage: Postgres when DATABASE_URL is set (use this on Render - the free
@@ -105,6 +107,11 @@ def init_db():
         days REAL NOT NULL, type TEXT NOT NULL DEFAULT 'annual', note TEXT DEFAULT '',
         status TEXT NOT NULL DEFAULT 'pending', admin_note TEXT DEFAULT '',
         created_at TEXT NOT NULL, decided_at TEXT)''')
+    for col, ddl in (('manager_id', 'INTEGER'), ('is_manager', 'INTEGER NOT NULL DEFAULT 0')):
+        try:
+            execute(f'ALTER TABLE leave_employees ADD COLUMN {col} {ddl}')
+        except Exception:
+            pass  # column already exists
     execute('CREATE TABLE IF NOT EXISTS leave_bank_holidays (date TEXT PRIMARY KEY, name TEXT NOT NULL)')
     if not query('SELECT date FROM leave_bank_holidays LIMIT 1'):
         for d, n in _SEED_BANK_HOLIDAYS:
@@ -261,7 +268,8 @@ def overlaps_own(emp_id, start, end, exclude_id=None):
 def fmt_request(r):
     return {k: r[k] for k in ('id', 'start_date', 'end_date', 'half_day', 'days', 'type',
                                'note', 'status', 'admin_note', 'created_at', 'decided_at')} | {
-        'employeeId': r['employee_id'], 'employeeName': r.get('name')}
+        'employeeId': r['employee_id'], 'employeeName': r.get('name'),
+        'managerName': r.get('manager_name')}
 
 def create_request(emp, v, note, status='pending', admin_note=''):
     now = datetime.utcnow().strftime('%Y-%m-%dT%H:%M:%S')
@@ -339,7 +347,9 @@ def me():
     if not emp: return _auth_error()
     rows = query('''SELECT r.*, e.name FROM leave_requests r JOIN leave_employees e ON e.id = r.employee_id
                     WHERE r.employee_id = ? ORDER BY r.start_date DESC''', (emp['id'],))
-    return jsonify({'name': emp['name'], 'balance': balance_for(emp),
+    mgr = query('SELECT name FROM leave_employees WHERE id = ?', (emp['manager_id'],)) if emp.get('manager_id') else []
+    return jsonify({'name': emp['name'], 'isManager': bool(emp.get('is_manager')),
+                    'managerName': mgr[0]['name'] if mgr else None, 'balance': balance_for(emp),
                     'requests': [fmt_request(r) for r in rows]})
 
 @leave_bp.route('/api/leave/preview', methods=['POST'])
@@ -408,18 +418,20 @@ def calendar():
                     'bankHolidays': [d for d in sorted(bank_holiday_set()) if iso(first) <= d <= iso(last)]})
 
 # ── Admin endpoints ───────────────────────────────────────────────────────
-@leave_bp.route('/api/leave/admin/requests')
-def admin_requests():
-    if not is_admin(): return _auth_error()
-    status = request.args.get('status')
-    sql = '''SELECT r.*, e.name FROM leave_requests r JOIN leave_employees e ON e.id = r.employee_id'''
-    params = ()
+def _request_list(status=None, manager_id=None):
+    sql = '''SELECT r.*, e.name, m.name AS manager_name FROM leave_requests r
+           JOIN leave_employees e ON e.id = r.employee_id
+           LEFT JOIN leave_employees m ON m.id = e.manager_id'''
+    where, params = [], []
     if status:
-        sql += ' WHERE r.status = ?'
-        params = (status,)
+        where.append('r.status = ?'); params.append(status)
+    if manager_id:
+        where.append('e.manager_id = ?'); params.append(manager_id)
+    if where:
+        sql += ' WHERE ' + ' AND '.join(where)
     sql += ' ORDER BY r.start_date'
     out = []
-    for r in query(sql, params):
+    for r in query(sql, tuple(params)):
         f = fmt_request(r)
         if r['status'] == 'pending':
             f['clash'] = clash_summary(parse_date(r['start_date']), parse_date(r['end_date']),
@@ -427,21 +439,50 @@ def admin_requests():
             emp = query('SELECT * FROM leave_employees WHERE id = ?', (r['employee_id'],))[0]
             f['balance'] = balance_for(emp, parse_date(r['start_date']))
         out.append(f)
-    return jsonify({'requests': out})
+    return out
 
-@leave_bp.route('/api/leave/admin/requests/<int:rid>/decide', methods=['POST'])
-def admin_decide(rid):
-    if not is_admin(): return _auth_error()
-    body = request.get_json(silent=True) or {}
+def _decide(rid, body, actor=None):
+    """actor=None means office admin (can decide anything). Otherwise actor is a
+    manager and may only decide their own team's requests, never their own."""
     action = body.get('action')
     new_status = {'approve': 'approved', 'reject': 'rejected', 'cancel': 'cancelled'}.get(action)
     if not new_status: return jsonify({'error': 'action must be approve, reject or cancel'}), 400
-    if not query('SELECT id FROM leave_requests WHERE id = ?', (rid,)):
-        return jsonify({'error': 'Not found'}), 404
+    rows = query('''SELECT r.id, r.employee_id, e.manager_id FROM leave_requests r
+                    JOIN leave_employees e ON e.id = r.employee_id WHERE r.id = ?''', (rid,))
+    if not rows: return jsonify({'error': 'Not found'}), 404
+    if actor and (rows[0]['manager_id'] != actor['id'] or rows[0]['employee_id'] == actor['id']):
+        return jsonify({'error': 'That request is not yours to decide'}), 403
     execute('UPDATE leave_requests SET status = ?, admin_note = ?, decided_at = ? WHERE id = ?',
             (new_status, (body.get('note') or '')[:300],
              datetime.utcnow().strftime('%Y-%m-%dT%H:%M:%S'), rid))
     return jsonify({'success': True})
+
+@leave_bp.route('/api/leave/admin/requests')
+def admin_requests():
+    if not is_admin(): return _auth_error()
+    return jsonify({'requests': _request_list(request.args.get('status'))})
+
+@leave_bp.route('/api/leave/admin/requests/<int:rid>/decide', methods=['POST'])
+def admin_decide(rid):
+    if not is_admin(): return _auth_error()
+    return _decide(rid, request.get_json(silent=True) or {})
+
+# Managers (supervisors) handle requests from the people assigned to them.
+def current_manager():
+    emp = current_employee()
+    return emp if emp and emp.get('is_manager') else None
+
+@leave_bp.route('/api/leave/team/requests')
+def team_requests():
+    mgr = current_manager()
+    if not mgr: return _auth_error()
+    return jsonify({'requests': _request_list(request.args.get('status'), manager_id=mgr['id'])})
+
+@leave_bp.route('/api/leave/team/requests/<int:rid>/decide', methods=['POST'])
+def team_decide(rid):
+    mgr = current_manager()
+    if not mgr: return _auth_error()
+    return _decide(rid, request.get_json(silent=True) or {}, actor=mgr)
 
 @leave_bp.route('/api/leave/admin/requests', methods=['POST'])
 def admin_book():
@@ -464,7 +505,8 @@ def admin_employees():
     out = []
     for e in query('SELECT * FROM leave_employees ORDER BY active DESC, name'):
         out.append({'id': e['id'], 'name': e['name'], 'allowance': e['allowance'],
-                    'supervisor': e['supervisor'], 'bcResourceId': e['bc_resource_id'],
+                    'managerId': e.get('manager_id'), 'isManager': bool(e.get('is_manager')),
+                    'bcResourceId': e['bc_resource_id'],
                     'active': bool(e['active']), 'hasPin': bool(e['pin_hash']),
                     'balance': balance_for(e)})
     return jsonify({'employees': out})
@@ -477,11 +519,16 @@ def admin_add_employee():
     if not name: return jsonify({'error': 'Name required'}), 400
     pin = b.get('pin')
     if pin and not _pin_ok(str(pin)): return jsonify({'error': 'PIN must be 4-6 digits'}), 400
-    eid = execute('''INSERT INTO leave_employees (name, pin_hash, allowance, supervisor, bc_resource_id)
-                     VALUES (?,?,?,?,?)''',
+    mid = b.get('managerId') or None
+    if mid and not query('SELECT id FROM leave_employees WHERE id = ? AND is_manager = 1', (mid,)):
+        return jsonify({'error': 'Pick a valid manager'}), 400
+    eid = execute('''INSERT INTO leave_employees
+                     (name, pin_hash, allowance, bc_resource_id, manager_id, is_manager)
+                     VALUES (?,?,?,?,?,?)''',
                   (name, generate_password_hash(str(pin)) if pin else None,
-                   float(b.get('allowance', DEFAULT_ALLOWANCE)), b.get('supervisor', ''),
-                   str(b.get('bcResourceId', '') or '')), returning_id=True)
+                   float(b.get('allowance', DEFAULT_ALLOWANCE)),
+                   str(b.get('bcResourceId', '') or ''), mid, 1 if b.get('isManager') else 0),
+                  returning_id=True)
     return jsonify({'success': True, 'id': eid})
 
 @leave_bp.route('/api/leave/admin/employees/<int:eid>', methods=['PUT'])
@@ -490,10 +537,17 @@ def admin_update_employee(eid):
     b = request.get_json(silent=True) or {}
     if not query('SELECT id FROM leave_employees WHERE id = ?', (eid,)):
         return jsonify({'error': 'Not found'}), 404
+    mid = b.get('managerId')
+    if mid not in (None, ''):
+        if int(mid) == eid:
+            return jsonify({'error': 'Someone cannot be their own manager'}), 400
+        if not query('SELECT id FROM leave_employees WHERE id = ? AND is_manager = 1', (int(mid),)):
+            return jsonify({'error': 'Pick a valid manager (mark them as a manager first)'}), 400
     sets, params = [], []
     for field, col, cast in (('name', 'name', lambda x: str(x).strip()),
                              ('allowance', 'allowance', float),
-                             ('supervisor', 'supervisor', str),
+                             ('managerId', 'manager_id', lambda x: int(x) if x not in (None, '') else None),
+                             ('isManager', 'is_manager', lambda x: 1 if x else 0),
                              ('bcResourceId', 'bc_resource_id', str),
                              ('active', 'active', lambda x: 1 if x else 0)):
         if field in b:
