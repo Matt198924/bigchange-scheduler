@@ -1,0 +1,294 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>R&amp;S Annual Leave</title>
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500&display=swap" rel="stylesheet">
+<style>
+:root{--ink:#0B2A4A;--cyan:#00C2FF;--paper:#F6F7F6;--surface:#fff;--slate:#5B6B7A;--amber:#F5A623;--moss:#2F9E44;--rust:#E5484D;--line:#E2E6E7;--amber-bg:#FEF3E0;--moss-bg:#EAF6EC;--rust-bg:#FCEAEA;--cyan-bg:#E6F9FF;}
+*{box-sizing:border-box;margin:0;padding:0}
+body{font-family:'IBM Plex Sans',system-ui,sans-serif;background:var(--paper);color:var(--ink);font-size:14px}
+.topbar{background:var(--ink);padding:0 1rem;height:56px;display:flex;align-items:center;justify-content:space-between;border-bottom:2px solid var(--cyan)}
+.topbar a,.topbar button{color:rgba(255,255,255,.85);font-size:12px;text-decoration:none;background:none;border:1px solid rgba(255,255,255,.25);border-radius:7px;padding:6px 12px;cursor:pointer;font-family:inherit}
+.title{color:#fff;font-weight:600;font-size:14px}
+.wrap{max-width:960px;margin:0 auto;padding:1rem}
+.card{background:var(--surface);border:1px solid var(--line);border-radius:10px;padding:1rem;margin-bottom:1rem}
+h2{font-size:15px;margin-bottom:.75rem}
+label{display:block;font-size:12px;color:var(--slate);margin:.6rem 0 .25rem}
+input,select,textarea{width:100%;padding:9px 10px;border:1px solid var(--line);border-radius:7px;font:inherit;background:#fff;color:var(--ink)}
+.row{display:grid;grid-template-columns:1fr 1fr;gap:.75rem}
+button.primary{background:var(--ink);color:#fff;border:0;border-radius:7px;padding:10px 16px;font:inherit;font-weight:600;cursor:pointer;margin-top:.9rem}
+button.primary:disabled{opacity:.5}
+button.sm{border:1px solid var(--line);background:#fff;border-radius:6px;padding:5px 10px;font:inherit;font-size:12px;cursor:pointer;color:var(--ink)}
+button.ok{background:var(--moss);color:#fff;border-color:var(--moss)}
+button.no{background:var(--rust);color:#fff;border-color:var(--rust)}
+.stats{display:grid;grid-template-columns:repeat(4,1fr);gap:.6rem}
+.stat{background:var(--paper);border-radius:8px;padding:.6rem;text-align:center}
+.stat b{display:block;font:500 20px 'IBM Plex Mono',monospace}.stat span{font-size:11px;color:var(--slate)}
+.tabs{display:flex;gap:.4rem;margin-bottom:1rem;flex-wrap:wrap}
+.tabs button{border:1px solid var(--line);background:#fff;border-radius:20px;padding:6px 14px;font:inherit;cursor:pointer}
+.tabs button.on{background:var(--ink);color:#fff;border-color:var(--ink)}
+.item{display:flex;justify-content:space-between;gap:.75rem;align-items:flex-start;padding:.7rem 0;border-top:1px solid var(--line)}
+.item:first-child{border-top:0}
+.pill{font:500 10px 'IBM Plex Mono',monospace;text-transform:uppercase;padding:3px 8px;border-radius:20px;letter-spacing:.05em}
+.pending{background:var(--amber-bg);color:#9A6200}.approved{background:var(--moss-bg);color:#1F7A33}
+.rejected,.cancelled{background:var(--rust-bg);color:#B3262B}
+.warn{background:var(--amber-bg);color:#7A4E00;border-radius:7px;padding:8px 10px;margin-top:.6rem;font-size:13px}
+.err{background:var(--rust-bg);color:#B3262B;border-radius:7px;padding:8px 10px;margin-top:.6rem}
+.info{background:var(--cyan-bg);border-radius:7px;padding:8px 10px;margin-top:.6rem}
+.muted{color:var(--slate);font-size:12px}
+.cal{display:grid;grid-template-columns:repeat(7,1fr);gap:3px}
+.cal .h{font-size:11px;color:var(--slate);text-align:center;padding:4px 0}
+.cal .d{min-height:62px;background:#fff;border:1px solid var(--line);border-radius:6px;padding:3px;font-size:10px;overflow:hidden}
+.cal .d.we{background:var(--paper)}.cal .d.bh{background:var(--cyan-bg)}
+.cal .d i{font-style:normal;font-weight:600;font-size:11px;display:block}
+.cal .n{background:var(--moss-bg);border-radius:3px;margin-top:1px;padding:0 3px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.cal .n.p{background:var(--amber-bg)}
+.hidden{display:none}
+@media(max-width:560px){.stats{grid-template-columns:repeat(2,1fr)}.cal .d{min-height:48px;font-size:9px}}
+</style>
+</head>
+<body>
+<div class="topbar"><span class="title">R&amp;S Annual Leave</span>
+  <span><a href="/">Scheduler</a> <button id="signout" class="hidden" onclick="signOut()">Sign out</button></span></div>
+<div class="wrap">
+
+<!-- LOGIN -->
+<div id="login" class="card">
+  <h2>Sign in</h2>
+  <label>Your name</label><select id="l-emp"></select>
+  <label>PIN</label><input id="l-pin" type="password" inputmode="numeric" maxlength="6" placeholder="4-6 digit PIN from the office">
+  <button class="primary" onclick="empLogin()">Sign in</button>
+  <div id="l-err"></div>
+  <p class="muted" style="margin-top:1rem"><a href="#" onclick="showAdminLogin();return false">Office / admin sign in</a></p>
+  <div id="a-login" class="hidden">
+    <label>Admin password</label><input id="a-pw" type="password">
+    <button class="primary" onclick="adminLogin()">Sign in as office</button><div id="a-err"></div>
+  </div>
+</div>
+
+<!-- STAFF -->
+<div id="staff" class="hidden">
+  <div class="card"><h2 id="s-name"></h2>
+    <div class="stats" id="s-stats"></div>
+    <p class="muted" id="s-year" style="margin-top:.6rem"></p></div>
+  <div class="card hidden" id="s-team"><h2>Team requests waiting for you</h2><div id="s-team-list"></div></div>
+  <div class="card"><h2>Request leave</h2>
+    <p class="muted" id="r-goesto" style="margin-bottom:.4rem"></p>
+    <div class="row"><div><label>From</label><input type="date" id="r-start"></div>
+      <div><label>To</label><input type="date" id="r-end"></div></div>
+    <div class="row"><div><label>Type</label><select id="r-type"><option value="annual">Annual leave</option><option value="unpaid">Unpaid</option><option value="other">Other</option></select></div>
+      <div><label>Half day (single day only)</label><select id="r-half"><option value="">Full day</option><option value="am">Morning off</option><option value="pm">Afternoon off</option></select></div></div>
+    <label>Note (optional)</label><input id="r-note" maxlength="500">
+    <div id="r-preview"></div>
+    <button class="primary" id="r-go" onclick="submitRequest()">Submit request</button>
+  </div>
+  <div class="card"><h2>My requests</h2><div id="s-list"></div></div>
+  <div class="card"><h2>Who's off</h2><div id="s-cal"></div></div>
+</div>
+
+<!-- ADMIN -->
+<div id="admin" class="hidden">
+  <div class="tabs" id="a-tabs"></div>
+  <div id="a-body"></div>
+</div>
+
+</div>
+<script>
+let TOKEN = sessionStorage.getItem('leaveToken'), ROLE = sessionStorage.getItem('leaveRole');
+const $ = id => document.getElementById(id);
+const esc = s => String(s ?? '').replace(/[&<>"]/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
+const fmtD = d => new Date(d + 'T12:00:00').toLocaleDateString('en-GB', {weekday:'short', day:'numeric', month:'short', year:'numeric'});
+const range = r => r.start_date === r.end_date ? fmtD(r.start_date) + (r.half_day ? ` (${r.half_day.toUpperCase()})` : '') : `${fmtD(r.start_date)} → ${fmtD(r.end_date)}`;
+
+async function api(path, method='GET', body) {
+  const r = await fetch('/api/leave' + path, {method, headers: {'Content-Type':'application/json', ...(TOKEN ? {Authorization:'Bearer ' + TOKEN} : {})}, body: body ? JSON.stringify(body) : undefined});
+  const j = await r.json().catch(() => ({}));
+  if (r.status === 401) { signOut(); throw new Error('Session expired - sign in again'); }
+  if (!r.ok) throw new Error(j.error || 'Something went wrong');
+  return j;
+}
+function signOut() { sessionStorage.clear(); TOKEN = ROLE = null; location.reload(); }
+function setSession(t, role) { TOKEN = t; ROLE = role; sessionStorage.setItem('leaveToken', t); sessionStorage.setItem('leaveRole', role); start(); }
+
+// ── login ──
+async function loadEmployees() {
+  const j = await api('/employees');
+  $('l-emp').innerHTML = j.employees.map(e => `<option value="${e.id}">${esc(e.name)}</option>`).join('');
+}
+async function empLogin() {
+  try { const j = await api('/login', 'POST', {employeeId: +$('l-emp').value, pin: $('l-pin').value}); setSession(j.token, 'employee'); }
+  catch (e) { $('l-err').innerHTML = `<div class="err">${esc(e.message)}</div>`; }
+}
+function showAdminLogin() { $('a-login').classList.toggle('hidden'); }
+async function adminLogin() {
+  try { const j = await api('/admin/login', 'POST', {password: $('a-pw').value}); setSession(j.token, 'admin'); }
+  catch (e) { $('a-err').innerHTML = `<div class="err">${esc(e.message)}</div>`; }
+}
+
+// ── calendar (shared) ──
+let calMonth = new Date().toISOString().slice(0, 7);
+async function renderCal(el, month) {
+  calMonth = month;
+  const j = await api('/calendar?month=' + month);
+  const [y, m] = month.split('-').map(Number);
+  const first = new Date(y, m - 1, 1), days = new Date(y, m, 0).getDate(), lead = (first.getDay() + 6) % 7;
+  let h = `<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:.5rem">
+    <button class="sm" onclick="shiftCal('${el}',-1)">‹</button><b>${first.toLocaleDateString('en-GB',{month:'long',year:'numeric'})}</b>
+    <button class="sm" onclick="shiftCal('${el}',1)">›</button></div><div class="cal">`;
+  h += ['Mon','Tue','Wed','Thu','Fri','Sat','Sun'].map(d => `<div class="h">${d}</div>`).join('');
+  for (let i = 0; i < lead; i++) h += '<div></div>';
+  for (let d = 1; d <= days; d++) {
+    const ds = `${month}-${String(d).padStart(2, '0')}`, dow = (lead + d - 1) % 7;
+    const names = (j.approved[ds] || []).map(n => `<div class="n">${esc(n)}</div>`).join('') + (j.pending[ds] || []).map(n => `<div class="n p">${esc(n)}?</div>`).join('');
+    h += `<div class="d ${dow > 4 ? 'we' : ''} ${j.bankHolidays.includes(ds) ? 'bh' : ''}"><i>${d}</i>${names}</div>`;
+  }
+  $(el).innerHTML = h + '</div>' + (ROLE === 'admin' ? '<p class="muted" style="margin-top:.4rem">Amber with ? = pending</p>' : '');
+}
+function shiftCal(el, n) { const [y, m] = calMonth.split('-').map(Number); renderCal(el, new Date(y, m - 1 + n, 1).toISOString().slice(0, 7).replace(/^(\d{4}-\d{2}).*/, '$1')); }
+
+// ── staff ──
+async function loadStaff() {
+  const j = await api('/me'), b = j.balance;
+  $('s-name').textContent = j.name;
+  $('r-goesto').textContent = 'Your request goes to: ' + (j.managerName || 'the office');
+  $('s-team').classList.toggle('hidden', !j.isManager);
+  if (j.isManager) loadTeam();
+  $('s-stats').innerHTML = [['allowance','Allowance'],['taken','Booked'],['pending','Pending'],['remaining','Remaining']]
+    .map(([k, l]) => `<div class="stat"><b>${b[k]}</b><span>${l}</span></div>`).join('');
+  $('s-year').textContent = `Leave year ${fmtD(b.yearStart)} – ${fmtD(b.yearEnd)}. Weekends and bank holidays are not counted.`;
+  $('s-list').innerHTML = j.requests.length ? j.requests.map(r => `<div class="item"><div><b>${range(r)}</b>
+    <div class="muted">${r.days} day${r.days === 1 ? '' : 's'} · ${r.type}${r.note ? ' · ' + esc(r.note) : ''}${r.admin_note ? ' · Office: ' + esc(r.admin_note) : ''}</div></div>
+    <div style="text-align:right"><span class="pill ${r.status}">${r.status}</span>
+    ${(r.status === 'pending' || (r.status === 'approved' && r.start_date > new Date().toISOString().slice(0,10))) ? `<div><button class="sm" style="margin-top:4px" onclick="cancelReq(${r.id})">Cancel</button></div>` : ''}</div></div>`).join('') : '<p class="muted">No requests yet.</p>';
+  renderCal('s-cal', calMonth);
+}
+async function loadTeam() {
+  const j = await api('/team/requests?status=pending');
+  $('s-team-list').innerHTML = j.requests.length ? j.requests.map(r => `<div class="item"><div><b>${esc(r.employeeName)}</b> · ${range(r)}
+    <div class="muted">${r.days} day${r.days === 1 ? '' : 's'} · ${r.type}${r.note ? ' · ' + esc(r.note) : ''}</div>
+    ${r.balance && r.type === 'annual' ? `<div class="muted">Left after this: ${r.balance.remaining}</div>` : ''}
+    ${r.clash && r.clash.names.length ? `<div class="warn">Also off: ${r.clash.names.map(esc).join(', ')}</div>` : ''}</div>
+    <div style="display:flex;gap:4px"><button class="sm ok" onclick="teamDecide(${r.id},'approve')">Approve</button><button class="sm no" onclick="teamDecide(${r.id},'reject')">Reject</button></div></div>`).join('') : '<p class="muted">Nothing waiting.</p>';
+}
+async function teamDecide(id, action) {
+  const note = action === 'reject' ? prompt('Reason (shown to the employee):') : '';
+  if (action === 'reject' && note === null) return;
+  try { await api(`/team/requests/${id}/decide`, 'POST', {action, note}); loadStaff(); } catch (e) { alert(e.message); }
+}
+async function preview() {
+  const s = $('r-start').value, e = $('r-end').value || s;
+  if (!s) { $('r-preview').innerHTML = ''; return; }
+  try {
+    const j = await api('/preview', 'POST', {startDate: s, endDate: e, halfDay: $('r-half').value, type: $('r-type').value});
+    let h = `<div class="info"><b>${j.days}</b> working day${j.days === 1 ? '' : 's'}${j.remainingAfter !== undefined ? ` · ${j.remainingAfter} left after this` : ''}</div>`;
+    if (j.clash.names.length) h += `<div class="warn">Already off in that period: ${j.clash.names.map(esc).join(', ')}. The office may need to check cover.</div>`;
+    $('r-preview').innerHTML = h;
+  } catch (err) { $('r-preview').innerHTML = `<div class="err">${esc(err.message)}</div>`; }
+}
+async function submitRequest() {
+  const s = $('r-start').value; if (!s) return;
+  $('r-go').disabled = true;
+  try {
+    await api('/requests', 'POST', {startDate: s, endDate: $('r-end').value || s, halfDay: $('r-half').value, type: $('r-type').value, note: $('r-note').value});
+    $('r-start').value = $('r-end').value = $('r-note').value = ''; $('r-preview').innerHTML = '<div class="info">Request sent to the office.</div>';
+    loadStaff();
+  } catch (err) { $('r-preview').innerHTML = `<div class="err">${esc(err.message)}</div>`; }
+  $('r-go').disabled = false;
+}
+async function cancelReq(id) { if (confirm('Cancel this request?')) { await api(`/requests/${id}/cancel`, 'POST'); loadStaff(); } }
+
+// ── admin ──
+const TABS = {pending:'Pending', calendar:'Calendar', book:'Book leave', all:'All requests', staff:'Staff', bh:'Bank holidays'};
+let tab = 'pending';
+function showTab(t) { tab = t; $('a-tabs').innerHTML = Object.entries(TABS).map(([k, v]) => `<button class="${k === t ? 'on' : ''}" onclick="showTab('${k}')">${v}</button>`).join(''); ({pending: tabPending, calendar: tabCal, book: tabBook, all: tabAll, staff: tabStaff, bh: tabBH})[t](); }
+
+function reqRow(r, actions) {
+  return `<div class="item"><div><b>${esc(r.employeeName)}</b> · ${range(r)}
+    <div class="muted">${r.days} day${r.days === 1 ? '' : 's'} · ${r.type}${r.note ? ' · ' + esc(r.note) : ''}</div>
+    ${r.balance && r.type === 'annual' ? `<div class="muted">Remaining before: ${r.balance.remaining + r.days} → after: ${r.balance.remaining}</div>` : ''}
+    ${r.clash && r.clash.names.length ? `<div class="warn">Also off: ${r.clash.names.map(esc).join(', ')} (max ${r.clash.maxOff} at once)</div>` : ''}
+    ${r.status === 'pending' ? `<div class="muted">Goes to: ${esc(r.managerName || 'Office')}</div>` : ''}
+    ${r.admin_note ? `<div class="muted">Note: ${esc(r.admin_note)}</div>` : ''}</div>
+    <div style="text-align:right"><span class="pill ${r.status}">${r.status}</span><div style="margin-top:4px;display:flex;gap:4px;justify-content:flex-end">${actions}</div></div></div>`;
+}
+async function tabPending() {
+  const j = await api('/admin/requests?status=pending');
+  $('a-body').innerHTML = `<div class="card"><h2>Waiting for a decision (${j.requests.length})</h2>` + (j.requests.map(r =>
+    reqRow(r, `<button class="sm ok" onclick="decide(${r.id},'approve')">Approve</button><button class="sm no" onclick="decide(${r.id},'reject')">Reject</button>`)).join('') || '<p class="muted">Nothing pending.</p>') + '</div>';
+}
+async function decide(id, action) {
+  const note = action === 'reject' ? prompt('Reason (shown to the employee):') : '';
+  if (action === 'reject' && note === null) return;
+  await api(`/admin/requests/${id}/decide`, 'POST', {action, note}); showTab(tab);
+}
+async function tabAll() {
+  const j = await api('/admin/requests');
+  $('a-body').innerHTML = `<div class="card"><h2>All requests</h2>` + j.requests.slice().reverse().map(r =>
+    reqRow(r, r.status === 'approved' || r.status === 'pending' ? `<button class="sm" onclick="decide(${r.id},'cancel')">Cancel</button>` : '')).join('') + '</div>';
+}
+function tabCal() { $('a-body').innerHTML = '<div class="card"><div id="a-cal"></div></div>'; renderCal('a-cal', calMonth); }
+async function tabBook() {
+  const j = await api('/admin/employees');
+  $('a-body').innerHTML = `<div class="card"><h2>Book leave for someone (auto-approved)</h2>
+    <label>Employee</label><select id="b-emp">${j.employees.filter(e => e.active).map(e => `<option value="${e.id}">${esc(e.name)}</option>`).join('')}</select>
+    <div class="row"><div><label>From</label><input type="date" id="b-start"></div><div><label>To</label><input type="date" id="b-end"></div></div>
+    <div class="row"><div><label>Type</label><select id="b-type"><option value="annual">Annual</option><option value="unpaid">Unpaid</option><option value="other">Other</option></select></div>
+    <div><label>Half day</label><select id="b-half"><option value="">Full day</option><option value="am">AM off</option><option value="pm">PM off</option></select></div></div>
+    <label>Note</label><input id="b-note"><button class="primary" onclick="adminBook()">Book</button><div id="b-msg"></div></div>`;
+}
+async function adminBook() {
+  try { await api('/admin/requests', 'POST', {employeeId: +$('b-emp').value, startDate: $('b-start').value, endDate: $('b-end').value || $('b-start').value, halfDay: $('b-half').value, type: $('b-type').value, note: $('b-note').value}); $('b-msg').innerHTML = '<div class="info">Booked.</div>'; }
+  catch (e) { $('b-msg').innerHTML = `<div class="err">${esc(e.message)}</div>`; }
+}
+async function tabStaff() {
+  const j = await api('/admin/employees');
+  const mgrs = j.employees.filter(e => e.isManager && e.active);
+  const mgrOpts = sel => `<option value="">Office (no manager)</option>` + mgrs.map(m => `<option value="${m.id}" ${m.id === sel ? 'selected' : ''}>${esc(m.name)}</option>`).join('');
+  $('a-body').innerHTML = `<div class="card"><h2>Add employee</h2><div class="row"><div><label>Name</label><input id="n-name"></div><div><label>PIN (4-6 digits)</label><input id="n-pin" inputmode="numeric" maxlength="6"></div></div>
+    <div class="row"><div><label>Approved by</label><select id="n-mgr">${mgrOpts(null)}</select></div><div><label>Is a manager?</label><select id="n-ismgr"><option value="">No</option><option value="1">Yes - approves their team's leave</option></select></div></div>
+    <div class="row"><div><label>Allowance (days)</label><input id="n-all" type="number" step="0.5" value="20"></div><div><label>BigChange resource ID (optional)</label><input id="n-bc"></div></div>
+    <button class="primary" onclick="addEmp()">Add</button><div id="n-msg"></div></div>
+    <div class="card"><h2>Staff</h2>` + j.employees.map(e => `<div class="item" style="${e.active ? '' : 'opacity:.5'}"><div><b>${esc(e.name)}</b>
+    <div class="muted">${e.balance.remaining} of ${e.allowance} left · ${e.hasPin ? 'PIN set' : 'no PIN'}${e.isManager ? ' · manager' : ''}${e.bcResourceId ? ' · BC ' + esc(e.bcResourceId) : ''}</div></div>
+    <div style="display:flex;gap:4px;flex-wrap:wrap;justify-content:flex-end"><select class="sm" style="width:auto" onchange="upd(${e.id},{managerId:this.value})" title="Who approves their leave">${mgrOpts(e.managerId)}</select><button class="sm" onclick="upd(${e.id},{isManager:${!e.isManager}})">${e.isManager ? 'Remove manager' : 'Make manager'}</button><button class="sm" onclick="setPin(${e.id})">Set PIN</button><button class="sm" onclick="setAllow(${e.id},${e.allowance})">Allowance</button><button class="sm" onclick="setBC(${e.id},'${esc(e.bcResourceId)}')">BC ID</button><button class="sm" onclick="toggleEmp(${e.id},${!e.active})">${e.active ? 'Deactivate' : 'Reactivate'}</button></div></div>`).join('') + '</div>';
+}
+async function addEmp() {
+  try { await api('/admin/employees', 'POST', {name: $('n-name').value, pin: $('n-pin').value || undefined, allowance: +$('n-all').value, bcResourceId: $('n-bc').value, managerId: $('n-mgr').value || null, isManager: !!$('n-ismgr').value}); tabStaff(); }
+  catch (e) { $('n-msg').innerHTML = `<div class="err">${esc(e.message)}</div>`; }
+}
+async function upd(id, body) { try { await api('/admin/employees/' + id, 'PUT', body); tabStaff(); } catch (e) { alert(e.message); } }
+function setPin(id) { const p = prompt('New PIN (4-6 digits):'); if (p) upd(id, {pin: p}); }
+function setAllow(id, cur) { const a = prompt('Allowance in days:', cur); if (a !== null && a !== '') upd(id, {allowance: +a}); }
+function setBC(id, cur) { const a = prompt('BigChange resource ID:', cur); if (a !== null) upd(id, {bcResourceId: a}); }
+function toggleEmp(id, active) { upd(id, {active}); }
+async function tabBH() {
+  const j = await api('/admin/bank-holidays');
+  $('a-body').innerHTML = `<div class="card"><h2>Bank holidays (not deducted from allowance)</h2>
+    <div class="row"><div><label>Date</label><input type="date" id="h-date"></div><div><label>Name</label><input id="h-name"></div></div>
+    <button class="primary" onclick="addBH()">Add</button></div><div class="card">` +
+    j.bankHolidays.map(h => `<div class="item"><div><b>${fmtD(h.date)}</b> <span class="muted">${esc(h.name)}</span></div><button class="sm" onclick="delBH('${h.date}')">Remove</button></div>`).join('') + '</div>';
+}
+async function addBH() { if ($('h-date').value) { await api('/admin/bank-holidays', 'POST', {date: $('h-date').value, name: $('h-name').value}); tabBH(); } }
+async function delBH(d) { await api('/admin/bank-holidays/' + d, 'DELETE'); tabBH(); }
+
+// ── boot ──
+async function start() {
+  ['login', 'staff', 'admin'].forEach(x => $(x).classList.add('hidden'));
+  if (!TOKEN) { $('login').classList.remove('hidden'); $('signout').classList.add('hidden'); return loadEmployees(); }
+  $('signout').classList.remove('hidden');
+  try {
+    if (ROLE === 'admin') { $('admin').classList.remove('hidden'); showTab('pending'); }
+    else { $('staff').classList.remove('hidden'); await loadStaff(); }
+  } catch (e) { /* api() already signed out on 401 */ }
+}
+['r-start', 'r-end', 'r-half', 'r-type'].forEach(id => $(id).addEventListener('change', () => {
+  if (id === 'r-start' && (!$('r-end').value || $('r-end').value < $('r-start').value)) $('r-end').value = $('r-start').value;
+  if ($('r-start').value !== $('r-end').value) $('r-half').value = '';
+  preview();
+}));
+start();
+</script>
+</body>
+</html>

@@ -8,6 +8,9 @@ from datetime import datetime, timezone, timedelta
 app = Flask(__name__, static_folder='static')
 CORS(app)
 
+from leave import leave_bp  # annual leave booking (/leave)
+app.register_blueprint(leave_bp)
+
 CLIENT_ID     = os.environ.get('BIGCHANGE_CLIENT_ID', '')
 CLIENT_SECRET = os.environ.get('BIGCHANGE_CLIENT_SECRET', '')
 CUSTOMER_ID   = os.environ.get('BIGCHANGE_CUSTOMER_ID', '1564')

@@ -280,6 +280,8 @@ body{
     <span class="brand-date mono" id="topbar-date"></span>
   </div>
   <div class="topbar-right">
+    <span class="conn-badge" id="leave-badge" style="display:none;background:rgba(245,166,35,0.18);color:#F5C16B" title=""></span>
+    <a class="btn-refresh" href="/leave" style="text-decoration:none">Annual leave</a>
     <span class="conn-badge" id="conn-badge">Connecting</span>
     <button class="btn-refresh" onclick="loadAll()">Refresh</button>
   </div>
@@ -330,7 +332,19 @@ function setBadge(state, text) {
   b.className = 'conn-badge' + (state==='error'?' error':'');
 }
 
+async function loadLeaveBadge() {
+  try {
+    const j = await api('/api/leave/off');
+    const b = document.getElementById('leave-badge');
+    const names = j.off.map(o => o.name + (o.halfDay ? ' (' + o.halfDay.toUpperCase() + ')' : ''));
+    b.style.display = names.length ? '' : 'none';
+    b.textContent = names.length + ' on leave';
+    b.title = names.join(', ');
+  } catch (e) { /* leave system optional - never block the scheduler */ }
+}
+
 async function loadAll() {
+  loadLeaveBadge();
   setBadge('loading','Loading');
   try {
     await Promise.all([loadJobs(), loadUpcoming()]);
