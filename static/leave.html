@@ -250,6 +250,16 @@ async function tabStaff() {
     <div class="row"><div><label>Approved by</label><select id="n-mgr">${mgrOpts(null)}</select></div><div><label>Is a manager?</label><select id="n-ismgr"><option value="">No</option><option value="1">Yes - approves their team's leave</option></select></div></div>
     <div class="row"><div><label>Allowance (days)</label><input id="n-all" type="number" step="0.5" value="20"></div><div><label>BigChange resource ID (optional)</label><input id="n-bc"></div></div>
     <button class="primary" onclick="addEmp()">Add</button><div id="n-msg"></div></div>
+    <div class="card"><h2>Import spreadsheet</h2>
+    <p class="muted">Columns: Staff, Manager (optional: Allowance, BigChange ID). Paste straight from Excel, or choose a CSV file. Anyone named as a manager is set up as one automatically.</p>
+    <input type="file" id="im-file" accept=".csv,.tsv,.txt" style="margin:.5rem 0" onchange="loadSheetFile(this)">
+    <textarea id="im-text" rows="6" placeholder="Staff&#9;Manager&#10;Jane Smith&#9;Chris Scott"></textarea>
+    <button class="primary" onclick="importSheet()">Import</button><div id="im-msg"></div></div>
+    <div class="card"><h2>Bulk add (paste names, one per line)</h2>
+    <label>Names</label><textarea id="bk-names" rows="6" placeholder="Jane Smith&#10;John Brown"></textarea>
+    <div class="row"><div><label>Approved by</label><select id="bk-mgr">${mgrOpts(null)}</select></div><div><label>Allowance (days)</label><input id="bk-all" type="number" step="0.5" value="20"></div></div>
+    <label style="display:flex;gap:6px;align-items:center"><input type="checkbox" id="bk-ismgr" style="width:auto"> These are managers (supervisors)</label>
+    <button class="primary" onclick="bulkAdd()">Add all</button><div id="bk-msg"></div></div>
     <div class="card"><h2>Staff</h2>` + j.employees.map(e => `<div class="item" style="${e.active ? '' : 'opacity:.5'}"><div><b>${esc(e.name)}</b>
     <div class="muted">${e.balance.remaining} of ${e.allowance} left · ${e.hasPin ? 'PIN set' : 'no PIN'}${e.isManager ? ' · manager' : ''}${e.bcResourceId ? ' · BC ' + esc(e.bcResourceId) : ''}</div></div>
     <div style="display:flex;gap:4px;flex-wrap:wrap;justify-content:flex-end"><select class="sm" style="width:auto" onchange="upd(${e.id},{managerId:this.value})" title="Who approves their leave">${mgrOpts(e.managerId)}</select><button class="sm" onclick="upd(${e.id},{isManager:${!e.isManager}})">${e.isManager ? 'Remove manager' : 'Make manager'}</button><button class="sm" onclick="setPin(${e.id})">Set PIN</button><button class="sm" onclick="setAllow(${e.id},${e.allowance})">Allowance</button><button class="sm" onclick="setBC(${e.id},'${esc(e.bcResourceId)}')">BC ID</button><button class="sm" onclick="toggleEmp(${e.id},${!e.active})">${e.active ? 'Deactivate' : 'Reactivate'}</button></div></div>`).join('') + '</div>';
@@ -257,6 +267,41 @@ async function tabStaff() {
 async function addEmp() {
   try { await api('/admin/employees', 'POST', {name: $('n-name').value, pin: $('n-pin').value || undefined, allowance: +$('n-all').value, bcResourceId: $('n-bc').value, managerId: $('n-mgr').value || null, isManager: !!$('n-ismgr').value}); tabStaff(); }
   catch (e) { $('n-msg').innerHTML = `<div class="err">${esc(e.message)}</div>`; }
+}
+async function bulkAdd() {
+  try {
+    const j = await api('/admin/employees/bulk', 'POST', {names: $('bk-names').value.split('\n'), managerId: $('bk-mgr').value || null, allowance: +$('bk-all').value, isManager: $('bk-ismgr').checked});
+    const rows = j.created.map(c => `${c.name}\t${c.pin}`).join('\n');
+    $('bk-msg').innerHTML = `<div class="info"><b>${j.created.length} added.</b> Note these PINs now - they are not shown again (you can reset any PIN later).
+      <textarea rows="${Math.min(12, j.created.length + 1)}" readonly onclick="this.select()" style="margin-top:6px;font-family:'IBM Plex Mono',monospace">${esc(rows)}</textarea>
+      ${j.skipped.length ? `<div class="muted">Skipped (already exist): ${j.skipped.map(esc).join(', ')}</div>` : ''}
+      <button class="sm" style="margin-top:6px" onclick="tabStaff()">Done - refresh list</button></div>`;
+  } catch (e) { $('bk-msg').innerHTML = `<div class="err">${esc(e.message)}</div>`; }
+}
+function loadSheetFile(inp) {
+  const f = inp.files[0]; if (!f) return;
+  const rd = new FileReader(); rd.onload = () => { $('im-text').value = rd.result; }; rd.readAsText(f);
+}
+function parseSheet(text) {
+  const lines = text.split(/\r?\n/).filter(l => l.trim());
+  if (!lines.length) return [];
+  const delim = lines[0].includes('\t') ? '\t' : ',';
+  const rows = lines.map(l => l.split(delim).map(c => c.trim().replace(/^"|"$/g, '')));
+  if (/^(staff|name|employee)/i.test(rows[0][0])) rows.shift();
+  return rows.map(c => ({name: c[0], manager: c[1] || '', allowance: c[2] || '', bcResourceId: c[3] || ''}));
+}
+async function importSheet() {
+  try {
+    const rows = parseSheet($('im-text').value);
+    if (!rows.length) throw new Error('Paste or choose a file first');
+    const j = await api('/admin/employees/import', 'POST', {rows});
+    const out = j.created.map(c => `${c.name}\t${c.manager || '(office)'}\t${c.pin}`).join('\n');
+    $('im-msg').innerHTML = `<div class="info"><b>${j.created.length} added, ${j.updated.length} already existed (manager updated).</b>
+      ${j.created.length ? `<p style="margin-top:4px">Copy these PINs now - they are not shown again. Columns: name, manager, PIN.</p>
+      <textarea rows="${Math.min(14, j.created.length + 1)}" readonly onclick="this.select()" style="margin-top:6px;font-family:'IBM Plex Mono',monospace">${esc(out)}</textarea>` : ''}
+      ${j.problems.length ? `<div class="warn">${j.problems.map(esc).join('<br>')}</div>` : ''}
+      <button class="sm" style="margin-top:6px" onclick="tabStaff()">Done - refresh list</button></div>`;
+  } catch (e) { $('im-msg').innerHTML = `<div class="err">${esc(e.message)}</div>`; }
 }
 async function upd(id, body) { try { await api('/admin/employees/' + id, 'PUT', body); tabStaff(); } catch (e) { alert(e.message); } }
 function setPin(id) { const p = prompt('New PIN (4-6 digits):'); if (p) upd(id, {pin: p}); }

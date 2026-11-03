@@ -20,6 +20,7 @@ Env vars
 """
 import os
 import hmac
+import secrets
 import time
 import sqlite3
 from datetime import date, datetime, timedelta
@@ -530,6 +531,76 @@ def admin_add_employee():
                    str(b.get('bcResourceId', '') or ''), mid, 1 if b.get('isManager') else 0),
                   returning_id=True)
     return jsonify({'success': True, 'id': eid})
+
+@leave_bp.route('/api/leave/admin/employees/bulk', methods=['POST'])
+def admin_bulk_add():
+    """Paste a list of names (one per line); each gets a random 4-digit PIN,
+    returned once so the office can hand them out."""
+    if not is_admin(): return _auth_error()
+    b = request.get_json(silent=True) or {}
+    names = [n.strip() for n in (b.get('names') or []) if n and n.strip()]
+    if not names: return jsonify({'error': 'Paste at least one name'}), 400
+    if len(names) > 200: return jsonify({'error': 'Max 200 at a time'}), 400
+    mid = b.get('managerId') or None
+    if mid and not query('SELECT id FROM leave_employees WHERE id = ? AND is_manager = 1', (mid,)):
+        return jsonify({'error': 'Pick a valid manager'}), 400
+    allowance = float(b.get('allowance') or DEFAULT_ALLOWANCE)
+    is_mgr = 1 if b.get('isManager') else 0
+    existing = {r['name'].lower() for r in query('SELECT name FROM leave_employees')}
+    created, skipped = [], []
+    for n in names:
+        if n.lower() in existing:
+            skipped.append(n); continue
+        pin = f'{secrets.randbelow(10000):04d}'
+        execute('''INSERT INTO leave_employees (name, pin_hash, allowance, manager_id, is_manager)
+                    VALUES (?,?,?,?,?)''', (n, generate_password_hash(pin), allowance, mid, is_mgr))
+        existing.add(n.lower())
+        created.append({'name': n, 'pin': pin})
+    return jsonify({'created': created, 'skipped': skipped})
+
+def _clean(x):
+    return ' '.join(str(x or '').split())
+
+@leave_bp.route('/api/leave/admin/employees/import', methods=['POST'])
+def admin_import():
+    """Import a staff sheet: rows of {name, manager, allowance?, bcResourceId?}.
+    Anyone named in the manager column becomes a manager. New people get a
+    random PIN (returned once); people who already exist just get their
+    manager updated."""
+    if not is_admin(): return _auth_error()
+    rows, seen = [], set()
+    for r in (request.get_json(silent=True) or {}).get('rows') or []:
+        name = _clean(r.get('name'))
+        if not name or name.lower() in seen: continue
+        seen.add(name.lower())
+        rows.append({'name': name, 'manager': _clean(r.get('manager')),
+                     'allowance': _clean(r.get('allowance')), 'bc': _clean(r.get('bcResourceId'))})
+    if not rows: return jsonify({'error': 'No rows found'}), 400
+    if len(rows) > 300: return jsonify({'error': 'Max 300 rows at a time'}), 400
+
+    problems, created, updated = [], [], []
+    existing = {e['name'].lower(): e for e in query('SELECT id, name FROM leave_employees')}
+    for r in rows:
+        if r['name'].lower() in existing:
+            updated.append(r['name']); continue
+        try: allowance = float(r['allowance']) if r['allowance'] else DEFAULT_ALLOWANCE
+        except ValueError:
+            allowance = DEFAULT_ALLOWANCE; problems.append(f"{r['name']}: bad allowance '{r['allowance']}', used default")
+        pin = f'{secrets.randbelow(10000):04d}'
+        execute('''INSERT INTO leave_employees (name, pin_hash, allowance, bc_resource_id)
+                    VALUES (?,?,?,?)''', (r['name'], generate_password_hash(pin), allowance, r['bc']))
+        created.append({'name': r['name'], 'pin': pin, 'manager': r['manager']})
+    ids = {e['name'].lower(): e['id'] for e in query('SELECT id, name FROM leave_employees')}
+    for r in rows:
+        if not r['manager']: continue
+        mid = ids.get(r['manager'].lower())
+        if not mid:
+            problems.append(f"{r['name']}: manager '{r['manager']}' is not in the staff list - left with the office"); continue
+        if mid == ids[r['name'].lower()]:
+            problems.append(f"{r['name']}: cannot be their own manager"); continue
+        execute('UPDATE leave_employees SET is_manager = 1 WHERE id = ?', (mid,))
+        execute('UPDATE leave_employees SET manager_id = ? WHERE id = ?', (mid, ids[r['name'].lower()]))
+    return jsonify({'created': created, 'updated': updated, 'problems': problems})
 
 @leave_bp.route('/api/leave/admin/employees/<int:eid>', methods=['PUT'])
 def admin_update_employee(eid):
