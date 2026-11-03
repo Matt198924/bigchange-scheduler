@@ -6,56 +6,102 @@
 <title>R&amp;S Annual Leave</title>
 <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500&display=swap" rel="stylesheet">
 <style>
-:root{--ink:#0B2A4A;--cyan:#00C2FF;--paper:#F6F7F6;--surface:#fff;--slate:#5B6B7A;--amber:#F5A623;--moss:#2F9E44;--rust:#E5484D;--line:#E2E6E7;--amber-bg:#FEF3E0;--moss-bg:#EAF6EC;--rust-bg:#FCEAEA;--cyan-bg:#E6F9FF;}
+:root{--ink:#0B2A4A;--ink-2:#123A63;--cyan:#00C2FF;--paper:#F4F6F7;--surface:#fff;--slate:#5B6B7A;--amber:#F5A623;--moss:#2F9E44;--rust:#E5484D;--line:#E2E6E7;--amber-bg:#FEF3E0;--moss-bg:#EAF6EC;--rust-bg:#FCEAEA;--cyan-bg:#E6F9FF;--shadow:0 1px 2px rgba(11,42,74,.05),0 4px 14px rgba(11,42,74,.05)}
 *{box-sizing:border-box;margin:0;padding:0}
-body{font-family:'IBM Plex Sans',system-ui,sans-serif;background:var(--paper);color:var(--ink);font-size:14px}
-.topbar{background:var(--ink);padding:0 1rem;height:56px;display:flex;align-items:center;justify-content:space-between;border-bottom:2px solid var(--cyan)}
-.topbar a,.topbar button{color:rgba(255,255,255,.85);font-size:12px;text-decoration:none;background:none;border:1px solid rgba(255,255,255,.25);border-radius:7px;padding:6px 12px;cursor:pointer;font-family:inherit}
-.title{color:#fff;font-weight:600;font-size:14px}
-.wrap{max-width:960px;margin:0 auto;padding:1rem}
-.card{background:var(--surface);border:1px solid var(--line);border-radius:10px;padding:1rem;margin-bottom:1rem}
-h2{font-size:15px;margin-bottom:.75rem}
-label{display:block;font-size:12px;color:var(--slate);margin:.6rem 0 .25rem}
-input,select,textarea{width:100%;padding:9px 10px;border:1px solid var(--line);border-radius:7px;font:inherit;background:#fff;color:var(--ink)}
+body{font-family:'IBM Plex Sans',system-ui,sans-serif;background:var(--paper);color:var(--ink);font-size:14px;-webkit-font-smoothing:antialiased;min-height:100vh}
+.mono{font-family:'IBM Plex Mono',monospace}
+/* top bar - same look as the scheduler */
+.topbar{background:var(--ink);padding:0 1.25rem;height:56px;display:flex;align-items:center;justify-content:space-between;border-bottom:2px solid var(--cyan);position:sticky;top:0;z-index:10}
+.brand{display:flex;align-items:center;gap:10px;text-decoration:none}
+.brand-mark{width:38px;height:38px;border-radius:8px;background:#fff;display:flex;align-items:center;justify-content:center;padding:5px}
+.brand-mark img{width:100%;height:100%;object-fit:contain;display:block}
+.brand-name{font-size:14px;font-weight:600;color:#fff;letter-spacing:.01em}
+.brand-sub{font:400 11px 'IBM Plex Mono',monospace;color:rgba(255,255,255,.55);margin-left:4px}
+.topbar-right{display:flex;gap:8px}
+.topbar a,.topbar button{color:rgba(255,255,255,.88);font:500 12px 'IBM Plex Sans',sans-serif;text-decoration:none;background:transparent;border:1px solid rgba(255,255,255,.25);border-radius:7px;padding:6px 13px;cursor:pointer;transition:background .15s,border-color .15s}
+.topbar a:hover,.topbar button:hover{background:rgba(255,255,255,.09);border-color:rgba(255,255,255,.45)}
+.wrap{max-width:980px;margin:0 auto;padding:1.25rem 1rem 3rem}
+/* cards */
+.card{background:var(--surface);border:1px solid var(--line);border-radius:12px;padding:1.15rem 1.25rem;margin-bottom:1rem;box-shadow:var(--shadow)}
+h2{font-size:15px;font-weight:600;margin-bottom:.85rem;display:flex;align-items:center;gap:8px}
+h2::before{content:'';width:3px;height:15px;border-radius:2px;background:var(--cyan)}
+label{display:block;font-size:11.5px;font-weight:500;color:var(--slate);margin:.7rem 0 .3rem;letter-spacing:.02em}
+input,select,textarea{width:100%;padding:9px 11px;border:1px solid var(--line);border-radius:8px;font:inherit;background:#fff;color:var(--ink);transition:border-color .15s,box-shadow .15s}
+input:focus,select:focus,textarea:focus{outline:none;border-color:var(--cyan);box-shadow:0 0 0 3px rgba(0,194,255,.18)}
 .row{display:grid;grid-template-columns:1fr 1fr;gap:.75rem}
-button.primary{background:var(--ink);color:#fff;border:0;border-radius:7px;padding:10px 16px;font:inherit;font-weight:600;cursor:pointer;margin-top:.9rem}
-button.primary:disabled{opacity:.5}
-button.sm{border:1px solid var(--line);background:#fff;border-radius:6px;padding:5px 10px;font:inherit;font-size:12px;cursor:pointer;color:var(--ink)}
-button.ok{background:var(--moss);color:#fff;border-color:var(--moss)}
-button.no{background:var(--rust);color:#fff;border-color:var(--rust)}
-.stats{display:grid;grid-template-columns:repeat(4,1fr);gap:.6rem}
-.stat{background:var(--paper);border-radius:8px;padding:.6rem;text-align:center}
-.stat b{display:block;font:500 20px 'IBM Plex Mono',monospace}.stat span{font-size:11px;color:var(--slate)}
-.tabs{display:flex;gap:.4rem;margin-bottom:1rem;flex-wrap:wrap}
-.tabs button{border:1px solid var(--line);background:#fff;border-radius:20px;padding:6px 14px;font:inherit;cursor:pointer}
-.tabs button.on{background:var(--ink);color:#fff;border-color:var(--ink)}
-.item{display:flex;justify-content:space-between;gap:.75rem;align-items:flex-start;padding:.7rem 0;border-top:1px solid var(--line)}
-.item:first-child{border-top:0}
-.pill{font:500 10px 'IBM Plex Mono',monospace;text-transform:uppercase;padding:3px 8px;border-radius:20px;letter-spacing:.05em}
+button.primary{background:var(--ink);color:#fff;border:0;border-radius:8px;padding:10px 18px;font:600 13px 'IBM Plex Sans',sans-serif;cursor:pointer;margin-top:1rem;transition:background .15s,transform .05s}
+button.primary:hover{background:var(--ink-2)}button.primary:active{transform:translateY(1px)}button.primary:disabled{opacity:.5}
+button.sm{border:1px solid var(--line);background:#fff;border-radius:7px;padding:5px 10px;font:500 12px 'IBM Plex Sans',sans-serif;cursor:pointer;color:var(--ink);transition:background .12s,border-color .12s}
+button.sm:hover{background:var(--paper);border-color:#cdd3d6}
+button.ok{background:var(--moss);color:#fff;border-color:var(--moss)}button.ok:hover{background:#278a3b}
+button.no{background:#fff;color:var(--rust);border-color:#f1c4c6}button.no:hover{background:var(--rust-bg)}
+/* stat tiles */
+.stats{display:grid;grid-template-columns:repeat(4,1fr);gap:.7rem}
+.stat{background:var(--surface);border:1px solid var(--line);border-top:3px solid var(--line);border-radius:10px;padding:.8rem .9rem}
+.stat.c-blue{border-top-color:var(--ink)}.stat.c-green{border-top-color:var(--moss)}.stat.c-amber{border-top-color:var(--amber)}.stat.c-cyan{border-top-color:var(--cyan)}
+.stat span{display:block;font-size:10.5px;color:var(--slate);text-transform:uppercase;letter-spacing:.05em;margin-bottom:4px}
+.stat b{font:500 24px 'IBM Plex Mono',monospace}
+.bar{height:8px;background:var(--line);border-radius:6px;margin-top:.9rem;overflow:hidden;display:flex}
+.bar i{display:block;height:100%}.bar .t{background:var(--moss)}.bar .p{background:var(--amber)}
+/* tabs */
+.tabs{display:flex;gap:.35rem;margin-bottom:1rem;flex-wrap:wrap;background:var(--surface);padding:5px;border:1px solid var(--line);border-radius:12px;box-shadow:var(--shadow)}
+.tabs button{border:0;background:transparent;border-radius:8px;padding:8px 14px;font:500 13px 'IBM Plex Sans',sans-serif;cursor:pointer;color:var(--slate);transition:background .12s,color .12s}
+.tabs button:hover{background:var(--paper);color:var(--ink)}
+.tabs button.on{background:var(--ink);color:#fff}
+/* list rows */
+.item{display:flex;justify-content:space-between;gap:.9rem;align-items:flex-start;padding:.85rem 0;border-top:1px solid var(--line)}
+.item:first-of-type{border-top:0}
+.who{display:flex;gap:11px;align-items:flex-start;min-width:0}
+.avatar{flex:none;width:34px;height:34px;border-radius:50%;background:var(--cyan-bg);color:var(--ink);font:600 12px 'IBM Plex Sans',sans-serif;display:flex;align-items:center;justify-content:center;border:1px solid #bfeeff}
+.pill{font:500 10px 'IBM Plex Mono',monospace;text-transform:uppercase;padding:3px 9px;border-radius:20px;letter-spacing:.05em;white-space:nowrap}
 .pending{background:var(--amber-bg);color:#9A6200}.approved{background:var(--moss-bg);color:#1F7A33}
 .rejected,.cancelled{background:var(--rust-bg);color:#B3262B}
-.warn{background:var(--amber-bg);color:#7A4E00;border-radius:7px;padding:8px 10px;margin-top:.6rem;font-size:13px}
-.err{background:var(--rust-bg);color:#B3262B;border-radius:7px;padding:8px 10px;margin-top:.6rem}
-.info{background:var(--cyan-bg);border-radius:7px;padding:8px 10px;margin-top:.6rem}
-.muted{color:var(--slate);font-size:12px}
-.cal{display:grid;grid-template-columns:repeat(7,1fr);gap:3px}
-.cal .h{font-size:11px;color:var(--slate);text-align:center;padding:4px 0}
-.cal .d{min-height:62px;background:#fff;border:1px solid var(--line);border-radius:6px;padding:3px;font-size:10px;overflow:hidden}
-.cal .d.we{background:var(--paper)}.cal .d.bh{background:var(--cyan-bg)}
-.cal .d i{font-style:normal;font-weight:600;font-size:11px;display:block}
-.cal .n{background:var(--moss-bg);border-radius:3px;margin-top:1px;padding:0 3px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
-.cal .n.p{background:var(--amber-bg)}
+.warn{background:var(--amber-bg);color:#7A4E00;border-radius:8px;padding:8px 11px;margin-top:.6rem;font-size:13px}
+.err{background:var(--rust-bg);color:#B3262B;border-radius:8px;padding:8px 11px;margin-top:.6rem}
+.info{background:var(--cyan-bg);border-radius:8px;padding:9px 12px;margin-top:.6rem}
+.muted{color:var(--slate);font-size:12px;line-height:1.45}
+.allow{width:74px;padding:5px 7px;font:500 12px 'IBM Plex Mono',monospace;text-align:center}
+.controls{display:flex;gap:6px;flex-wrap:wrap;justify-content:flex-end;align-items:center}
+.controls select{width:auto;padding:5px 8px;font-size:12px}
+/* calendar */
+.cal{display:grid;grid-template-columns:repeat(7,1fr);gap:4px}
+.cal .h{font:500 10.5px 'IBM Plex Mono',monospace;color:var(--slate);text-align:center;padding:4px 0;text-transform:uppercase}
+.cal .d{min-height:66px;background:#fff;border:1px solid var(--line);border-radius:8px;padding:4px;font-size:10px;overflow:hidden}
+.cal .d.we{background:var(--paper)}.cal .d.bh{background:var(--cyan-bg);border-color:#bfeeff}
+.cal .d.today{border-color:var(--ink);box-shadow:0 0 0 1px var(--ink)}
+.cal .d i{font-style:normal;font-weight:600;font-size:11px;display:block;margin-bottom:2px}
+.cal .n{background:var(--moss-bg);color:#1F5F2D;border-radius:4px;margin-top:2px;padding:1px 4px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.cal .n.p{background:var(--amber-bg);color:#7A4E00}
+/* sign-in */
+.login-wrap{max-width:400px;margin:2.5rem auto 0}
+.login-logo{display:flex;flex-direction:column;align-items:center;margin-bottom:1.25rem;text-align:center}
+.login-logo .mark{width:72px;height:72px;border-radius:16px;background:#fff;border:1px solid var(--line);box-shadow:var(--shadow);padding:11px;margin-bottom:.8rem}
+.login-logo img{width:100%;height:100%;object-fit:contain}
+.login-logo h1{font-size:20px}.login-logo p{color:var(--slate);margin-top:.2rem}
+details.card summary{cursor:pointer;font-weight:600;font-size:15px;list-style:none;display:flex;align-items:center;gap:8px}
+details.card summary::-webkit-details-marker{display:none}
+details.card summary::before{content:'';width:3px;height:15px;border-radius:2px;background:var(--cyan)}
+details.card summary::after{content:'+';margin-left:auto;color:var(--slate);font-size:18px;font-weight:400}
+details.card[open] summary::after{content:'–'}
+details.card[open] summary{margin-bottom:.4rem}
 .hidden{display:none}
-@media(max-width:560px){.stats{grid-template-columns:repeat(2,1fr)}.cal .d{min-height:48px;font-size:9px}}
+@media(max-width:600px){.stats{grid-template-columns:repeat(2,1fr)}.cal .d{min-height:50px;font-size:9px}.row{grid-template-columns:1fr}.item{flex-direction:column}.controls{justify-content:flex-start}.brand-sub{display:none}}
 </style>
 </head>
 <body>
-<div class="topbar"><span class="title">R&amp;S Annual Leave</span>
-  <span><a href="/">Home</a> <button id="signout" class="hidden" onclick="signOut()">Sign out</button></span></div>
+<div class="topbar">
+  <a class="brand" href="/" style="border:0;padding:0">
+    <div class="brand-mark"><img src="/static/logo-mark.png" alt="R&amp;S Services"></div>
+    <span class="brand-name">Annual Leave</span><span class="brand-sub" id="who-sub"></span>
+  </a>
+  <div class="topbar-right"><a href="/">Home</a><button id="signout" class="hidden" onclick="signOut()">Sign out</button></div>
+</div>
 <div class="wrap">
 
 <!-- LOGIN -->
-<div id="login" class="card">
+<div id="login" class="login-wrap">
+<div class="login-logo"><div class="mark"><img src="/static/logo-mark.png" alt="R&amp;S"></div><h1>Annual Leave</h1><p>Sign in to request or approve leave</p></div>
+<div class="card">
   <h2>Sign in</h2>
   <label>Your name</label><select id="l-emp"></select>
   <label>PIN</label><input id="l-pin" type="password" inputmode="numeric" maxlength="6" placeholder="4-6 digit PIN from the office">
@@ -67,6 +113,7 @@ button.no{background:var(--rust);color:#fff;border-color:var(--rust)}
     <button class="primary" onclick="adminLogin()">Sign in as office</button><div id="a-err"></div>
   </div>
 </div>
+</div>
 
 <!-- STAFF -->
 <div id="staff" class="hidden">
@@ -74,6 +121,14 @@ button.no{background:var(--rust);color:#fff;border-color:var(--rust)}
     <div class="stats" id="s-stats"></div>
     <p class="muted" id="s-year" style="margin-top:.6rem"></p></div>
   <div class="card hidden" id="s-team"><h2>Team requests waiting for you</h2><div id="s-team-list"></div></div>
+  <div class="card hidden" id="s-sick"><h2>Log sick days for your team</h2>
+    <label>Who</label><select id="k-emp"></select>
+    <div class="row"><div><label>First day off sick</label><input type="date" id="k-start"></div>
+      <div><label>Back at work on</label><input type="date" id="k-end"></div></div>
+    <div class="row"><div><label>Half day (one day only)</label><select id="k-half"><option value="">Full day</option><option value="am">Morning off</option><option value="pm">Afternoon off</option></select></div>
+      <div><label>Note (optional)</label><input id="k-note" maxlength="500"></div></div>
+    <button class="primary" onclick="logSick()">Log sick days</button><div id="k-msg"></div>
+    <div id="k-team" style="margin-top:.8rem"></div></div>
   <div class="card"><h2>Request leave</h2>
     <p class="muted" id="r-goesto" style="margin-bottom:.4rem"></p>
     <div class="row"><div><label>First day off</label><input type="date" id="r-start"></div>
@@ -101,6 +156,8 @@ let TOKEN = sessionStorage.getItem('leaveToken'), ROLE = sessionStorage.getItem(
 const $ = id => document.getElementById(id);
 const esc = s => String(s ?? '').replace(/[&<>"]/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
 const fmtD = d => new Date(d + 'T12:00:00').toLocaleDateString('en-GB', {weekday:'short', day:'numeric', month:'short', year:'numeric'});
+const initials = n => (n || '?').split(/\s+/).slice(0, 2).map(w => w[0]).join('').toUpperCase();
+const avatar = n => `<div class="avatar">${esc(initials(n))}</div>`;
 const typeLabel = t => t === 'bankholiday' ? 'bank holiday' : t;
 let BH = [];
 fetch('/api/leave/config').then(r => r.json()).then(j => { BH = j.bankHolidays || []; }).catch(() => {});
@@ -156,7 +213,7 @@ async function renderCal(el, month) {
   for (let d = 1; d <= days; d++) {
     const ds = `${month}-${String(d).padStart(2, '0')}`, dow = (lead + d - 1) % 7;
     const names = (j.approved[ds] || []).map(n => `<div class="n">${esc(n)}</div>`).join('') + (j.pending[ds] || []).map(n => `<div class="n p">${esc(n)}?</div>`).join('');
-    h += `<div class="d ${dow > 4 ? 'we' : ''} ${j.bankHolidays.includes(ds) ? 'bh' : ''}"><i>${d}</i>${names}</div>`;
+    h += `<div class="d ${dow > 4 ? 'we' : ''} ${j.bankHolidays.includes(ds) ? 'bh' : ''} ${ds === new Date().toISOString().slice(0, 10) ? 'today' : ''}"><i>${d}</i>${names}</div>`;
   }
   $(el).innerHTML = h + '</div>' + (ROLE === 'admin' ? '<p class="muted" style="margin-top:.4rem">Amber with ? = pending</p>' : '');
 }
@@ -168,9 +225,13 @@ async function loadStaff() {
   $('s-name').textContent = j.name;
   $('r-goesto').textContent = 'Your request goes to: ' + (j.managerName || 'the office');
   $('s-team').classList.toggle('hidden', !j.isManager);
-  if (j.isManager) loadTeam();
-  $('s-stats').innerHTML = [['allowance','Allowance'],['taken','Booked'],['pending','Pending'],['remaining','Remaining']]
-    .map(([k, l]) => `<div class="stat"><b>${b[k]}</b><span>${l}</span></div>`).join('');
+  $('s-sick').classList.toggle('hidden', !j.isManager);
+  if (j.isManager) { loadTeam(); loadSickTeam(); }
+  $('s-stats').innerHTML = [['allowance','Allowance','c-blue'],['taken','Booked','c-green'],['pending','Pending','c-amber'],['remaining','Remaining','c-cyan']]
+    .map(([k, l, c]) => `<div class="stat ${c}"><span>${l}</span><b>${b[k]}</b></div>`).join('')
+    + `<div class="bar" style="grid-column:1/-1"><i class="t" style="width:${Math.min(100, 100 * b.taken / (b.allowance || 1))}%"></i><i class="p" style="width:${Math.min(100, 100 * b.pending / (b.allowance || 1))}%"></i></div>`;
+  $('s-stats').innerHTML += `<div class="muted" style="grid-column:1/-1">Sick days this year: <b>${b.sickTaken}</b> of ${b.sickAllowance} used. Sick days are logged by your manager.</div>`;
+  $('who-sub').textContent = j.name;
   $('s-year').textContent = `Leave year ${fmtD(b.yearStart)} – ${fmtD(b.yearEnd)}. Weekends and bank holidays are not counted.`;
   $('s-list').innerHTML = j.requests.length ? j.requests.map(r => `<div class="item"><div><b>${range(r)}</b>
     <div class="muted">${r.days} day${r.days === 1 ? '' : 's'} · ${typeLabel(r.type)}${r.note ? ' · ' + esc(r.note) : ''}${r.admin_note && r.type !== 'bankholiday' ? ' · Office: ' + esc(r.admin_note) : ''}</div></div>
@@ -180,11 +241,26 @@ async function loadStaff() {
 }
 async function loadTeam() {
   const j = await api('/team/requests?status=pending');
-  $('s-team-list').innerHTML = j.requests.length ? j.requests.map(r => `<div class="item"><div><b>${esc(r.employeeName)}</b> · ${range(r)}
+  $('s-team-list').innerHTML = j.requests.length ? j.requests.map(r => `<div class="item"><div class="who">${avatar(r.employeeName)}<div><b>${esc(r.employeeName)}</b> · ${range(r)}
     <div class="muted">${r.days} day${r.days === 1 ? '' : 's'} · ${r.type}${r.note ? ' · ' + esc(r.note) : ''}</div>
     ${r.balance && r.type === 'annual' ? `<div class="muted">Left after this: ${r.balance.remaining}</div>` : ''}
-    ${r.clash && r.clash.names.length ? `<div class="warn">Also off: ${r.clash.names.map(esc).join(', ')}</div>` : ''}</div>
+    ${r.clash && r.clash.names.length ? `<div class="warn">Also off: ${r.clash.names.map(esc).join(', ')}</div>` : ''}</div></div>
     <div style="display:flex;gap:4px"><button class="sm ok" onclick="teamDecide(${r.id},'approve')">Approve</button><button class="sm no" onclick="teamDecide(${r.id},'reject')">Reject</button></div></div>`).join('') : '<p class="muted">Nothing waiting.</p>';
+}
+async function loadSickTeam() {
+  const j = await api('/team/members');
+  $('k-emp').innerHTML = j.members.map(m => `<option value="${m.id}">${esc(m.name)}</option>`).join('');
+  $('k-team').innerHTML = j.members.length ? '<div class="muted" style="margin-bottom:.3rem">Sick days used this year</div>' + j.members.map(m =>
+    `<div class="item"><div class="who">${avatar(m.name)}<b>${esc(m.name)}</b></div><span class="muted">${m.balance.sickTaken} of ${m.balance.sickAllowance} used · ${m.balance.sickRemaining} left</span></div>`).join('') : '<p class="muted">Nobody is assigned to you yet.</p>';
+}
+async function logSick() {
+  try {
+    const st = $('k-start').value, half = $('k-half').value;
+    if (badReturn(st, $('k-end').value, half)) throw new Error('"Back at work on" must be after the first day off');
+    const j = await api('/team/sick', 'POST', {employeeId: +$('k-emp').value, startDate: st, endDate: lastDayOff(st, $('k-end').value, half), halfDay: half, note: $('k-note').value});
+    $('k-msg').innerHTML = `<div class="info">Logged. ${j.balance.sickRemaining} sick days left this year.</div>`;
+    $('k-start').value = $('k-end').value = $('k-note').value = ''; loadSickTeam();
+  } catch (e) { $('k-msg').innerHTML = `<div class="err">${esc(e.message)}</div>`; }
 }
 async function teamDecide(id, action) {
   const note = action === 'reject' ? prompt('Reason (shown to the employee):') : '';
@@ -228,13 +304,13 @@ let tab = 'pending';
 function showTab(t) { tab = t; $('a-tabs').innerHTML = Object.entries(TABS).map(([k, v]) => `<button class="${k === t ? 'on' : ''}" onclick="showTab('${k}')">${v}</button>`).join(''); ({pending: tabPending, calendar: tabCal, book: tabBook, all: tabAll, staff: tabStaff, bh: tabBH})[t](); }
 
 function reqRow(r, actions) {
-  return `<div class="item"><div><b>${esc(r.employeeName)}</b> · ${range(r)}
+  return `<div class="item"><div class="who">${avatar(r.employeeName)}<div><b>${esc(r.employeeName)}</b> · ${range(r)}
     <div class="muted">${r.days} day${r.days === 1 ? '' : 's'} · ${r.type}${r.note ? ' · ' + esc(r.note) : ''}</div>
     ${r.balance && r.type === 'annual' ? `<div class="muted">Remaining before: ${r.balance.remaining + r.days} → after: ${r.balance.remaining}</div>` : ''}
     ${r.clash && r.clash.names.length ? `<div class="warn">Also off: ${r.clash.names.map(esc).join(', ')} (max ${r.clash.maxOff} at once)</div>` : ''}
     ${r.status === 'pending' ? `<div class="muted">Goes to: ${esc(r.managerName || 'Office')}</div>` : ''}
     ${r.bcSync ? `<div class="${r.bcSync.startsWith('failed') ? 'warn' : 'muted'}">BigChange: ${esc(r.bcSync)}</div>` : ''}
-    ${r.admin_note ? `<div class="muted">Note: ${esc(r.admin_note)}</div>` : ''}</div>
+    ${r.admin_note ? `<div class="muted">Note: ${esc(r.admin_note)}</div>` : ''}</div></div>
     <div style="text-align:right"><span class="pill ${r.status}">${r.status}</span><div style="margin-top:4px;display:flex;gap:4px;justify-content:flex-end">${actions}</div></div></div>`;
 }
 async function tabPending() {
@@ -261,7 +337,7 @@ async function tabBook() {
   $('a-body').innerHTML = `<div class="card"><h2>Book leave for someone (auto-approved)</h2>
     <label>Employee</label><select id="b-emp">${j.employees.filter(e => e.active).map(e => `<option value="${e.id}">${esc(e.name)}</option>`).join('')}</select>
     <div class="row"><div><label>First day off</label><input type="date" id="b-start"></div><div><label>Back at work on</label><input type="date" id="b-end"></div></div>
-    <div class="row"><div><label>Type</label><select id="b-type"><option value="annual">Annual</option><option value="unpaid">Unpaid</option><option value="other">Other</option></select></div>
+    <div class="row"><div><label>Type</label><select id="b-type"><option value="annual">Annual</option><option value="unpaid">Unpaid</option><option value="other">Other</option><option value="sick">Sick</option></select></div>
     <div><label>Half day</label><select id="b-half"><option value="">Full day</option><option value="am">AM off</option><option value="pm">PM off</option></select></div></div>
     <label>Note</label><input id="b-note"><button class="primary" onclick="adminBook()">Book</button><div id="b-msg"></div></div>`;
 }
@@ -271,36 +347,75 @@ async function adminBook() {
   catch (e) { $('b-msg').innerHTML = `<div class="err">${esc(e.message)}</div>`; }
 }
 async function tabStaff() {
-  const j = await api('/admin/employees');
+  const [j, es, st] = await Promise.all([api('/admin/employees'), api('/admin/email-status'), api('/admin/settings')]);
   const mgrs = j.employees.filter(e => e.isManager && e.active);
   const mgrOpts = sel => `<option value="">Office (no manager)</option>` + mgrs.map(m => `<option value="${m.id}" ${m.id === sel ? 'selected' : ''}>${esc(m.name)}</option>`).join('');
-  const es = await api('/admin/email-status');
-  $('a-body').innerHTML = `<div class="card"><h2>Email notifications</h2>
-    ${es.enabled ? `<p class="muted">On - sending from ${esc(es.from)}. Staff get approved/rejected/cancelled emails; managers get new-request emails${es.office ? '; people with no manager go to ' + esc(es.office) : ' (set LEAVE_OFFICE_EMAIL so requests with no manager reach you)'}.</p>
-    <button class="sm" onclick="testEmail()">Send test email</button>` : `<p class="muted">Off. Set RESEND_API_KEY and LEAVE_EMAIL_FROM on Render to switch on (see README).</p>`}</div>
-    <div class="card"><h2>Add employee</h2><div class="row"><div><label>Name</label><input id="n-name"></div><div><label>PIN (4-6 digits)</label><input id="n-pin" inputmode="numeric" maxlength="6"></div></div>
-    <div class="row"><div><label>Approved by</label><select id="n-mgr">${mgrOpts(null)}</select></div><div><label>Is a manager?</label><select id="n-ismgr"><option value="">No</option><option value="1">Yes - approves their team's leave</option></select></div></div>
-    <div class="row"><div><label>Allowance (days)</label><input id="n-all" type="number" step="0.5" value="28"></div><div><label>BigChange resource ID (optional)</label><input id="n-bc"></div></div>
-    <label>Email (for leave notifications)</label><input id="n-email" type="email">
-    <button class="primary" onclick="addEmp()">Add</button><div id="n-msg"></div></div>
-    <div class="card"><h2>Import spreadsheet</h2>
-    <p class="muted">Columns: Staff, Manager, Email (optional: Allowance, BigChange ID). Use a header row so columns can be in any order. Paste straight from Excel, or choose a CSV file. Anyone named as a manager is set up as one automatically.</p>
-    <input type="file" id="im-file" accept=".csv,.tsv,.txt" style="margin:.5rem 0" onchange="loadSheetFile(this)">
-    <textarea id="im-text" rows="6" placeholder="Staff&#9;Manager&#9;Email&#10;Jane Smith&#9;Chris Scott&#9;jane@example.com"></textarea>
-    <button class="primary" onclick="importSheet()">Import</button><div id="im-msg"></div></div>
-    <div class="card"><h2>Bulk add (paste names, one per line)</h2>
-    <label>Names</label><textarea id="bk-names" rows="6" placeholder="Jane Smith&#10;John Brown"></textarea>
-    <div class="row"><div><label>Approved by</label><select id="bk-mgr">${mgrOpts(null)}</select></div><div><label>Allowance (days)</label><input id="bk-all" type="number" step="0.5" value="28"></div></div>
-    <label style="display:flex;gap:6px;align-items:center"><input type="checkbox" id="bk-ismgr" style="width:auto"> These are managers (supervisors)</label>
-    <button class="primary" onclick="bulkAdd()">Add all</button><div id="bk-msg"></div></div>
-    <div class="card"><h2>Staff</h2>` + j.employees.map(e => `<div class="item" style="${e.active ? '' : 'opacity:.5'}"><div><b>${esc(e.name)}</b>
-    <div class="muted">${e.balance.remaining} of ${e.allowance} left · ${e.hasPin ? 'PIN set' : 'no PIN'}${e.isManager ? ' · manager' : ''}${e.email ? ' · ' + esc(e.email) : ' · no email'}${e.bcResourceId ? ' · BC ' + esc(e.bcResourceId) : ''}</div></div>
-    <div style="display:flex;gap:4px;flex-wrap:wrap;justify-content:flex-end"><select class="sm" style="width:auto" onchange="upd(${e.id},{managerId:this.value})" title="Who approves their leave">${mgrOpts(e.managerId)}</select><button class="sm" onclick="upd(${e.id},{isManager:${!e.isManager}})">${e.isManager ? 'Remove manager' : 'Make manager'}</button><button class="sm" onclick="setEmail(${e.id},'${esc(e.email).replace(/'/g, "\\'")}')">Email</button><button class="sm" onclick="setPin(${e.id})">Set PIN</button><button class="sm" onclick="setAllow(${e.id},${e.allowance})">Allowance</button><button class="sm" onclick="setBC(${e.id},'${esc(e.bcResourceId)}')">BC ID</button><button class="sm" onclick="toggleEmp(${e.id},${!e.active})">${e.active ? 'Deactivate' : 'Reactivate'}</button><button class="sm no" onclick="delEmp(${e.id},'${esc(e.name).replace(/'/g, "\\'")}')">Delete</button></div></div>`).join('') + `<div style="margin-top:1rem;border-top:1px solid var(--line);padding-top:1rem"><button class="sm" onclick="setAllowAll()">Set allowance for everyone</button> <button class="sm no" onclick="delAll()">Delete ALL staff</button>
-    <span class="muted"> Removes every employee and all leave records. Bank holidays are kept.</span></div></div>`;
+  const dflt = st.defaultAllowance;
+  $('a-body').innerHTML = `
+    <div class="card"><h2>Allowances</h2>
+      <div class="row">
+        <div><label>Default for new staff (days a year)</label>
+          <div style="display:flex;gap:6px"><input id="def-all" type="number" step="0.5" min="0" max="60" value="${dflt}"><button class="sm" onclick="saveDefaultAllowance()">Save</button></div></div>
+        <div><label>Sick days per person (a year)</label>
+          <div style="display:flex;gap:6px"><input id="sick-all" type="number" step="0.5" min="0" max="60" value="${st.sickAllowance}"><button class="sm" onclick="saveSick()">Save</button></div></div>
+        <div><label>Set EVERYONE'S allowance to</label>
+          <div style="display:flex;gap:6px"><input id="all-all" type="number" step="0.5" min="0" max="60" value="${dflt}"><button class="sm" onclick="applyAllowAll()">Apply to all</button></div></div>
+      </div>
+      <p class="muted" style="margin-top:.6rem">Includes bank holidays, which are booked automatically and deducted. Change one person's allowance with the number box on their row below.</p>
+      <div id="al-msg"></div>
+    </div>
+    <div class="card"><h2>Staff (${j.employees.length})</h2>` + j.employees.map(e => `<div class="item" style="${e.active ? '' : 'opacity:.5'}">
+      <div class="who">${avatar(e.name)}<div><b>${esc(e.name)}</b>${e.isManager ? ' <span class="pill approved">manager</span>' : ''}
+        <div class="muted">${e.balance.remaining} of ${e.allowance} days left · sick ${e.balance.sickTaken}/${e.balance.sickAllowance} · ${e.hasPin ? 'PIN set' : 'no PIN'}${e.email ? ' · ' + esc(e.email) : ' · no email'}${e.bcResourceId ? ' · BC ' + esc(e.bcResourceId) : ''}</div></div></div>
+      <div class="controls">
+        <select title="Who approves their leave" onchange="upd(${e.id},{managerId:this.value})">${mgrOpts(e.managerId)}</select>
+        <span class="muted">Days</span><input class="allow" type="number" step="0.5" min="0" max="60" value="${e.allowance}" title="Yearly allowance" onchange="upd(${e.id},{allowance:this.value})">
+        <button class="sm" onclick="upd(${e.id},{isManager:${!e.isManager}})">${e.isManager ? 'Remove manager' : 'Make manager'}</button>
+        <button class="sm" onclick="setEmail(${e.id},'${esc(e.email).replace(/'/g, "\\'")}')">Email</button>
+        <button class="sm" onclick="setPin(${e.id})">Set PIN</button>
+        <button class="sm" onclick="setBC(${e.id},'${esc(e.bcResourceId)}')">BC ID</button>
+        <button class="sm" onclick="toggleEmp(${e.id},${!e.active})">${e.active ? 'Deactivate' : 'Reactivate'}</button>
+        <button class="sm no" onclick="delEmp(${e.id},'${esc(e.name).replace(/'/g, "\\'")}')">Delete</button>
+      </div></div>`).join('') + `
+      <div style="margin-top:1rem;border-top:1px solid var(--line);padding-top:1rem"><button class="sm no" onclick="delAll()">Delete ALL staff</button>
+      <span class="muted"> Removes every employee and all leave records. Bank holidays are kept.</span></div></div>
+
+    <details class="card"><summary>Add one employee</summary>
+      <div class="row"><div><label>Name</label><input id="n-name"></div><div><label>PIN (4-6 digits)</label><input id="n-pin" inputmode="numeric" maxlength="6"></div></div>
+      <div class="row"><div><label>Approved by</label><select id="n-mgr">${mgrOpts(null)}</select></div><div><label>Is a manager?</label><select id="n-ismgr"><option value="">No</option><option value="1">Yes - approves their team's leave</option></select></div></div>
+      <div class="row"><div><label>Allowance (days)</label><input id="n-all" type="number" step="0.5" value="${dflt}"></div><div><label>BigChange resource ID (optional)</label><input id="n-bc"></div></div>
+      <label>Email (for leave notifications)</label><input id="n-email" type="email">
+      <button class="primary" onclick="addEmp()">Add</button><div id="n-msg"></div></details>
+
+    <details class="card"><summary>Import spreadsheet</summary>
+      <p class="muted">Columns: Staff, Manager, Email (optional: Allowance, BigChange ID). Use a header row so columns can be in any order. Paste straight from Excel, or choose a CSV file. Anyone named as a manager is set up as one automatically. Re-importing fills in emails and IDs for existing people.</p>
+      <input type="file" id="im-file" accept=".csv,.tsv,.txt" style="margin:.5rem 0" onchange="loadSheetFile(this)">
+      <textarea id="im-text" rows="6" placeholder="Staff&#9;Manager&#9;Email&#10;Jane Smith&#9;Chris Scott&#9;jane@example.com"></textarea>
+      <button class="primary" onclick="importSheet()">Import</button><div id="im-msg"></div></details>
+
+    <details class="card"><summary>Bulk add (paste names, one per line)</summary>
+      <label>Names</label><textarea id="bk-names" rows="6" placeholder="Jane Smith&#10;John Brown"></textarea>
+      <div class="row"><div><label>Approved by</label><select id="bk-mgr">${mgrOpts(null)}</select></div><div><label>Allowance (days)</label><input id="bk-all" type="number" step="0.5" value="${dflt}"></div></div>
+      <label style="display:flex;gap:6px;align-items:center"><input type="checkbox" id="bk-ismgr" style="width:auto"> These are managers (supervisors)</label>
+      <button class="primary" onclick="bulkAdd()">Add all</button><div id="bk-msg"></div></details>
+
+    <details class="card"><summary>Email notifications ${es.enabled ? '<span class="pill approved">on</span>' : '<span class="pill pending">off</span>'}</summary>
+      ${es.enabled ? `<p class="muted">Sending from ${esc(es.from)}. Staff get approved/rejected/cancelled emails; managers get new-request emails${es.office ? '; people with no manager go to ' + esc(es.office) : ' (set LEAVE_OFFICE_EMAIL so requests with no manager reach you)'}.</p>
+      <button class="sm" style="margin-top:.6rem" onclick="testEmail()">Send test email</button>` : `<p class="muted">Off. Set RESEND_API_KEY and LEAVE_EMAIL_FROM on Render to switch on (see README).</p>`}</details>`;
 }
-async function setAllowAll() {
-  const a = prompt('Set EVERYONE\'s yearly allowance (days, including bank holidays):', '28'); if (a === null || a === '') return;
-  try { const j = await api('/admin/employees/set-allowance', 'POST', {allowance: +a}); alert(j.updated + ' staff updated.'); tabStaff(); } catch (e) { alert(e.message); }
+async function saveDefaultAllowance() {
+  try { const j = await api('/admin/settings', 'PUT', {defaultAllowance: $('def-all').value}); $('al-msg').innerHTML = `<div class="info">New staff will start with ${j.defaultAllowance} days.</div>`; }
+  catch (e) { $('al-msg').innerHTML = `<div class="err">${esc(e.message)}</div>`; }
+}
+async function saveSick() {
+  try { const j = await api('/admin/settings', 'PUT', {sickAllowance: $('sick-all').value}); $('al-msg').innerHTML = `<div class="info">Everyone now gets ${j.sickAllowance} sick days a year.</div>`; }
+  catch (e) { $('al-msg').innerHTML = `<div class="err">${esc(e.message)}</div>`; }
+}
+async function applyAllowAll() {
+  const a = $('all-all').value;
+  if (!confirm(`Set EVERY employee's yearly allowance to ${a} days?`)) return;
+  try { const j = await api('/admin/employees/set-allowance', 'POST', {allowance: +a}); await tabStaff(); $('al-msg').innerHTML = `<div class="info">${j.updated} staff updated to ${a} days.</div>`; }
+  catch (e) { $('al-msg').innerHTML = `<div class="err">${esc(e.message)}</div>`; }
 }
 async function delEmp(id, name) {
   if (!confirm(`Delete ${name} and all their leave records permanently?\n\n(Use Deactivate instead if you just want them to stop appearing.)`)) return;

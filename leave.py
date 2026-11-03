@@ -46,6 +46,8 @@ YEAR_START_MONTH = min(12, max(1, int(os.environ.get('LEAVE_YEAR_START_MONTH', '
 # BIGCHANGE_ABSENCE_TYPE_ID_OTHER is used for unpaid/other leave (skipped if unset).
 BC_TYPE_ANNUAL = os.environ.get('BIGCHANGE_ABSENCE_TYPE_ID', '').strip()
 BC_TYPE_OTHER  = os.environ.get('BIGCHANGE_ABSENCE_TYPE_ID_OTHER', '').strip()
+BC_TYPE_SICK   = os.environ.get('BIGCHANGE_ABSENCE_TYPE_ID_SICK', '').strip()   # sick days logged by managers
+DEFAULT_SICK = float(os.environ.get('LEAVE_SICK_ALLOWANCE', '7'))
 bc_hooks = {'post': None, 'delete': None}   # filled in by app.py
 UK = ZoneInfo('Europe/London')
 
@@ -57,7 +59,7 @@ EMAIL_REPLY_TO   = os.environ.get('LEAVE_EMAIL_REPLY_TO', '').strip()
 OFFICE_EMAIL     = os.environ.get('LEAVE_OFFICE_EMAIL', '').strip()  # gets requests from people with no manager
 SYNC_EMAIL       = False   # tests set True; normally emails go out on a background thread
 
-LEAVE_TYPES = ['annual', 'unpaid', 'other']
+LEAVE_TYPES = ['annual', 'unpaid', 'other', 'sick']
 IS_PG = bool(DATABASE_URL)
 _serializer = URLSafeTimedSerializer(SECRET, salt='leave-auth')
 
@@ -149,6 +151,7 @@ def init_db():
             execute(f'ALTER TABLE {tbl} ADD COLUMN {col} {ddl}')
         except Exception:
             pass  # column already exists
+    execute('CREATE TABLE IF NOT EXISTS leave_settings (setting_key TEXT PRIMARY KEY, setting_value TEXT NOT NULL)')
     execute('CREATE TABLE IF NOT EXISTS leave_bank_holidays (date TEXT PRIMARY KEY, name TEXT NOT NULL)')
     if not query('SELECT date FROM leave_bank_holidays LIMIT 1'):
         for d, n in _SEED_BANK_HOLIDAYS:
@@ -204,9 +207,16 @@ def balance_for(emp, on=None):
                              r['half_day'], bhs, lo, hi)
         if r['status'] == 'approved': taken += d
         else: pending += d
+    sick = 0.0
+    for r in query('''SELECT start_date, end_date, half_day FROM leave_requests
+                      WHERE employee_id = ? AND type = 'sick' AND status = 'approved' ''', (emp['id'],)):
+        sick += working_days(parse_date(r['start_date']), parse_date(r['end_date']),
+                             r['half_day'], bhs, lo, hi)
+    sa = sick_allowance()
     return {'yearStart': iso(lo), 'yearEnd': iso(hi), 'allowance': emp['allowance'],
             'taken': taken, 'pending': pending,
-            'remaining': emp['allowance'] - taken - pending}
+            'remaining': emp['allowance'] - taken - pending,
+            'sickAllowance': sa, 'sickTaken': sick, 'sickRemaining': sa - sick}
 
 # ── Auth ──────────────────────────────────────────────────────────────────
 _fails = {}  # (ip, key) -> [timestamps]
@@ -364,6 +374,8 @@ def notify_request(rid, event, base_url, note=''):
     base = base_url.rstrip('/')
     if base.startswith('http://') and 'localhost' not in base and '127.0.0.1' not in base:
         base = 'https://' + base[len('http://'):]   # Render terminates TLS in front of the app
+    if r['type'] == 'sick':
+        return                              # sick days are recorded quietly, no email
     link = base + '/leave'
     when = _range_text(r)
     label = (r['type'] if r['type'] != 'annual' else 'annual leave')
@@ -420,7 +432,7 @@ def bc_sync_create(rid):
     r = rows[0]
     if r['type'] == 'bankholiday':
         return None                        # bank holidays are not pushed to BigChange
-    type_id = BC_TYPE_ANNUAL if r['type'] == 'annual' else BC_TYPE_OTHER
+    type_id = {'annual': BC_TYPE_ANNUAL, 'sick': BC_TYPE_SICK}.get(r['type'], BC_TYPE_OTHER)
     if r.get('bc_absence_id') or not bc_hooks['post'] or not type_id:
         return r.get('bc_sync')            # already synced, or sync switched off
     resource = str(r.get('bc_resource_id') or '').strip()
@@ -433,7 +445,7 @@ def bc_sync_create(rid):
     else:                       s, e = _uk_iso(start), _uk_iso(end + timedelta(days=1))
     body = {'resourceId': int(resource), 'startAt': s, 'endAt': e, 'absenceTypeId': int(type_id),
             'daysRequested': r['days'], 'reason': ((r['type'].capitalize() + ' leave') + (f" - {r['note']}" if r['note'] else ''))[:200],
-            'isPaidLeave': r['type'] == 'annual'}
+            'isPaidLeave': r['type'] in ('annual', 'sick')}
     try:
         res = bc_hooks['post']('/absences', body)
         _set_sync(rid, str(res.get('id') or ''), 'synced to BigChange')
@@ -561,6 +573,8 @@ def request_leave():
     body = request.get_json(silent=True) or {}
     v, err = validate_range(body)
     if err: return jsonify({'error': err}), 400
+    if v['type'] == 'sick':
+        return jsonify({'error': 'Sick days are logged by your manager - tell them or call the office'}), 400
     if v['start'] < date.today():
         return jsonify({'error': 'Cannot request leave in the past - call the office'}), 400
     if overlaps_own(emp['id'], v['start'], v['end']):
@@ -677,6 +691,34 @@ def team_decide(rid):
     if not mgr: return _auth_error()
     return _decide(rid, request.get_json(silent=True) or {}, actor=mgr)
 
+@leave_bp.route('/api/leave/team/sick', methods=['POST'])
+def team_log_sick():
+    """A manager logs sick days for someone on their team. Auto-approved, past dates fine,
+    counted against the separate sick allowance (not annual leave)."""
+    mgr = current_manager()
+    if not mgr: return _auth_error()
+    body = request.get_json(silent=True) or {}
+    rows = query('SELECT * FROM leave_employees WHERE id = ? AND manager_id = ? AND active = 1',
+                 (body.get('employeeId'), mgr['id']))
+    if not rows: return jsonify({'error': 'Pick someone on your team'}), 400
+    body['type'] = 'sick'
+    v, err = validate_range(body)
+    if err: return jsonify({'error': err}), 400
+    if overlaps_own(rows[0]['id'], v['start'], v['end']):
+        return jsonify({'error': 'They already have leave booked or pending on those dates'}), 409
+    rid = create_request(rows[0], v, body.get('note'), status='approved',
+                         admin_note=f"Sick - logged by {mgr['name']}")
+    sync = bc_sync_create(rid)
+    return jsonify({'success': True, 'id': rid, 'bcSync': sync,
+                    'balance': balance_for(rows[0], v['start'])})
+
+@leave_bp.route('/api/leave/team/members')
+def team_members():
+    mgr = current_manager()
+    if not mgr: return _auth_error()
+    return jsonify({'members': [{'id': e['id'], 'name': e['name'], 'balance': balance_for(e)}
+                                for e in query('SELECT * FROM leave_employees WHERE manager_id = ? AND active = 1 ORDER BY name', (mgr['id'],))]})
+
 @leave_bp.route('/api/leave/admin/requests', methods=['POST'])
 def admin_book():
     """Office books leave on someone's behalf (phone call, sickness-adjacent
@@ -730,7 +772,7 @@ def admin_add_employee():
                      (name, pin_hash, allowance, bc_resource_id, manager_id, is_manager, email)
                      VALUES (?,?,?,?,?,?,?)''',
                   (name, generate_password_hash(str(pin)) if pin else None,
-                   float(b.get('allowance', DEFAULT_ALLOWANCE)),
+                   float(b.get('allowance') if b.get('allowance') not in (None, '') else default_allowance()),
                    str(b.get('bcResourceId', '') or ''), mid, 1 if b.get('isManager') else 0,
                    _clean(b.get('email')).lower()),
                   returning_id=True)
@@ -749,7 +791,7 @@ def admin_bulk_add():
     mid = b.get('managerId') or None
     if mid and not query('SELECT id FROM leave_employees WHERE id = ? AND is_manager = 1', (mid,)):
         return jsonify({'error': 'Pick a valid manager'}), 400
-    allowance = float(b.get('allowance') or DEFAULT_ALLOWANCE)
+    allowance = float(b.get('allowance') or default_allowance())
     is_mgr = 1 if b.get('isManager') else 0
     existing = {r['name'].lower() for r in query('SELECT name FROM leave_employees')}
     created, skipped = [], []
@@ -763,6 +805,23 @@ def admin_bulk_add():
         created.append({'name': n, 'pin': pin})
     if created: book_bank_holidays(date.today())
     return jsonify({'created': created, 'skipped': skipped})
+
+def get_setting(key, default=None):
+    rows = query('SELECT setting_value FROM leave_settings WHERE setting_key = ?', (key,))
+    return rows[0]['setting_value'] if rows else default
+
+def set_setting(key, value):
+    execute('DELETE FROM leave_settings WHERE setting_key = ?', (key,))
+    execute('INSERT INTO leave_settings (setting_key, setting_value) VALUES (?, ?)', (key, str(value)))
+
+def sick_allowance():
+    try: return float(get_setting('sick_allowance', DEFAULT_SICK))
+    except (TypeError, ValueError): return DEFAULT_SICK
+
+def default_allowance():
+    """Yearly allowance given to new staff: the admin-set value, else LEAVE_DEFAULT_ALLOWANCE."""
+    try: return float(get_setting('default_allowance'))
+    except (TypeError, ValueError): return DEFAULT_ALLOWANCE
 
 def _clean(x):
     return ' '.join(str(x or '').split())
@@ -790,9 +849,9 @@ def admin_import():
     for r in rows:
         if r['name'].lower() in existing:
             updated.append(r['name']); continue
-        try: allowance = float(r['allowance']) if r['allowance'] else DEFAULT_ALLOWANCE
+        try: allowance = float(r['allowance']) if r['allowance'] else default_allowance()
         except ValueError:
-            allowance = DEFAULT_ALLOWANCE; problems.append(f"{r['name']}: bad allowance '{r['allowance']}', used default")
+            allowance = default_allowance(); problems.append(f"{r['name']}: bad allowance '{r['allowance']}', used default")
         pin = f'{secrets.randbelow(10000):04d}'
         execute('''INSERT INTO leave_employees (name, pin_hash, allowance, bc_resource_id, email)
                     VALUES (?,?,?,?,?)''', (r['name'], generate_password_hash(pin), allowance, r['bc'], r['email']))
@@ -869,6 +928,27 @@ def admin_delete_all_employees():
     execute('DELETE FROM leave_requests')
     execute('DELETE FROM leave_employees')
     return jsonify({'success': True, 'deleted': n})
+
+@leave_bp.route('/api/leave/admin/settings')
+def admin_get_settings():
+    if not is_admin(): return _auth_error()
+    return jsonify({'defaultAllowance': default_allowance(), 'sickAllowance': sick_allowance()})
+
+@leave_bp.route('/api/leave/admin/settings', methods=['PUT'])
+def admin_put_settings():
+    if not is_admin(): return _auth_error()
+    b = request.get_json(silent=True) or {}
+    if 'defaultAllowance' in b:
+        try: a = float(b['defaultAllowance'])
+        except (TypeError, ValueError): return jsonify({'error': 'Enter a number of days'}), 400
+        if not 0 <= a <= 60: return jsonify({'error': 'Allowance must be between 0 and 60'}), 400
+        set_setting('default_allowance', a)
+    if 'sickAllowance' in b:
+        try: a = float(b['sickAllowance'])
+        except (TypeError, ValueError): return jsonify({'error': 'Enter a number of days'}), 400
+        if not 0 <= a <= 60: return jsonify({'error': 'Sick allowance must be between 0 and 60'}), 400
+        set_setting('sick_allowance', a)
+    return jsonify({'success': True, 'defaultAllowance': default_allowance(), 'sickAllowance': sick_allowance()})
 
 @leave_bp.route('/api/leave/admin/email-status')
 def admin_email_status():

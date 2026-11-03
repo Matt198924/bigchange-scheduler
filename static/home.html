@@ -6,30 +6,43 @@
 <title>R&amp;S Staff Hub</title>
 <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500&display=swap" rel="stylesheet">
 <style>
-:root{--ink:#0B2A4A;--cyan:#00C2FF;--paper:#F6F7F6;--surface:#fff;--slate:#5B6B7A;--line:#E2E6E7;--cyan-bg:#E6F9FF}
+:root{--ink:#0B2A4A;--ink-2:#123A63;--cyan:#00C2FF;--paper:#F4F6F7;--surface:#fff;--slate:#5B6B7A;--line:#E2E6E7;--cyan-bg:#E6F9FF;--shadow:0 1px 2px rgba(11,42,74,.05),0 4px 14px rgba(11,42,74,.06)}
 *{box-sizing:border-box;margin:0;padding:0}
-body{font-family:'IBM Plex Sans',system-ui,sans-serif;background:var(--paper);color:var(--ink);min-height:100vh}
+body{font-family:'IBM Plex Sans',system-ui,sans-serif;background:var(--paper);color:var(--ink);min-height:100vh;-webkit-font-smoothing:antialiased}
 .topbar{background:var(--ink);height:56px;padding:0 1.25rem;display:flex;align-items:center;border-bottom:2px solid var(--cyan)}
-.topbar span{color:#fff;font-weight:600;font-size:14px}
-.wrap{max-width:860px;margin:0 auto;padding:2rem 1rem}
-h1{font-size:22px;margin-bottom:.25rem}
-.sub{color:var(--slate);margin-bottom:1.5rem}
-.grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(240px,1fr));gap:1rem}
-.tile{display:block;background:var(--surface);border:1px solid var(--line);border-radius:12px;padding:1.25rem;text-decoration:none;color:inherit;transition:border-color .15s,box-shadow .15s}
-.tile:hover,.tile:focus-visible{border-color:var(--cyan);box-shadow:0 2px 10px rgba(11,42,74,.08);outline:none}
-.icon{width:44px;height:44px;border-radius:10px;background:var(--cyan-bg);display:flex;align-items:center;justify-content:center;font-size:22px;margin-bottom:.75rem}
-.tile b{display:block;font-size:15px;margin-bottom:.25rem}
-.tile p{font-size:13px;color:var(--slate);line-height:1.4}
+.brand{display:flex;align-items:center;gap:10px}
+.brand-mark{width:38px;height:38px;border-radius:8px;background:#fff;display:flex;align-items:center;justify-content:center;padding:5px}
+.brand-mark img{width:100%;height:100%;object-fit:contain;display:block}
+.brand-name{color:#fff;font-weight:600;font-size:14px;letter-spacing:.01em}
+.hero{background:linear-gradient(180deg,var(--ink) 0,var(--ink-2) 100%);color:#fff;padding:2.2rem 1rem 4.2rem}
+.hero-in{max-width:860px;margin:0 auto;display:flex;align-items:center;gap:1.1rem}
+.hero .mark{flex:none;width:68px;height:68px;border-radius:16px;background:#fff;padding:10px;box-shadow:0 6px 20px rgba(0,0,0,.25)}
+.hero .mark img{width:100%;height:100%;object-fit:contain}
+.hero h1{font-size:24px;font-weight:600}
+.hero p{color:rgba(255,255,255,.7);margin-top:.25rem}
+.wrap{max-width:860px;margin:-2.6rem auto 0;padding:0 1rem 3rem}
+.grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(250px,1fr));gap:1rem}
+.tile{display:block;background:var(--surface);border:1px solid var(--line);border-radius:14px;padding:1.3rem;text-decoration:none;color:inherit;box-shadow:var(--shadow);transition:transform .15s,border-color .15s,box-shadow .15s;position:relative;overflow:hidden}
+.tile::before{content:'';position:absolute;left:0;top:0;right:0;height:3px;background:var(--cyan)}
+.tile:hover,.tile:focus-visible{transform:translateY(-2px);border-color:var(--cyan);box-shadow:0 8px 24px rgba(11,42,74,.12);outline:none}
+.icon{width:48px;height:48px;border-radius:12px;background:var(--cyan-bg);display:flex;align-items:center;justify-content:center;font-size:24px;margin-bottom:.9rem}
+.tile b{display:block;font-size:16px;margin-bottom:.3rem}
+.tile p{font-size:13px;color:var(--slate);line-height:1.45}
+.go{display:inline-block;margin-top:.9rem;font:500 12px 'IBM Plex Mono',monospace;color:var(--ink-2)}
 .soon{opacity:.55;pointer-events:none}
-.badge{display:inline-block;font:500 10px 'IBM Plex Mono',monospace;text-transform:uppercase;letter-spacing:.05em;background:var(--paper);border-radius:20px;padding:2px 8px;margin-top:.5rem;color:var(--slate)}
+.badge{display:inline-block;font:500 10px 'IBM Plex Mono',monospace;text-transform:uppercase;letter-spacing:.05em;background:var(--paper);border-radius:20px;padding:2px 8px;margin-top:.8rem;color:var(--slate)}
+.foot{text-align:center;color:var(--slate);font-size:12px;margin-top:2rem}
 </style>
 </head>
 <body>
-<div class="topbar"><span>R&amp;S Staff Hub</span></div>
+<div class="topbar"><div class="brand"><div class="brand-mark"><img src="/static/logo-mark.png" alt="R&amp;S Services"></div><span class="brand-name">Staff Hub</span></div></div>
+<div class="hero"><div class="hero-in">
+  <div class="mark"><img src="/static/logo-mark.png" alt="R&amp;S"></div>
+  <div><h1>R&amp;S Staff Hub</h1><p>Pick a tool to get started.</p></div>
+</div></div>
 <div class="wrap">
-  <h1>What do you need?</h1>
-  <p class="sub">Pick a tool below.</p>
   <div class="grid" id="grid"></div>
+  <p class="foot">R&amp;S Services (Yorkshire) Ltd</p>
 </div>
 <script>
 // To add a tool, add one line here. Set soon:true to show it greyed out as "Coming soon".
@@ -39,7 +52,8 @@ const APPS = [
 ];
 document.getElementById('grid').innerHTML = APPS.map(a => `
   <a class="tile ${a.soon ? 'soon' : ''}" ${a.soon ? '' : `href="${a.url}"`}>
-    <div class="icon">${a.icon}</div><b>${a.name}</b><p>${a.desc}</p>${a.soon ? '<span class="badge">Coming soon</span>' : ''}
+    <div class="icon">${a.icon}</div><b>${a.name}</b><p>${a.desc}</p>
+    ${a.soon ? '<span class="badge">Coming soon</span>' : '<span class="go">Open →</span>'}
   </a>`).join('');
 </script>
 </body>

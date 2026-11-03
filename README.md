@@ -110,6 +110,8 @@ When leave is approved, the app creates an absence in BigChange (`POST /v1/absen
 |-----|-------|
 | `BIGCHANGE_ABSENCE_TYPE_ID` | BigChange absence type ID used for annual leave |
 | `BIGCHANGE_ABSENCE_TYPE_ID_OTHER` | Optional: absence type ID for unpaid/other leave (those are not synced if unset) |
+| `BIGCHANGE_ABSENCE_TYPE_ID_SICK` | Optional: absence type ID for sick days logged by managers (not synced if unset) |
+| `LEAVE_SICK_ALLOWANCE` | Default sick days per person per year (default 7; also editable on the admin Staff tab) |
 
 The BigChange API key needs the `resources:write` scope. Each person needs their BigChange resource ID set in the admin Staff tab. Sync problems show on the request in "All requests", with a Retry button.
 
