@@ -210,6 +210,7 @@ function reqRow(r, actions) {
     ${r.balance && r.type === 'annual' ? `<div class="muted">Remaining before: ${r.balance.remaining + r.days} → after: ${r.balance.remaining}</div>` : ''}
     ${r.clash && r.clash.names.length ? `<div class="warn">Also off: ${r.clash.names.map(esc).join(', ')} (max ${r.clash.maxOff} at once)</div>` : ''}
     ${r.status === 'pending' ? `<div class="muted">Goes to: ${esc(r.managerName || 'Office')}</div>` : ''}
+    ${r.bcSync ? `<div class="${r.bcSync.startsWith('failed') ? 'warn' : 'muted'}">BigChange: ${esc(r.bcSync)}</div>` : ''}
     ${r.admin_note ? `<div class="muted">Note: ${esc(r.admin_note)}</div>` : ''}</div>
     <div style="text-align:right"><span class="pill ${r.status}">${r.status}</span><div style="margin-top:4px;display:flex;gap:4px;justify-content:flex-end">${actions}</div></div></div>`;
 }
@@ -221,12 +222,15 @@ async function tabPending() {
 async function decide(id, action) {
   const note = action === 'reject' ? prompt('Reason (shown to the employee):') : '';
   if (action === 'reject' && note === null) return;
-  await api(`/admin/requests/${id}/decide`, 'POST', {action, note}); showTab(tab);
+  const j = await api(`/admin/requests/${id}/decide`, 'POST', {action, note});
+  if (j.bcSync === 'failed') alert('Saved, but BigChange did not update. See "All requests" for the reason, then use Retry BigChange (or fix it in BigChange by hand).');
+  showTab(tab);
 }
+async function retrySync(id) { try { const j = await api(`/admin/requests/${id}/bc-sync`, 'POST'); if (j.bcSync === 'failed') alert('Still failing - the reason is shown on the request.'); } catch (e) { alert(e.message); } showTab(tab); }
 async function tabAll() {
   const j = await api('/admin/requests');
   $('a-body').innerHTML = `<div class="card"><h2>All requests</h2>` + j.requests.slice().reverse().map(r =>
-    reqRow(r, r.status === 'approved' || r.status === 'pending' ? `<button class="sm" onclick="decide(${r.id},'cancel')">Cancel</button>` : '')).join('') + '</div>';
+    reqRow(r, (r.status === 'approved' && r.bcSync && (r.bcSync.startsWith('failed:') || r.bcSync.startsWith('skipped')) ? `<button class="sm" onclick="retrySync(${r.id})">Retry BigChange</button>` : '') + (r.status === 'approved' || r.status === 'pending' ? `<button class="sm" onclick="decide(${r.id},'cancel')">Cancel</button>` : ''))).join('') + '</div>';
 }
 function tabCal() { $('a-body').innerHTML = '<div class="card"><div id="a-cal"></div></div>'; renderCal('a-cal', calMonth); }
 async function tabBook() {

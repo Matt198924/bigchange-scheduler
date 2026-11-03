@@ -86,6 +86,27 @@ def bc_put(path, body):
     try: return resp.json()
     except: return {}
 
+def _bc_headers():
+    return {
+        'Authorization': f'Bearer {get_token()}',
+        'Content-Type': 'application/json',
+        'customer-id': CUSTOMER_ID,
+    }
+
+def bc_post(path, body):
+    resp = requests.post(f'{API_BASE}{path}', headers=_bc_headers(), json=body, timeout=15)
+    print(f"[POST] {path} {resp.status_code}: {resp.text[:200]}")
+    if not resp.ok:
+        raise RuntimeError(f'BigChange {resp.status_code}: {resp.text[:200]}')
+    try: return resp.json()
+    except Exception: return {}
+
+def bc_delete(path):
+    resp = requests.delete(f'{API_BASE}{path}', headers=_bc_headers(), timeout=15)
+    print(f"[DELETE] {path} {resp.status_code}: {resp.text[:200]}")
+    if not resp.ok:
+        raise RuntimeError(f'BigChange {resp.status_code}: {resp.text[:200]}')
+
 def fetch_paged(params):
     all_items = []
     page = 1
@@ -411,6 +432,9 @@ def assign_job(job_id):
     except Exception as e:
         print(f"[ASSIGN] ERROR: {e}")
         return jsonify({'error': str(e)}), 500
+
+import leave as _leave
+_leave.bc_hooks.update(post=bc_post, delete=bc_delete)
 
 if __name__ == '__main__':
     port = int(os.environ.get('PORT', 5000))
