@@ -250,14 +250,19 @@ async function tabStaff() {
   const j = await api('/admin/employees');
   const mgrs = j.employees.filter(e => e.isManager && e.active);
   const mgrOpts = sel => `<option value="">Office (no manager)</option>` + mgrs.map(m => `<option value="${m.id}" ${m.id === sel ? 'selected' : ''}>${esc(m.name)}</option>`).join('');
-  $('a-body').innerHTML = `<div class="card"><h2>Add employee</h2><div class="row"><div><label>Name</label><input id="n-name"></div><div><label>PIN (4-6 digits)</label><input id="n-pin" inputmode="numeric" maxlength="6"></div></div>
+  const es = await api('/admin/email-status');
+  $('a-body').innerHTML = `<div class="card"><h2>Email notifications</h2>
+    ${es.enabled ? `<p class="muted">On - sending from ${esc(es.from)}. Staff get approved/rejected/cancelled emails; managers get new-request emails${es.office ? '; people with no manager go to ' + esc(es.office) : ' (set LEAVE_OFFICE_EMAIL so requests with no manager reach you)'}.</p>
+    <button class="sm" onclick="testEmail()">Send test email</button>` : `<p class="muted">Off. Set RESEND_API_KEY and LEAVE_EMAIL_FROM on Render to switch on (see README).</p>`}</div>
+    <div class="card"><h2>Add employee</h2><div class="row"><div><label>Name</label><input id="n-name"></div><div><label>PIN (4-6 digits)</label><input id="n-pin" inputmode="numeric" maxlength="6"></div></div>
     <div class="row"><div><label>Approved by</label><select id="n-mgr">${mgrOpts(null)}</select></div><div><label>Is a manager?</label><select id="n-ismgr"><option value="">No</option><option value="1">Yes - approves their team's leave</option></select></div></div>
     <div class="row"><div><label>Allowance (days)</label><input id="n-all" type="number" step="0.5" value="20"></div><div><label>BigChange resource ID (optional)</label><input id="n-bc"></div></div>
+    <label>Email (for leave notifications)</label><input id="n-email" type="email">
     <button class="primary" onclick="addEmp()">Add</button><div id="n-msg"></div></div>
     <div class="card"><h2>Import spreadsheet</h2>
-    <p class="muted">Columns: Staff, Manager (optional: Allowance, BigChange ID). Paste straight from Excel, or choose a CSV file. Anyone named as a manager is set up as one automatically.</p>
+    <p class="muted">Columns: Staff, Manager, Email (optional: Allowance, BigChange ID). Use a header row so columns can be in any order. Paste straight from Excel, or choose a CSV file. Anyone named as a manager is set up as one automatically.</p>
     <input type="file" id="im-file" accept=".csv,.tsv,.txt" style="margin:.5rem 0" onchange="loadSheetFile(this)">
-    <textarea id="im-text" rows="6" placeholder="Staff&#9;Manager&#10;Jane Smith&#9;Chris Scott"></textarea>
+    <textarea id="im-text" rows="6" placeholder="Staff&#9;Manager&#9;Email&#10;Jane Smith&#9;Chris Scott&#9;jane@example.com"></textarea>
     <button class="primary" onclick="importSheet()">Import</button><div id="im-msg"></div></div>
     <div class="card"><h2>Bulk add (paste names, one per line)</h2>
     <label>Names</label><textarea id="bk-names" rows="6" placeholder="Jane Smith&#10;John Brown"></textarea>
@@ -265,8 +270,8 @@ async function tabStaff() {
     <label style="display:flex;gap:6px;align-items:center"><input type="checkbox" id="bk-ismgr" style="width:auto"> These are managers (supervisors)</label>
     <button class="primary" onclick="bulkAdd()">Add all</button><div id="bk-msg"></div></div>
     <div class="card"><h2>Staff</h2>` + j.employees.map(e => `<div class="item" style="${e.active ? '' : 'opacity:.5'}"><div><b>${esc(e.name)}</b>
-    <div class="muted">${e.balance.remaining} of ${e.allowance} left · ${e.hasPin ? 'PIN set' : 'no PIN'}${e.isManager ? ' · manager' : ''}${e.bcResourceId ? ' · BC ' + esc(e.bcResourceId) : ''}</div></div>
-    <div style="display:flex;gap:4px;flex-wrap:wrap;justify-content:flex-end"><select class="sm" style="width:auto" onchange="upd(${e.id},{managerId:this.value})" title="Who approves their leave">${mgrOpts(e.managerId)}</select><button class="sm" onclick="upd(${e.id},{isManager:${!e.isManager}})">${e.isManager ? 'Remove manager' : 'Make manager'}</button><button class="sm" onclick="setPin(${e.id})">Set PIN</button><button class="sm" onclick="setAllow(${e.id},${e.allowance})">Allowance</button><button class="sm" onclick="setBC(${e.id},'${esc(e.bcResourceId)}')">BC ID</button><button class="sm" onclick="toggleEmp(${e.id},${!e.active})">${e.active ? 'Deactivate' : 'Reactivate'}</button><button class="sm no" onclick="delEmp(${e.id},'${esc(e.name).replace(/'/g, "\\'")}')">Delete</button></div></div>`).join('') + `<div style="margin-top:1rem;border-top:1px solid var(--line);padding-top:1rem"><button class="sm no" onclick="delAll()">Delete ALL staff</button>
+    <div class="muted">${e.balance.remaining} of ${e.allowance} left · ${e.hasPin ? 'PIN set' : 'no PIN'}${e.isManager ? ' · manager' : ''}${e.email ? ' · ' + esc(e.email) : ' · no email'}${e.bcResourceId ? ' · BC ' + esc(e.bcResourceId) : ''}</div></div>
+    <div style="display:flex;gap:4px;flex-wrap:wrap;justify-content:flex-end"><select class="sm" style="width:auto" onchange="upd(${e.id},{managerId:this.value})" title="Who approves their leave">${mgrOpts(e.managerId)}</select><button class="sm" onclick="upd(${e.id},{isManager:${!e.isManager}})">${e.isManager ? 'Remove manager' : 'Make manager'}</button><button class="sm" onclick="setEmail(${e.id},'${esc(e.email).replace(/'/g, "\\'")}')">Email</button><button class="sm" onclick="setPin(${e.id})">Set PIN</button><button class="sm" onclick="setAllow(${e.id},${e.allowance})">Allowance</button><button class="sm" onclick="setBC(${e.id},'${esc(e.bcResourceId)}')">BC ID</button><button class="sm" onclick="toggleEmp(${e.id},${!e.active})">${e.active ? 'Deactivate' : 'Reactivate'}</button><button class="sm no" onclick="delEmp(${e.id},'${esc(e.name).replace(/'/g, "\\'")}')">Delete</button></div></div>`).join('') + `<div style="margin-top:1rem;border-top:1px solid var(--line);padding-top:1rem"><button class="sm no" onclick="delAll()">Delete ALL staff</button>
     <span class="muted"> Removes every employee and all leave records. Bank holidays are kept.</span></div></div>`;
 }
 async function delEmp(id, name) {
@@ -279,7 +284,7 @@ async function delAll() {
   try { const j = await api('/admin/employees', 'DELETE', {confirm: 'DELETE ALL'}); alert(j.deleted + ' staff deleted.'); tabStaff(); } catch (e) { alert(e.message); }
 }
 async function addEmp() {
-  try { await api('/admin/employees', 'POST', {name: $('n-name').value, pin: $('n-pin').value || undefined, allowance: +$('n-all').value, bcResourceId: $('n-bc').value, managerId: $('n-mgr').value || null, isManager: !!$('n-ismgr').value}); tabStaff(); }
+  try { await api('/admin/employees', 'POST', {name: $('n-name').value, pin: $('n-pin').value || undefined, allowance: +$('n-all').value, bcResourceId: $('n-bc').value, email: $('n-email').value, managerId: $('n-mgr').value || null, isManager: !!$('n-ismgr').value}); tabStaff(); }
   catch (e) { $('n-msg').innerHTML = `<div class="err">${esc(e.message)}</div>`; }
 }
 async function bulkAdd() {
@@ -301,8 +306,17 @@ function parseSheet(text) {
   if (!lines.length) return [];
   const delim = lines[0].includes('\t') ? '\t' : ',';
   const rows = lines.map(l => l.split(delim).map(c => c.trim().replace(/^"|"$/g, '')));
-  if (/^(staff|name|employee)/i.test(rows[0][0])) rows.shift();
-  return rows.map(c => ({name: c[0], manager: c[1] || '', allowance: c[2] || '', bcResourceId: c[3] || ''}));
+  const norm = s => (s || '').toLowerCase().replace(/[^a-z]/g, '');
+  let cols = {name: 0, manager: 1, email: 2, allowance: 3, bcResourceId: 4};   // no header row: this order
+  const first = rows[0].map(norm);
+  if (/^(staff|name|employee)/.test(first[0])) {
+    rows.shift();
+    const find = (...keys) => first.findIndex(h => keys.some(k => h.includes(k)));
+    cols = {name: 0, manager: find('manager', 'approv', 'supervisor'), email: find('email', 'mail'),
+            allowance: find('allowance', 'days'), bcResourceId: find('bigchange', 'bcid', 'resource', 'bc')};
+  }
+  const get = (c, k) => cols[k] >= 0 ? (c[cols[k]] || '') : '';
+  return rows.map(c => ({name: c[0], manager: get(c, 'manager'), email: get(c, 'email'), allowance: get(c, 'allowance'), bcResourceId: get(c, 'bcResourceId')}));
 }
 async function importSheet() {
   try {
@@ -317,7 +331,12 @@ async function importSheet() {
       <button class="sm" style="margin-top:6px" onclick="tabStaff()">Done - refresh list</button></div>`;
   } catch (e) { $('im-msg').innerHTML = `<div class="err">${esc(e.message)}</div>`; }
 }
+async function testEmail() {
+  const to = prompt('Send a test email to:'); if (!to) return;
+  try { await api('/admin/test-email', 'POST', {to}); alert('Sent - check that inbox (and spam).'); } catch (e) { alert(e.message); }
+}
 async function upd(id, body) { try { await api('/admin/employees/' + id, 'PUT', body); tabStaff(); } catch (e) { alert(e.message); } }
+function setEmail(id, cur) { const a = prompt('Email address:', cur); if (a !== null) upd(id, {email: a}); }
 function setPin(id) { const p = prompt('New PIN (4-6 digits):'); if (p) upd(id, {pin: p}); }
 function setAllow(id, cur) { const a = prompt('Allowance in days:', cur); if (a !== null && a !== '') upd(id, {allowance: +a}); }
 function setBC(id, cur) { const a = prompt('BigChange resource ID:', cur); if (a !== null) upd(id, {bcResourceId: a}); }
