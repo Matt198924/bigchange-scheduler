@@ -20,6 +20,7 @@ Env vars
 """
 import os
 import hmac
+import secrets
 import time
 import sqlite3
 from datetime import date, datetime, timedelta
@@ -530,6 +531,32 @@ def admin_add_employee():
                    str(b.get('bcResourceId', '') or ''), mid, 1 if b.get('isManager') else 0),
                   returning_id=True)
     return jsonify({'success': True, 'id': eid})
+
+@leave_bp.route('/api/leave/admin/employees/bulk', methods=['POST'])
+def admin_bulk_add():
+    """Paste a list of names (one per line); each gets a random 4-digit PIN,
+    returned once so the office can hand them out."""
+    if not is_admin(): return _auth_error()
+    b = request.get_json(silent=True) or {}
+    names = [n.strip() for n in (b.get('names') or []) if n and n.strip()]
+    if not names: return jsonify({'error': 'Paste at least one name'}), 400
+    if len(names) > 200: return jsonify({'error': 'Max 200 at a time'}), 400
+    mid = b.get('managerId') or None
+    if mid and not query('SELECT id FROM leave_employees WHERE id = ? AND is_manager = 1', (mid,)):
+        return jsonify({'error': 'Pick a valid manager'}), 400
+    allowance = float(b.get('allowance') or DEFAULT_ALLOWANCE)
+    is_mgr = 1 if b.get('isManager') else 0
+    existing = {r['name'].lower() for r in query('SELECT name FROM leave_employees')}
+    created, skipped = [], []
+    for n in names:
+        if n.lower() in existing:
+            skipped.append(n); continue
+        pin = f'{secrets.randbelow(10000):04d}'
+        execute('''INSERT INTO leave_employees (name, pin_hash, allowance, manager_id, is_manager)
+                    VALUES (?,?,?,?,?)''', (n, generate_password_hash(pin), allowance, mid, is_mgr))
+        existing.add(n.lower())
+        created.append({'name': n, 'pin': pin})
+    return jsonify({'created': created, 'skipped': skipped})
 
 @leave_bp.route('/api/leave/admin/employees/<int:eid>', methods=['PUT'])
 def admin_update_employee(eid):
