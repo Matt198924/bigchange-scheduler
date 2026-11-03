@@ -195,6 +195,10 @@ def day_payload(raw_jobs, date_str, is_today):
     }
 
 @app.route('/')
+def home():
+    return send_from_directory('static', 'home.html')
+
+@app.route('/scheduler')
 def index():
     return send_from_directory('static', 'index.html')
 
