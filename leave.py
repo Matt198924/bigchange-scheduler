@@ -320,12 +320,22 @@ def _dispatch(messages):
     else: threading.Thread(target=run, daemon=True).start()
 
 def _range_text(r):
+    """e.g. 'Mon 14 Dec 2026 to Fri 18 Dec 2026 (back at work Mon 21 Dec 2026) - 5 working days'"""
+    bhs = bank_holiday_set()
     s, e = parse_date(r['start_date']), parse_date(r['end_date'])
     f = lambda d: d.strftime('%a %d %b %Y')
-    half = {'am': ' (morning only)', 'pm': ' (afternoon only)'}.get(r.get('half_day') or '', '')
-    txt = f(s) + half if s == e else f'{f(s)} to {f(e)}'
+    off = lambda d: d.weekday() >= 5 or iso(d) in bhs
     d = r['days']
-    return f"{txt} - {d:g} working day{'' if d == 1 else 's'}"
+    days = f"{d:g} working day{'' if d == 1 else 's'}"
+    half = {'am': ' (morning only)', 'pm': ' (afternoon only)'}.get(r.get('half_day') or '', '')
+    if half:
+        return f'{f(s)}{half} - {days}'
+    last = e
+    while last > s and off(last): last -= timedelta(days=1)
+    back = e + timedelta(days=1)
+    while off(back): back += timedelta(days=1)
+    span = f(s) if s == last else f'{f(s)} to {f(last)}'
+    return f'{span} (back at work {f(back)}) - {days}'
 
 def notify_request(rid, event, base_url, note=''):
     """event: submitted | approved | rejected | cancelled | booked"""

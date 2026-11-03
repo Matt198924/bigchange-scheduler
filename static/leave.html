@@ -76,10 +76,11 @@ button.no{background:var(--rust);color:#fff;border-color:var(--rust)}
   <div class="card hidden" id="s-team"><h2>Team requests waiting for you</h2><div id="s-team-list"></div></div>
   <div class="card"><h2>Request leave</h2>
     <p class="muted" id="r-goesto" style="margin-bottom:.4rem"></p>
-    <div class="row"><div><label>From</label><input type="date" id="r-start"></div>
-      <div><label>To</label><input type="date" id="r-end"></div></div>
+    <div class="row"><div><label>First day off</label><input type="date" id="r-start"></div>
+      <div><label>Back at work on</label><input type="date" id="r-end"></div></div>
+    <p class="muted">Leave "back at work" empty for a single day off. For a half day, choose it below and ignore "back at work".</p>
     <div class="row"><div><label>Type</label><select id="r-type"><option value="annual">Annual leave</option><option value="unpaid">Unpaid</option><option value="other">Other</option></select></div>
-      <div><label>Half day (single day only)</label><select id="r-half"><option value="">Full day</option><option value="am">Morning off</option><option value="pm">Afternoon off</option></select></div></div>
+      <div><label>Half day (one day only)</label><select id="r-half"><option value="">Full day</option><option value="am">Morning off</option><option value="pm">Afternoon off</option></select></div></div>
     <label>Note (optional)</label><input id="r-note" maxlength="500">
     <div id="r-preview"></div>
     <button class="primary" id="r-go" onclick="submitRequest()">Submit request</button>
@@ -100,7 +101,19 @@ let TOKEN = sessionStorage.getItem('leaveToken'), ROLE = sessionStorage.getItem(
 const $ = id => document.getElementById(id);
 const esc = s => String(s ?? '').replace(/[&<>"]/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
 const fmtD = d => new Date(d + 'T12:00:00').toLocaleDateString('en-GB', {weekday:'short', day:'numeric', month:'short', year:'numeric'});
-const range = r => r.start_date === r.end_date ? fmtD(r.start_date) + (r.half_day ? ` (${r.half_day.toUpperCase()})` : '') : `${fmtD(r.start_date)} → ${fmtD(r.end_date)}`;
+let BH = [];
+fetch('/api/leave/config').then(r => r.json()).then(j => { BH = j.bankHolidays || []; }).catch(() => {});
+const ymd = d => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+const nonWorking = d => d.getDay() === 0 || d.getDay() === 6 || BH.includes(ymd(d));
+// "Mon 14 Dec → Fri 18 Dec (back Mon 21 Dec)": show last working day off, and the day they return
+function range(r) {
+  if (r.half_day) return fmtD(r.start_date) + ` (${r.half_day.toUpperCase()})`;
+  const end = new Date(r.end_date + 'T12:00:00');
+  const back = new Date(end); do { back.setDate(back.getDate() + 1); } while (nonWorking(back));
+  const last = new Date(end); while (ymd(last) > r.start_date && nonWorking(last)) last.setDate(last.getDate() - 1);
+  const span = r.start_date === ymd(last) ? fmtD(r.start_date) : `${fmtD(r.start_date)} → ${fmtD(ymd(last))}`;
+  return `${span} (back ${fmtD(ymd(back))})`;
+}
 
 async function api(path, method='GET', body) {
   const r = await fetch('/api/leave' + path, {method, headers: {'Content-Type':'application/json', ...(TOKEN ? {Authorization:'Bearer ' + TOKEN} : {})}, body: body ? JSON.stringify(body) : undefined});
@@ -177,11 +190,19 @@ async function teamDecide(id, action) {
   if (action === 'reject' && note === null) return;
   try { await api(`/team/requests/${id}/decide`, 'POST', {action, note}); loadStaff(); } catch (e) { alert(e.message); }
 }
+// "Back at work on" is the day they return, so the last day off is the day before.
+function lastDayOff(first, back, half) {
+  if (half || !back) return first;
+  const d = new Date(back + 'T12:00:00'); d.setDate(d.getDate() - 1);
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+}
+function badReturn(first, back, half) { return !half && back && back <= first; }
 async function preview() {
-  const s = $('r-start').value, e = $('r-end').value || s;
+  const s = $('r-start').value, half = $('r-half').value, e = lastDayOff(s, $('r-end').value, half);
   if (!s) { $('r-preview').innerHTML = ''; return; }
+  if (badReturn(s, $('r-end').value, half)) { $('r-preview').innerHTML = '<div class="err">"Back at work on" must be after the first day off.</div>'; return; }
   try {
-    const j = await api('/preview', 'POST', {startDate: s, endDate: e, halfDay: $('r-half').value, type: $('r-type').value});
+    const j = await api('/preview', 'POST', {startDate: s, endDate: e, halfDay: half, type: $('r-type').value});
     let h = `<div class="info"><b>${j.days}</b> working day${j.days === 1 ? '' : 's'}${j.remainingAfter !== undefined ? ` · ${j.remainingAfter} left after this` : ''}</div>`;
     if (j.clash.names.length) h += `<div class="warn">Already off in that period: ${j.clash.names.map(esc).join(', ')}. The office may need to check cover.</div>`;
     $('r-preview').innerHTML = h;
@@ -189,9 +210,10 @@ async function preview() {
 }
 async function submitRequest() {
   const s = $('r-start').value; if (!s) return;
+  if (badReturn(s, $('r-end').value, $('r-half').value)) { $('r-preview').innerHTML = '<div class="err">"Back at work on" must be after the first day off.</div>'; return; }
   $('r-go').disabled = true;
   try {
-    await api('/requests', 'POST', {startDate: s, endDate: $('r-end').value || s, halfDay: $('r-half').value, type: $('r-type').value, note: $('r-note').value});
+    await api('/requests', 'POST', {startDate: s, endDate: lastDayOff(s, $('r-end').value, $('r-half').value), halfDay: $('r-half').value, type: $('r-type').value, note: $('r-note').value});
     $('r-start').value = $('r-end').value = $('r-note').value = ''; $('r-preview').innerHTML = '<div class="info">Request sent to the office.</div>';
     loadStaff();
   } catch (err) { $('r-preview').innerHTML = `<div class="err">${esc(err.message)}</div>`; }
@@ -237,13 +259,14 @@ async function tabBook() {
   const j = await api('/admin/employees');
   $('a-body').innerHTML = `<div class="card"><h2>Book leave for someone (auto-approved)</h2>
     <label>Employee</label><select id="b-emp">${j.employees.filter(e => e.active).map(e => `<option value="${e.id}">${esc(e.name)}</option>`).join('')}</select>
-    <div class="row"><div><label>From</label><input type="date" id="b-start"></div><div><label>To</label><input type="date" id="b-end"></div></div>
+    <div class="row"><div><label>First day off</label><input type="date" id="b-start"></div><div><label>Back at work on</label><input type="date" id="b-end"></div></div>
     <div class="row"><div><label>Type</label><select id="b-type"><option value="annual">Annual</option><option value="unpaid">Unpaid</option><option value="other">Other</option></select></div>
     <div><label>Half day</label><select id="b-half"><option value="">Full day</option><option value="am">AM off</option><option value="pm">PM off</option></select></div></div>
     <label>Note</label><input id="b-note"><button class="primary" onclick="adminBook()">Book</button><div id="b-msg"></div></div>`;
 }
 async function adminBook() {
-  try { await api('/admin/requests', 'POST', {employeeId: +$('b-emp').value, startDate: $('b-start').value, endDate: $('b-end').value || $('b-start').value, halfDay: $('b-half').value, type: $('b-type').value, note: $('b-note').value}); $('b-msg').innerHTML = '<div class="info">Booked.</div>'; }
+  try {
+    if (badReturn($('b-start').value, $('b-end').value, $('b-half').value)) throw new Error('"Back at work on" must be after the first day off'); await api('/admin/requests', 'POST', {employeeId: +$('b-emp').value, startDate: $('b-start').value, endDate: lastDayOff($('b-start').value, $('b-end').value, $('b-half').value), halfDay: $('b-half').value, type: $('b-type').value, note: $('b-note').value}); $('b-msg').innerHTML = '<div class="info">Booked.</div>'; }
   catch (e) { $('b-msg').innerHTML = `<div class="err">${esc(e.message)}</div>`; }
 }
 async function tabStaff() {
@@ -362,8 +385,6 @@ async function start() {
   } catch (e) { /* api() already signed out on 401 */ }
 }
 ['r-start', 'r-end', 'r-half', 'r-type'].forEach(id => $(id).addEventListener('change', () => {
-  if (id === 'r-start' && (!$('r-end').value || $('r-end').value < $('r-start').value)) $('r-end').value = $('r-start').value;
-  if ($('r-start').value !== $('r-end').value) $('r-half').value = '';
   preview();
 }));
 start();
