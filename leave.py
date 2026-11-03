@@ -630,6 +630,30 @@ def admin_update_employee(eid):
     execute(f"UPDATE leave_employees SET {', '.join(sets)} WHERE id = ?", (*params, eid))
     return jsonify({'success': True})
 
+@leave_bp.route('/api/leave/admin/employees/<int:eid>', methods=['DELETE'])
+def admin_delete_employee(eid):
+    """Permanently remove one person and their leave history. People they
+    manage fall back to the office."""
+    if not is_admin(): return _auth_error()
+    if not query('SELECT id FROM leave_employees WHERE id = ?', (eid,)):
+        return jsonify({'error': 'Not found'}), 404
+    execute('DELETE FROM leave_requests WHERE employee_id = ?', (eid,))
+    execute('UPDATE leave_employees SET manager_id = NULL WHERE manager_id = ?', (eid,))
+    execute('DELETE FROM leave_employees WHERE id = ?', (eid,))
+    return jsonify({'success': True})
+
+@leave_bp.route('/api/leave/admin/employees', methods=['DELETE'])
+def admin_delete_all_employees():
+    """Wipe every employee and every leave request (bank holidays are kept).
+    Requires {"confirm": "DELETE ALL"} so it cannot happen by accident."""
+    if not is_admin(): return _auth_error()
+    if (request.get_json(silent=True) or {}).get('confirm') != 'DELETE ALL':
+        return jsonify({'error': 'Confirmation missing'}), 400
+    n = len(query('SELECT id FROM leave_employees'))
+    execute('DELETE FROM leave_requests')
+    execute('DELETE FROM leave_employees')
+    return jsonify({'success': True, 'deleted': n})
+
 @leave_bp.route('/api/leave/admin/bank-holidays', methods=['POST'])
 def admin_add_bh():
     if not is_admin(): return _auth_error()

@@ -262,7 +262,17 @@ async function tabStaff() {
     <button class="primary" onclick="bulkAdd()">Add all</button><div id="bk-msg"></div></div>
     <div class="card"><h2>Staff</h2>` + j.employees.map(e => `<div class="item" style="${e.active ? '' : 'opacity:.5'}"><div><b>${esc(e.name)}</b>
     <div class="muted">${e.balance.remaining} of ${e.allowance} left · ${e.hasPin ? 'PIN set' : 'no PIN'}${e.isManager ? ' · manager' : ''}${e.bcResourceId ? ' · BC ' + esc(e.bcResourceId) : ''}</div></div>
-    <div style="display:flex;gap:4px;flex-wrap:wrap;justify-content:flex-end"><select class="sm" style="width:auto" onchange="upd(${e.id},{managerId:this.value})" title="Who approves their leave">${mgrOpts(e.managerId)}</select><button class="sm" onclick="upd(${e.id},{isManager:${!e.isManager}})">${e.isManager ? 'Remove manager' : 'Make manager'}</button><button class="sm" onclick="setPin(${e.id})">Set PIN</button><button class="sm" onclick="setAllow(${e.id},${e.allowance})">Allowance</button><button class="sm" onclick="setBC(${e.id},'${esc(e.bcResourceId)}')">BC ID</button><button class="sm" onclick="toggleEmp(${e.id},${!e.active})">${e.active ? 'Deactivate' : 'Reactivate'}</button></div></div>`).join('') + '</div>';
+    <div style="display:flex;gap:4px;flex-wrap:wrap;justify-content:flex-end"><select class="sm" style="width:auto" onchange="upd(${e.id},{managerId:this.value})" title="Who approves their leave">${mgrOpts(e.managerId)}</select><button class="sm" onclick="upd(${e.id},{isManager:${!e.isManager}})">${e.isManager ? 'Remove manager' : 'Make manager'}</button><button class="sm" onclick="setPin(${e.id})">Set PIN</button><button class="sm" onclick="setAllow(${e.id},${e.allowance})">Allowance</button><button class="sm" onclick="setBC(${e.id},'${esc(e.bcResourceId)}')">BC ID</button><button class="sm" onclick="toggleEmp(${e.id},${!e.active})">${e.active ? 'Deactivate' : 'Reactivate'}</button><button class="sm no" onclick="delEmp(${e.id},'${esc(e.name).replace(/'/g, "\\'")}')">Delete</button></div></div>`).join('') + `<div style="margin-top:1rem;border-top:1px solid var(--line);padding-top:1rem"><button class="sm no" onclick="delAll()">Delete ALL staff</button>
+    <span class="muted"> Removes every employee and all leave records. Bank holidays are kept.</span></div></div>`;
+}
+async function delEmp(id, name) {
+  if (!confirm(`Delete ${name} and all their leave records permanently?\n\n(Use Deactivate instead if you just want them to stop appearing.)`)) return;
+  try { await api('/admin/employees/' + id, 'DELETE'); tabStaff(); } catch (e) { alert(e.message); }
+}
+async function delAll() {
+  const t = prompt('This permanently deletes EVERY employee and ALL leave records.\nType DELETE ALL to confirm:');
+  if (t !== 'DELETE ALL') return;
+  try { const j = await api('/admin/employees', 'DELETE', {confirm: 'DELETE ALL'}); alert(j.deleted + ' staff deleted.'); tabStaff(); } catch (e) { alert(e.message); }
 }
 async function addEmp() {
   try { await api('/admin/employees', 'POST', {name: $('n-name').value, pin: $('n-pin').value || undefined, allowance: +$('n-all').value, bcResourceId: $('n-bc').value, managerId: $('n-mgr').value || null, isManager: !!$('n-ismgr').value}); tabStaff(); }
