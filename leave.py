@@ -156,8 +156,16 @@ def init_db():
     execute('CREATE TABLE IF NOT EXISTS leave_bank_holidays (date TEXT PRIMARY KEY, name TEXT NOT NULL)')
     if not query('SELECT date FROM leave_bank_holidays LIMIT 1'):
         for d, n in _SEED_BANK_HOLIDAYS:
-            execute('INSERT INTO leave_bank_holidays (date, name) VALUES (?, ?)', (d, n))
+            try: execute('INSERT INTO leave_bank_holidays (date, name) VALUES (?, ?)', (d, n))
+            except Exception: pass          # another worker seeded it first
     _inited = True
+
+@leave_bp.errorhandler(Exception)
+def _leave_error(ex):
+    from werkzeug.exceptions import HTTPException
+    if isinstance(ex, HTTPException): return ex
+    import traceback; traceback.print_exc()
+    return jsonify({'error': f'Server error: {type(ex).__name__}: {str(ex).strip().splitlines()[0][:200] if str(ex).strip() else ""}'}), 500
 
 @leave_bp.before_request
 def _ensure_db():
