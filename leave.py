@@ -77,11 +77,28 @@ _SEED_BANK_HOLIDAYS = [
 ]
 
 # ── DB ────────────────────────────────────────────────────────────────────
+_pool = None
+_pool_lock = __import__('threading').Lock()
+
 def _connect():
     if IS_PG:
-        import psycopg2
-        import psycopg2.extras
-        conn = psycopg2.connect(DATABASE_URL)
+        # Keep connections open between requests: a fresh TLS connection to a hosted
+        # database costs about a second, which made every page feel slow.
+        global _pool
+        import psycopg2, psycopg2.extras, psycopg2.pool
+        with _pool_lock:
+            if _pool is None:
+                _pool = psycopg2.pool.ThreadedConnectionPool(1, 8, DATABASE_URL, keepalives=1,
+                            keepalives_idle=30, keepalives_interval=10, keepalives_count=3)
+            conn = _pool.getconn()
+        if conn.closed:
+            with _pool_lock: _pool.putconn(conn, close=True)
+            return _connect()
+        try:                                    # drop a connection the server has closed
+            conn.rollback(); cur = conn.cursor(); cur.execute('SELECT 1'); conn.rollback()
+        except Exception:
+            with _pool_lock: _pool.putconn(conn, close=True)
+            conn = psycopg2.connect(DATABASE_URL)   # one-off; closed on release
         conn.cursor_factory = psycopg2.extras.RealDictCursor
         return conn
     conn = sqlite3.connect(SQLITE_PATH)
@@ -107,12 +124,23 @@ def _conn():
 def _close_conn(exc=None):
     c = g.pop('_leave_conn', None)
     if c is not None:
-        try: c.close()
-        except Exception: pass
+        _release(c)
+
+def _release(conn):
+    """Hand a connection back to the pool (or close it if it is not from the pool)."""
+    if IS_PG and _pool is not None:
+        try:
+            if not conn.closed: conn.rollback()
+            with _pool_lock: _pool.putconn(conn, close=bool(conn.closed))
+            return
+        except Exception:
+            pass
+    try: conn.close()
+    except Exception: pass
 
 def _finish(conn, shared):
     if not shared:
-        conn.close()
+        _release(conn)
 
 def query(sql, params=()):
     conn, shared = _conn()
