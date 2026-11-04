@@ -62,6 +62,16 @@ SYNC_EMAIL       = False   # tests set True; normally emails go out on a backgro
 
 LEAVE_TYPES = ['annual', 'unpaid', 'other', 'sick']
 IS_PG = bool(DATABASE_URL)
+
+def _storage_persistent():
+    """True when data survives a redeploy: Postgres, or a SQLite file on a mounted disk."""
+    if IS_PG or os.environ.get('LEAVE_PERSISTENT') == '1':
+        return True
+    try:
+        d = os.path.dirname(os.path.abspath(SQLITE_PATH))
+        return os.path.ismount(d) or d.startswith('/var/data')
+    except Exception:
+        return False
 _serializer = URLSafeTimedSerializer(SECRET, salt='leave-auth')
 
 # England & Wales bank holidays. Editable in the admin tab; seeded once.
@@ -599,7 +609,7 @@ def leave_page():
 def config():
     return jsonify({'types': LEAVE_TYPES, 'adminEnabled': bool(ADMIN_PASSWORD),
                     'bankHolidays': sorted(bank_holiday_set()),
-                    'yearStartMonth': YEAR_START_MONTH, 'persistent': IS_PG})
+                    'yearStartMonth': YEAR_START_MONTH, 'persistent': _storage_persistent()})
 
 @leave_bp.route('/api/leave/employees')
 def list_employees_public():

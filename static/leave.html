@@ -186,7 +186,7 @@ function setSession(t, role) { TOKEN = t; ROLE = role; sessionStorage.setItem('l
 
 // ── login ──
 async function dbWarn() {
-  try { const c = await api('/config'); $('a-warn').innerHTML = c.persistent ? '' : '<div class="err" style="margin-bottom:.8rem"><b>Data is NOT being saved permanently.</b> No DATABASE_URL is set on Render, so staff and leave are wiped on every update. Add a Postgres database (see README) before adding staff.</div>'; } catch (e) {}
+  try { const c = await api('/config'); $('a-warn').innerHTML = c.persistent ? '' : '<div class="err" style="margin-bottom:.8rem"><b>Data is NOT being saved permanently.</b> The app is storing data on temporary space, so staff and leave are wiped on every update. Add a Render disk (mount path /var/data and LEAVE_SQLITE_PATH=/var/data/leave.db) or a DATABASE_URL before adding staff.</div>'; } catch (e) {}
 }
 async function loadEmployees() {
   const j = await api('/employees');
