@@ -178,7 +178,7 @@ async function api(path, method='GET', body) {
   const r = await fetch('/api/leave' + path, {method, headers: {'Content-Type':'application/json', ...(TOKEN ? {Authorization:'Bearer ' + TOKEN} : {})}, body: body ? JSON.stringify(body) : undefined});
   const j = await r.json().catch(() => ({}));
   if (r.status === 401) { signOut(); throw new Error('Session expired - sign in again'); }
-  if (!r.ok) throw new Error(j.error || 'Something went wrong');
+  if (!r.ok) throw new Error(j.error || `Server problem (HTTP ${r.status}) on ${path}`);
   return j;
 }
 function signOut() { sessionStorage.clear(); TOKEN = ROLE = null; location.reload(); }

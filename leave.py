@@ -29,7 +29,7 @@ import requests
 from datetime import date, datetime, timedelta, timezone
 from zoneinfo import ZoneInfo
 
-from flask import Blueprint, jsonify, request, send_from_directory
+from flask import Blueprint, g, has_request_context, jsonify, request, send_from_directory
 from itsdangerous import URLSafeTimedSerializer, BadSignature, SignatureExpired
 from werkzeug.security import generate_password_hash, check_password_hash
 
@@ -91,18 +91,48 @@ def _connect():
 def _sql(sql):
     return sql.replace('?', '%s') if IS_PG else sql
 
+def _conn():
+    """One database connection per web request (opening a fresh one for every query is
+    very slow against a hosted database). Outside a request, a one-off connection."""
+    if has_request_context():
+        c = g.get('_leave_conn')
+        if c is not None and not (IS_PG and c.closed):
+            return c, True
+        c = _connect()
+        g._leave_conn = c
+        return c, True
+    return _connect(), False
+
+@leave_bp.teardown_request
+def _close_conn(exc=None):
+    c = g.pop('_leave_conn', None)
+    if c is not None:
+        try: c.close()
+        except Exception: pass
+
+def _finish(conn, shared):
+    if not shared:
+        conn.close()
+
 def query(sql, params=()):
-    conn = _connect()
+    conn, shared = _conn()
     try:
         cur = conn.cursor()
         cur.execute(_sql(sql), params)
         rows = cur.fetchall()
         return [dict(r) for r in rows]
+    except Exception:
+        try: conn.rollback()
+        except Exception: pass
+        raise
     finally:
-        conn.close()
+        if IS_PG and shared:
+            try: conn.rollback()      # end the read-only transaction
+            except Exception: pass
+        _finish(conn, shared)
 
 def execute(sql, params=(), returning_id=False):
-    conn = _connect()
+    conn, shared = _conn()
     try:
         cur = conn.cursor()
         if returning_id and IS_PG:
@@ -113,19 +143,27 @@ def execute(sql, params=(), returning_id=False):
             new_id = cur.lastrowid if not IS_PG else None
         conn.commit()
         return new_id
+    except Exception:
+        try: conn.rollback()
+        except Exception: pass
+        raise
     finally:
-        conn.close()
+        _finish(conn, shared)
 
 def execute_many(sql, rows):
     if not rows: return
-    conn = _connect()
+    conn, shared = _conn()
     try:
         cur = conn.cursor()
         for r in rows:
             cur.execute(_sql(sql), r)
         conn.commit()
+    except Exception:
+        try: conn.rollback()
+        except Exception: pass
+        raise
     finally:
-        conn.close()
+        _finish(conn, shared)
 
 _inited = False
 def init_db():
@@ -163,7 +201,8 @@ def init_db():
 @leave_bp.errorhandler(Exception)
 def _leave_error(ex):
     from werkzeug.exceptions import HTTPException
-    if isinstance(ex, HTTPException): return ex
+    if isinstance(ex, HTTPException):
+        return jsonify({'error': f'{ex.code} {ex.name}'}), ex.code
     import traceback; traceback.print_exc()
     return jsonify({'error': f'Server error: {type(ex).__name__}: {str(ex).strip().splitlines()[0][:200] if str(ex).strip() else ""}'}), 500
 
