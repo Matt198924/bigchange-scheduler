@@ -305,7 +305,7 @@ async function cancelReq(id) { if (confirm('Cancel this request?')) { await api(
 // ── admin ──
 const TABS = {pending:'Pending', calendar:'Calendar', book:'Book leave', all:'All requests', staff:'Staff', bh:'Bank holidays'};
 let tab = 'pending';
-function showTab(t) { tab = t; $('a-tabs').innerHTML = Object.entries(TABS).map(([k, v]) => `<button class="${k === t ? 'on' : ''}" onclick="showTab('${k}')">${v}</button>`).join(''); ({pending: tabPending, calendar: tabCal, book: tabBook, all: tabAll, staff: tabStaff, bh: tabBH})[t](); }
+function showTab(t) { tab = t; $('a-tabs').innerHTML = Object.entries(TABS).map(([k, v]) => `<button class="${k === t ? 'on' : ''}" onclick="showTab('${k}')">${v}</button>`).join(''); Promise.resolve(({pending: tabPending, calendar: tabCal, book: tabBook, all: tabAll, staff: tabStaff, bh: tabBH})[t]()).catch(e => { $('a-body').innerHTML = `<div class="card"><div class="err">Could not load this tab: ${esc(e.message)}</div></div>`; }); }
 
 function reqRow(r, actions) {
   return `<div class="item"><div class="who">${avatar(r.employeeName)}<div><b>${esc(r.employeeName)}</b> · ${range(r)}
