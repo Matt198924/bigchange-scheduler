@@ -275,31 +275,45 @@ def year_bounds(on):
     hi = date(y + 1, YEAR_START_MONTH, 1) - timedelta(days=1)
     return lo, hi
 
-def balance_for(emp, on=None):
-    lo, hi = year_bounds(on or date.today())
-    bhs = bank_holiday_set()
-    rows = query('''SELECT start_date, end_date, half_day, status, type FROM leave_requests
-                    WHERE employee_id = ? AND type IN ('annual', 'bankholiday')
-                    AND status IN ('approved','pending')''', (emp['id'],))
-    taken = pending = 0.0
+def _balance(emp, rows, bhs, lo, hi, sick_allow):
+    taken = pending = sick = 0.0
     for r in rows:
+        if r['type'] == 'sick':
+            if r['status'] == 'approved':
+                sick += working_days(parse_date(r['start_date']), parse_date(r['end_date']),
+                                     r['half_day'], bhs, lo, hi)
+            continue
+        if r['status'] not in ('approved', 'pending'):
+            continue
         if r['type'] == 'bankholiday':       # always exactly one day, counted in its own leave year
             d = 1.0 if iso(lo) <= r['start_date'] <= iso(hi) else 0.0
-        else:
+        elif r['type'] == 'annual':
             d = working_days(parse_date(r['start_date']), parse_date(r['end_date']),
                              r['half_day'], bhs, lo, hi)
+        else:
+            continue
         if r['status'] == 'approved': taken += d
         else: pending += d
-    sick = 0.0
-    for r in query('''SELECT start_date, end_date, half_day FROM leave_requests
-                      WHERE employee_id = ? AND type = 'sick' AND status = 'approved' ''', (emp['id'],)):
-        sick += working_days(parse_date(r['start_date']), parse_date(r['end_date']),
-                             r['half_day'], bhs, lo, hi)
-    sa = sick_allowance()
     return {'yearStart': iso(lo), 'yearEnd': iso(hi), 'allowance': emp['allowance'],
             'taken': taken, 'pending': pending,
             'remaining': emp['allowance'] - taken - pending,
-            'sickAllowance': sa, 'sickTaken': sick, 'sickRemaining': sa - sick}
+            'sickAllowance': sick_allow, 'sickTaken': sick, 'sickRemaining': sick_allow - sick}
+
+def balance_for(emp, on=None):
+    lo, hi = year_bounds(on or date.today())
+    rows = query('''SELECT start_date, end_date, half_day, status, type FROM leave_requests
+                    WHERE employee_id = ? AND type IN ('annual', 'bankholiday', 'sick')''', (emp['id'],))
+    return _balance(emp, rows, bank_holiday_set(), lo, hi, sick_allowance())
+
+def balances_for(emps, on=None):
+    """Balances for many people using three queries in total (not three each)."""
+    lo, hi = year_bounds(on or date.today())
+    bhs, sa = bank_holiday_set(), sick_allowance()
+    by = {}
+    for r in query('''SELECT employee_id, start_date, end_date, half_day, status, type FROM leave_requests
+                      WHERE type IN ('annual', 'bankholiday', 'sick')'''):
+        by.setdefault(r['employee_id'], []).append(r)
+    return {e['id']: _balance(e, by.get(e['id'], []), bhs, lo, hi, sa) for e in emps}
 
 # ── Auth ──────────────────────────────────────────────────────────────────
 _fails = {}  # (ip, key) -> [timestamps]
@@ -799,8 +813,9 @@ def team_log_sick():
 def team_members():
     mgr = current_manager()
     if not mgr: return _auth_error()
-    return jsonify({'members': [{'id': e['id'], 'name': e['name'], 'balance': balance_for(e)}
-                                for e in query('SELECT * FROM leave_employees WHERE manager_id = ? AND active = 1 ORDER BY name', (mgr['id'],))]})
+    team = query('SELECT * FROM leave_employees WHERE manager_id = ? AND active = 1 ORDER BY name', (mgr['id'],))
+    bals = balances_for(team)
+    return jsonify({'members': [{'id': e['id'], 'name': e['name'], 'balance': bals[e['id']]} for e in team]})
 
 @leave_bp.route('/api/leave/admin/requests', methods=['POST'])
 def admin_book():
@@ -832,12 +847,14 @@ def admin_retry_sync(rid):
 def admin_employees():
     if not is_admin(): return _auth_error()
     out = []
-    for e in query('SELECT * FROM leave_employees ORDER BY active DESC, name'):
+    emps = query('SELECT * FROM leave_employees ORDER BY active DESC, name')
+    bals = balances_for(emps)
+    for e in emps:
         out.append({'id': e['id'], 'name': e['name'], 'allowance': e['allowance'],
                     'managerId': e.get('manager_id'), 'isManager': bool(e.get('is_manager')),
                     'bcResourceId': e['bc_resource_id'], 'email': e.get('email') or '',
                     'active': bool(e['active']), 'hasPin': bool(e['pin_hash']),
-                    'balance': balance_for(e)})
+                    'balance': bals[e['id']]})
     return jsonify({'employees': out})
 
 @leave_bp.route('/api/leave/admin/employees', methods=['POST'])
