@@ -194,10 +194,26 @@ def execute_many(sql, rows):
         _finish(conn, shared)
 
 _inited = False
+_init_lock = __import__('threading').Lock()
 def init_db():
+    """Create tables once. Locked, and retried, because on a brand-new Postgres several
+    requests arriving together can collide while creating the same table."""
     global _inited
     if _inited:
         return
+    with _init_lock:
+        if _inited:
+            return
+        for attempt in range(4):
+            try:
+                _init_db_once()
+                break
+            except Exception:
+                if attempt == 3: raise
+                time.sleep(0.7)
+        _inited = True
+
+def _init_db_once():
     pk = 'SERIAL PRIMARY KEY' if IS_PG else 'INTEGER PRIMARY KEY AUTOINCREMENT'
     execute(f'''CREATE TABLE IF NOT EXISTS leave_employees (
         id {pk}, name TEXT NOT NULL, pin_hash TEXT, allowance REAL NOT NULL,
@@ -224,7 +240,6 @@ def init_db():
         for d, n in _SEED_BANK_HOLIDAYS:
             try: execute('INSERT INTO leave_bank_holidays (date, name) VALUES (?, ?)', (d, n))
             except Exception: pass          # another worker seeded it first
-    _inited = True
 
 @leave_bp.errorhandler(Exception)
 def _leave_error(ex):
