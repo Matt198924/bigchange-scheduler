@@ -206,7 +206,9 @@ async function adminLogin() {
 let calMonth = new Date().toISOString().slice(0, 7);
 async function renderCal(el, month) {
   calMonth = month;
-  const j = await api('/calendar?month=' + month);
+  let j;
+  try { j = await api('/calendar?month=' + month); }
+  catch (e) { $(el).innerHTML = `<div class="err">Could not load the calendar: ${esc(e.message)} <button class="sm" onclick="renderCal('${el}', calMonth)">Try again</button></div>`; return; }
   const [y, m] = month.split('-').map(Number);
   const first = new Date(y, m - 1, 1), days = new Date(y, m, 0).getDate(), lead = (first.getDay() + 6) % 7;
   let h = `<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:.5rem">
