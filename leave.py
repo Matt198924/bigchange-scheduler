@@ -778,11 +778,13 @@ def _bc_resource_names():
     names = {}
     try:
         for r in _bc_resources():
-            if r.get('id') is not None and _bc_res_name(r):
-                names[str(r['id'])] = _bc_res_name(r)
+            rid = r.get('id') if r.get('id') is not None else r.get('resourceId')
+            if rid is not None and _bc_res_name(r):
+                names[_bcid(rid)] = _bc_res_name(r)
     except Exception as ex:
         print(f'[LEAVE] could not read BigChange resource names: {ex}')
-    _bc_names_cache.update(t=time.time(), names=names)
+    if names:                                   # never cache a failure or an empty list
+        _bc_names_cache.update(t=time.time(), names=names)
     return names
 
 def bc_calendar_overlay(first, last, include_unmatched=False):
@@ -1294,9 +1296,9 @@ def _bc_resources():
     return out
 
 def _bc_res_name(r):
-    n = r.get('name') or r.get('resourceName') or r.get('fullName')
+    n = r.get('name') or r.get('resourceName') or r.get('fullName') or r.get('displayName')
     if not n:
-        n = f"{r.get('firstName') or ''} {r.get('lastName') or r.get('surname') or ''}".strip()
+        n = f"{r.get('firstName') or r.get('forename') or ''} {r.get('lastName') or r.get('surname') or ''}".strip()
     return n
 
 @leave_bp.route('/api/leave/admin/bc-match')
