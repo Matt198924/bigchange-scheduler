@@ -3,8 +3,8 @@
   "short_name":"Van Parts",
   "start_url":"./",
   "display":"standalone",
-  "background_color":"#f4f6f8",
-  "theme_color":"#0f172a",
+  "background_color":"#F4F6F7",
+  "theme_color":"#0B2A4A",
   "description":"Search the van parts stock list and find the locker location.",
   "icons":[
     {"src":"icons/icon-192.png","sizes":"192x192","type":"image/png","purpose":"any maskable"},
