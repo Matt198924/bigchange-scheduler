@@ -322,9 +322,9 @@ async function cancelReq(id) { if (confirm('Cancel this request?')) { await api(
 
 // ── admin ──
 const ADMIN_PAGE = location.pathname.startsWith('/staff-admin');   // office-only page: people, PINs, hub access
-const TABS = ADMIN_PAGE ? {staff:'Staff', access:'Hub access'} : {pending:'Pending', calendar:'Calendar', book:'Book leave', all:'All requests', bh:'Bank holidays'};
+const TABS = ADMIN_PAGE ? {pins:'Sign-in & PINs', access:'Hub access'} : {pending:'Pending', calendar:'Calendar', book:'Book leave', all:'All requests', staff:'Staff', bh:'Bank holidays'};
 let tab = 'pending';
-function showTab(t) { tab = t; if ($('a-body')) $('a-body').innerHTML = '<div class="card"><p class="muted">Loading…</p></div>'; $('a-tabs').innerHTML = Object.entries(TABS).map(([k, v]) => `<button class="${k === t ? 'on' : ''}" onclick="showTab('${k}')">${v}</button>`).join(''); Promise.resolve(({pending: tabPending, calendar: tabCal, book: tabBook, all: tabAll, staff: tabStaff, access: tabAccess, bh: tabBH})[t]()).catch(e => { $('a-body').innerHTML = `<div class="card"><div class="err">Could not load this tab: ${esc(e.message)}</div></div>`; }); }
+function showTab(t) { tab = t; if ($('a-body')) $('a-body').innerHTML = '<div class="card"><p class="muted">Loading…</p></div>'; $('a-tabs').innerHTML = Object.entries(TABS).map(([k, v]) => `<button class="${k === t ? 'on' : ''}" onclick="showTab('${k}')">${v}</button>`).join(''); Promise.resolve(({pending: tabPending, calendar: tabCal, book: tabBook, all: tabAll, staff: tabStaff, pins: tabPins, access: tabAccess, bh: tabBH})[t]()).catch(e => { $('a-body').innerHTML = `<div class="card"><div class="err">Could not load this tab: ${esc(e.message)}</div></div>`; }); }
 
 function reqRow(r, actions) {
   return `<div class="item"><div class="who">${avatar(r.employeeName)}<div><b>${esc(r.employeeName)}</b> · ${range(r)}
@@ -387,7 +387,7 @@ async function tabStaff() {
       <p class="muted" style="margin-top:.6rem">Includes bank holidays, which are booked automatically and deducted. Change one person's allowance with the number box on their row below.</p>
       <div id="al-msg"></div>
     </div>
-    <div class="card"><h2>Staff (${j.employees.length})</h2><div style="margin-bottom:.8rem"><button class="sm" onclick="emailPins(null)">Email everyone their PIN</button> <span class="muted">Sends each person a NEW PIN with sign-in instructions (needs an email address on file).</span><div id="ep-msg"></div></div>` + j.employees.map(e => `<div class="item" style="${e.active ? '' : 'opacity:.5'}">
+    <div class="card"><h2>Staff (${j.employees.length})</h2>` + j.employees.map(e => `<div class="item" style="${e.active ? '' : 'opacity:.5'}">
       <div class="who">${avatar(e.name)}<div><b>${esc(e.name)}</b>${e.isManager ? ' <span class="pill approved">manager</span>' : ''}
         <div class="muted">Annual: <b>${e.balance.remaining}</b> of ${e.allowance} left (${e.balance.taken} taken incl. bank holidays${e.balance.pending ? ', ' + e.balance.pending + ' pending' : ''}) · Sick (paid): ${e.balance.sickTaken}/${e.balance.sickAllowance}</div>
         <div class="muted">Recorded only: unpaid sick ${e.balance.sickUnpaidTaken || 0} · unpaid leave ${e.balance.unpaidTaken || 0} · appointments ${e.balance.appointmentTaken || 0}</div>
@@ -398,7 +398,6 @@ async function tabStaff() {
         <button class="sm" onclick="upd(${e.id},{isManager:${!e.isManager}})">${e.isManager ? 'Remove manager' : 'Make manager'}</button>
         <button class="sm" onclick="setEmail(${e.id},'${esc(e.email).replace(/'/g, "\\'")}')">Email</button>
         <button class="sm" onclick="setPin(${e.id})">Set PIN</button>
-        <button class="sm" onclick="emailPins([${e.id}], '${esc(e.name).replace(/'/g, "\\'")}')">Email PIN</button>
         <button class="sm" onclick="showReqs(${e.id})">Breakdown</button>
           <button class="sm" onclick="setBC(${e.id},'${esc(e.bcResourceId)}')">BC ID</button>
         <button class="sm" onclick="toggleEmp(${e.id},${!e.active})">${e.active ? 'Deactivate' : 'Reactivate'}</button>
@@ -618,8 +617,18 @@ async function showReqs(id) {
     alert(j.yearStart + ' to ' + j.yearEnd + '\n\n' + (j.requests.map(r => `${r.start}${r.end !== r.start ? ' → ' + r.end : ''}${r.half ? ' (half)' : ''} · ${t[r.type] || r.type} · ${r.status} · ${r.counted}d${r.fromBigChange ? ' · BC' : ''}`).join('\n') || 'No requests')); }
   catch (e) { alert(e.message); }
 }
-async function upd(id, body) { try { await api('/admin/employees/' + id, 'PUT', body); tabStaff(); } catch (e) { alert(e.message); } }
+async function upd(id, body) { try { await api('/admin/employees/' + id, 'PUT', body); ADMIN_PAGE ? tabPins() : tabStaff(); } catch (e) { alert(e.message); } }
 function setEmail(id, cur) { const a = prompt('Email address:', cur); if (a !== null) upd(id, {email: a}); }
+async function tabPins() {
+  const j = await api('/admin/employees');
+  $('a-body').innerHTML = `<div class="card"><h2>Sign-in &amp; PINs</h2>
+    <p class="muted">Staff sign in to the hub with their name and a PIN. Existing PINs can't be read back, so emailing sends a NEW PIN (the old one stops working) with sign-in instructions and a short intro to the hub.</p>
+    <div style="margin:.7rem 0"><button class="sm" onclick="emailPins(null)">Email everyone their PIN</button> <span class="muted">Only people with an email address.</span></div><div id="ep-msg"></div>`
+    + j.employees.filter(e => e.active).map(e => `<div class="item"><div class="who">${avatar(e.name)}<div><b>${esc(e.name)}</b>
+      <div class="muted">${e.hasPin ? 'PIN set' : 'no PIN yet'} · ${e.email ? esc(e.email) : 'no email on file'}</div></div></div>
+      <div class="controls"><button class="sm" ${e.email ? '' : 'disabled title="Add an email on the Staff tab first"'} onclick="emailPins([${e.id}], '${esc(e.name).replace(/'/g, "\\'")}')">Email PIN</button>
+      <button class="sm" onclick="setPin(${e.id})">Set PIN</button></div></div>`).join('') + '</div>';
+}
 async function emailPins(ids, name) {
   const n = ids ? name : 'EVERYONE with an email address';
   if (!confirm(`Email a NEW PIN to ${n}? Their current PIN will stop working.`)) return;
@@ -660,7 +669,7 @@ async function start() {
   if (!TOKEN) { $('login').classList.remove('hidden'); $('signout').classList.add('hidden'); return loadEmployees(); }
   $('signout').classList.remove('hidden');
   try {
-    if (ROLE === 'admin') { $('admin').classList.remove('hidden'); showTab(ADMIN_PAGE ? 'staff' : 'pending'); dbWarn(); }
+    if (ROLE === 'admin') { $('admin').classList.remove('hidden'); showTab(ADMIN_PAGE ? 'pins' : 'pending'); dbWarn(); }
     else { $('staff').classList.remove('hidden'); await loadStaff(); }
   } catch (e) { /* api() already signed out on 401 */ }
 }
