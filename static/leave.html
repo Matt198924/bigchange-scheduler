@@ -321,9 +321,9 @@ async function submitRequest() {
 async function cancelReq(id) { if (confirm('Cancel this request?')) { await api(`/requests/${id}/cancel`, 'POST'); loadStaff(); } }
 
 // ── admin ──
-const TABS = {pending:'Pending', calendar:'Calendar', book:'Book leave', all:'All requests', staff:'Staff', bh:'Bank holidays'};
+const TABS = {pending:'Pending', calendar:'Calendar', book:'Book leave', all:'All requests', staff:'Staff', access:'Hub access', bh:'Bank holidays'};
 let tab = 'pending';
-function showTab(t) { tab = t; if ($('a-body')) $('a-body').innerHTML = '<div class="card"><p class="muted">Loading…</p></div>'; $('a-tabs').innerHTML = Object.entries(TABS).map(([k, v]) => `<button class="${k === t ? 'on' : ''}" onclick="showTab('${k}')">${v}</button>`).join(''); Promise.resolve(({pending: tabPending, calendar: tabCal, book: tabBook, all: tabAll, staff: tabStaff, bh: tabBH})[t]()).catch(e => { $('a-body').innerHTML = `<div class="card"><div class="err">Could not load this tab: ${esc(e.message)}</div></div>`; }); }
+function showTab(t) { tab = t; if ($('a-body')) $('a-body').innerHTML = '<div class="card"><p class="muted">Loading…</p></div>'; $('a-tabs').innerHTML = Object.entries(TABS).map(([k, v]) => `<button class="${k === t ? 'on' : ''}" onclick="showTab('${k}')">${v}</button>`).join(''); Promise.resolve(({pending: tabPending, calendar: tabCal, book: tabBook, all: tabAll, staff: tabStaff, access: tabAccess, bh: tabBH})[t]()).catch(e => { $('a-body').innerHTML = `<div class="card"><div class="err">Could not load this tab: ${esc(e.message)}</div></div>`; }); }
 
 function reqRow(r, actions) {
   return `<div class="item"><div class="who">${avatar(r.employeeName)}<div><b>${esc(r.employeeName)}</b> · ${range(r)}
@@ -386,7 +386,6 @@ async function tabStaff() {
       <p class="muted" style="margin-top:.6rem">Includes bank holidays, which are booked automatically and deducted. Change one person's allowance with the number box on their row below.</p>
       <div id="al-msg"></div>
     </div>
-    <div class="card" id="ha-card"><h2>Hub access</h2><p class="muted">Loading...</p></div>
     <div class="card"><h2>Staff (${j.employees.length})</h2>` + j.employees.map(e => `<div class="item" style="${e.active ? '' : 'opacity:.5'}">
       <div class="who">${avatar(e.name)}<div><b>${esc(e.name)}</b>${e.isManager ? ' <span class="pill approved">manager</span>' : ''}
         <div class="muted">Annual: <b>${e.balance.remaining}</b> of ${e.allowance} left (${e.balance.taken} taken incl. bank holidays${e.balance.pending ? ', ' + e.balance.pending + ' pending' : ''}) · Sick (paid): ${e.balance.sickTaken}/${e.balance.sickAllowance}</div>
@@ -443,9 +442,12 @@ async function tabStaff() {
     <details class="card"><summary>Email notifications ${es.enabled ? '<span class="pill approved">on</span>' : '<span class="pill pending">off</span>'}</summary>
       ${es.enabled ? `<p class="muted">Sending from ${esc(es.from)}. Staff get approved/rejected/cancelled emails; managers get new-request emails${es.office ? '; people with no manager go to ' + esc(es.office) : ' (set LEAVE_OFFICE_EMAIL so requests with no manager reach you)'}.</p>
       <button class="sm" style="margin-top:.6rem" onclick="testEmail()">Send test email</button>` : `<p class="muted">Off. Set RESEND_API_KEY and LEAVE_EMAIL_FROM on Render to switch on (see README).</p>`}</details>`;
-  loadHubAccess();
 }
 let HA = null;
+async function tabAccess() {
+  $('a-body').innerHTML = '<div class="card" id="ha-card"></div>';
+  await loadHubAccess();
+}
 async function loadHubAccess() {
   try { HA = await api('/../hub/admin/access'); } catch (e) { $('ha-card').innerHTML = `<h2>Hub access</h2><div class="err">${esc(e.message)}</div>`; return; }
   $('ha-card').innerHTML = `<h2>Hub access</h2><p class="muted">Staff sign in at the hub with their name and PIN. For each tool choose whether every signed-in person can use it, or only the people you tick. The office password always has full access.</p>`
