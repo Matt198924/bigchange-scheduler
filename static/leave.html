@@ -72,6 +72,14 @@ button.no{background:#fff;color:var(--rust);border-color:#f1c4c6}button.no:hover
 .cal .d i{font-style:normal;font-weight:600;font-size:11px;display:block;margin-bottom:2px}
 .cal .n{background:var(--moss-bg);color:#1F5F2D;border-radius:4px;margin-top:2px;padding:1px 4px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .cal .n.p{background:var(--amber-bg);color:#7A4E00}
+.cal .n.k-sick,.legend .k-sick{background:#FBE0E0;color:#8A1C1C}
+.cal .n.k-unpaid,.legend .k-unpaid{background:#E4E7EC;color:#3B4452}
+.cal .n.k-other,.legend .k-other{background:#EBE1F7;color:#4B2B80}
+.legend{display:flex;flex-wrap:wrap;gap:.3rem .9rem;margin-top:.5rem;font-size:.78rem;color:var(--muted,#667)}
+.legend span{display:inline-flex;align-items:center;gap:.3rem}
+.legend i.n{display:inline-block;width:.9rem;height:.7rem;border-radius:3px;padding:0;margin:0;background:var(--moss-bg)}
+.legend i.n.p{background:var(--amber-bg)}
+.legend i.n.bhk{background:var(--cyan-bg);border:1px solid #bfeeff}
 /* sign-in */
 .login-wrap{max-width:400px;margin:2.5rem auto 0}
 .login-logo{display:flex;flex-direction:column;align-items:center;margin-bottom:1.25rem;text-align:center}
@@ -218,13 +226,15 @@ async function renderCal(el, month) {
   for (let i = 0; i < lead; i++) h += '<div></div>';
   for (let d = 1; d <= days; d++) {
     const ds = `${month}-${String(d).padStart(2, '0')}`, dow = (lead + d - 1) % 7;
-    const names = (j.approved[ds] || []).map(n => `<div class="n">${esc(n)}</div>`).join('') + (j.pending[ds] || []).map(n => `<div class="n p">${esc(n)}?</div>`).join('');
+    const inf = n => (j.info || {})[ds] && j.info[ds][n] || {k: 'annual', t: 'Leave'};
+    const names = (j.approved[ds] || []).map(n => `<div class="n k-${esc(inf(n).k)}" title="${esc(n + ' – ' + inf(n).t)}">${esc(n)}</div>`).join('') + (j.pending[ds] || []).map(n => `<div class="n p" title="${esc(n + ' – ' + inf(n).t + ' (waiting for approval)')}">${esc(n)}?</div>`).join('');
     h += `<div class="d ${dow > 4 ? 'we' : ''} ${j.bankHolidays.includes(ds) ? 'bh' : ''} ${ds === new Date().toISOString().slice(0, 10) ? 'today' : ''}"><i>${d}</i>${names}</div>`;
   }
   const note = [ROLE === 'admin' ? 'Amber with ? = pending.' : '', j.bcShown ? 'Includes absences booked in BigChange.' : '',
     j.bcError ? 'BigChange absences could not be loaded just now.' : '',
     j.bcUnmatched ? `${j.bcUnmatched} BigChange absence${j.bcUnmatched === 1 ? ' is' : 's'} this month for people with no BigChange ID here (shown by their BigChange name; they don't count against allowances).` : ''].filter(Boolean).join(' ');
-  $(el).innerHTML = h + '</div>' + (note ? `<p class="muted" style="margin-top:.4rem">${esc(note)}</p>` : '');
+  const legend = `<div class="legend"><span><i class="n k-annual"></i>Annual leave</span><span><i class="n k-sick"></i>Sick</span><span><i class="n k-unpaid"></i>Unpaid</span><span><i class="n k-other"></i>Other / appointment</span>${ROLE === 'admin' ? '<span><i class="n p"></i>Pending</span>' : ''}<span><i class="n bhk"></i>Bank holiday</span></div>`;
+  $(el).innerHTML = h + '</div>' + legend + (note ? `<p class="muted" style="margin-top:.4rem">${esc(note)}</p>` : '');
 }
 function shiftCal(el, n) { const [y, m] = calMonth.split('-').map(Number); renderCal(el, new Date(y, m - 1 + n, 1).toISOString().slice(0, 7).replace(/^(\d{4}-\d{2}).*/, '$1')); }
 
