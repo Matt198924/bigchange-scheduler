@@ -434,6 +434,7 @@ async function bcMatchPreview() {
     $('bcm-out').innerHTML = `<p class="muted">${j.alreadySet} staff already have an ID. BigChange has ${j.bcResources} resources.</p>`
       + (j.proposals.length ? `<p style="margin:.4rem 0 .2rem"><b>${j.proposals.length}</b> matches found</p>` + j.proposals.map(p => `<div class="muted">${esc(p.name)} → ${esc(p.resourceId)}${p.old ? ' (replaces wrong ID ' + esc(p.old) + ')' : ''}${p.bcName !== p.name ? ' (' + esc(p.bcName) + ')' : ''}</div>`).join('') + `<button class="primary" style="margin-top:.5rem" onclick="bcMatchApply()">Save ${j.proposals.length} IDs</button>` : '<p class="muted">No new matches.</p>')
       + (j.ambiguous.length ? `<p class="muted" style="margin-top:.5rem">More than one BigChange match, add by hand: ${esc(j.ambiguous.join(', '))}</p>` : '')
+      + (j.notFound.length && j.bcNames ? `<details style="margin-top:.5rem"><summary class="muted">Names BigChange has (${j.bcNames.length})</summary><div class="muted">${esc(j.bcNames.join(', '))}</div><div class="muted" style="margin-top:.4rem">Fields: ${esc((j.fields || []).join(', '))}</div></details>` : '')
       + (j.notFound.length ? `<p class="muted" style="margin-top:.5rem">Not found in BigChange (add by hand): ${esc(j.notFound.join(', '))}</p>` : '');
   } catch (e) { $('bcm-out').innerHTML = `<div class="err">${esc(e.message)}</div>`; }
 }
