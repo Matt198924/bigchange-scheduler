@@ -1187,6 +1187,17 @@ def _uk_date(ts, minus_second=False):
     if minus_second: dt -= timedelta(seconds=1)
     return dt.astimezone(UK)
 
+# Only these BigChange absence types are imported (id -> how it counts here). Anything else is skipped.
+# 3701 "bank holiday" is deliberately left out: bank holidays are already booked for everyone here.
+IMPORT_TYPE_MAP = {'3700': 'annual',       # Approved Holiday
+                   '37186': 'sick',        # Sick day paid
+                   '37187': 'sick',        # Sick pay unpaid
+                   '37409': 'unpaid',      # Unpaid leave
+                   '37331': 'other'}       # Appointment
+for _pair in os.environ.get('LEAVE_IMPORT_TYPES', '').split(','):
+    if '=' in _pair:
+        _k, _v = _pair.split('=', 1)
+        IMPORT_TYPE_MAP[_k.strip()] = _v.strip()
 IMPORT_FROM = os.environ.get('LEAVE_IMPORT_FROM', '2026-01-01')   # import absences starting on or after this date
 
 def _bc_fetch_absences():
@@ -1210,8 +1221,7 @@ def _bc_import_plan(type_map=None):
     rows = []
     for a in _bc_fetch_absences():
         tid = str(_bc_type(a))
-        default = 'annual' if tid == BC_TYPE_ANNUAL else 'sick' if tid == BC_TYPE_SICK else 'other'
-        typ = type_map.get(tid, default)
+        typ = type_map.get(tid, IMPORT_TYPE_MAP.get(tid, 'skip'))
         row = {'id': str(a.get('id')), 'resourceId': str(a.get('resourceId')), 'typeId': tid,
                'status': _bc_status(a), 'type': typ, 'action': 'import', 'why': ''}
         emp = emps.get(row['resourceId'])
@@ -1230,7 +1240,7 @@ def _bc_import_plan(type_map=None):
         if row['id'] in have: row.update(action='skip', why='already in the leave system')
         elif _bc_status(a) != 'approved': row.update(action='skip', why=f"status is {_bc_status(a) or 'unknown'}")
         elif not emp: row.update(action='skip', why='no employee has this BigChange ID')
-        elif typ == 'skip': row.update(action='skip', why='type set to skip')
+        elif typ == 'skip': row.update(action='skip', why='type is not on the import list')
         elif days == 0: row.update(action='skip', why='no working days')
         elif overlaps_own(emp['id'], start, end): row.update(action='skip', why='overlaps leave already booked')
         row['_emp'] = emp['id'] if emp else None
