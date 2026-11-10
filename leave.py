@@ -744,7 +744,7 @@ def _bc_type(a):
 
 def _bc_type_name(a):
     t = a.get('absenceType') or a.get('type')
-    return (t.get('name') if isinstance(t, dict) else None) or a.get('absenceTypeName') or ''
+    return (t.get('name') if isinstance(t, dict) else None) or a.get('typeName') or a.get('absenceTypeName') or ''
 
 # ── BigChange absences shown on the calendar (read-only, not counted against allowances) ──
 _bc_cal_cache = {}
@@ -767,8 +767,26 @@ def _bc_month_absences(first, last):
     _bc_cal_cache[key] = (time.time(), items)
     return items
 
-def bc_calendar_overlay(first, last, include_requested=False):
-    """({date: [names]} approved, {date: [names]} requested, unmatched_count, error)"""
+BANKHOL_TYPES = {t.strip() for t in os.environ.get('LEAVE_BC_BANKHOL_TYPES', '3701,30157').split(',') if t.strip()}
+_bc_names_cache = {'t': 0, 'names': {}}
+
+def _bc_resource_names():
+    """{resourceId: name} from BigChange, cached for an hour. Empty if it cannot be read."""
+    if time.time() - _bc_names_cache['t'] < 3600:
+        return _bc_names_cache['names']
+    names = {}
+    try:
+        for r in _bc_resources():
+            if r.get('id') is not None and _bc_res_name(r):
+                names[str(r['id'])] = _bc_res_name(r)
+    except Exception as ex:
+        print(f'[LEAVE] could not read BigChange resource names: {ex}')
+    _bc_names_cache.update(t=time.time(), names=names)
+    return names
+
+def bc_calendar_overlay(first, last, include_unmatched=False):
+    """({date: [names]} approved, {date: [names]} requested, other_people_count, error).
+    include_unmatched also shows people with no BigChange ID here, under their BigChange name."""
     if not bc_hooks.get('get'):
         return {}, {}, 0, None
     try:
@@ -785,9 +803,14 @@ def bc_calendar_overlay(first, last, include_requested=False):
         status = _bc_status(a)
         if status not in ('approved', 'requested') or str(a.get('id')) in have:
             continue
+        if _bc_type(a) in BANKHOL_TYPES or 'bank holiday' in _bc_type_name(a).lower():
+            continue                                   # bank holidays are shown as shaded days instead
         name = emps.get(str(a.get('resourceId')))
         if not name:
-            unmatched += 1; continue
+            unmatched += 1
+            if not include_unmatched: continue
+            rid = str(a.get('resourceId'))
+            name = _bc_resource_names().get(rid) or f'BigChange #{rid}'
         try:
             d = max(_uk_date(a['startAt']).date(), first)
             e = min(max(_uk_date(a['startAt']).date(), _uk_date(a['endAt'], True).date()), last)
@@ -813,14 +836,14 @@ def calendar():
     last = (date(y + (m == 12), m % 12 + 1, 1)) - timedelta(days=1)
     approved = off_on(first, last)
     pending = off_on(first, last, statuses=('pending',)) if is_admin() else {}
-    bc_ok, bc_req, bc_unmatched, bc_err = bc_calendar_overlay(first, last)
+    bc_ok, bc_req, bc_unmatched, bc_err = bc_calendar_overlay(first, last, include_unmatched=is_admin())
     for src, dst in ((bc_ok, approved), (bc_req if is_admin() else {}, pending)):
         for d, names in src.items():
             lst = dst.setdefault(d, [])
             lst.extend(n for n in names if n not in lst)
     return jsonify({'month': first.strftime('%Y-%m'), 'approved': approved, 'pending': pending,
                     'bcShown': bool(bc_hooks.get('get')) and not bc_err, 'bcError': bc_err,
-                    'bcUnmatched': bc_unmatched if is_admin() else 0,
+                    'bcUnmatched': bc_unmatched if is_admin() else 0, 'bcUnmatchedShown': bool(is_admin()),
                     'bankHolidays': [d for d in sorted(bank_holiday_set()) if iso(first) <= d <= iso(last)]})
 
 # ── Admin endpoints ───────────────────────────────────────────────────────
