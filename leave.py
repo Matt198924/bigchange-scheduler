@@ -1251,6 +1251,21 @@ def _bc_span(a, bhs=None):
     BigChange stamps are UK wall-clock times that may be labelled UTC ('Z'), so a midnight end in summer would
     otherwise slip onto the next day. Both readings are tried and the one matching daysRequested wins."""
     bhs = bank_holiday_set() if bhs is None else bhs
+    want = a.get('daysRequested')
+    try: want = float(want) if want is not None else None
+    except (TypeError, ValueError): want = None
+    if want and want > 0:                      # start date + days requested decides the end, never the end stamp
+        try:
+            sd = datetime.fromisoformat(re.sub(r'(Z|[+-]\d\d:?\d\d)$', '', str(a['startAt']).strip()))
+            d, left = sd.date(), want
+            while d.weekday() >= 5 or iso(d) in bhs: d += timedelta(days=1)   # first working day on/after the start
+            first = d
+            while left > 1:
+                d += timedelta(days=1)
+                if d.weekday() < 5 and iso(d) not in bhs: left -= 1
+            return first, d, sd.replace(hour=(13 if sd.hour >= 12 else 11) if want <= 0.5 else 23)
+        except Exception:
+            pass
     def naive(ts, minus=False):
         t = re.sub(r'(Z|[+-]\d\d:?\d\d)$', '', str(ts).strip())
         dt = datetime.fromisoformat(t)
@@ -1261,7 +1276,6 @@ def _bc_span(a, bhs=None):
     try: cands.append((naive(a['startAt']), naive(a['endAt'], True)))
     except Exception: pass
     if not cands: raise ValueError('unreadable dates')
-    want = a.get('daysRequested')
     def days(sd, ed):
         st, en = sd.date(), max(sd.date(), ed.date())
         d = working_days(st, en, '', bhs)
