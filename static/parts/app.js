@@ -57,3 +57,27 @@ if('serviceWorker' in navigator)window.addEventListener('load',async()=>{
   try{const reg=await navigator.serviceWorker.register('sw.js');await reg.update();}
   catch(e){console.warn('service worker update failed',e)}
 });
+
+// ── Lockers tab: tap a locker on the layout to see what should be in it ──
+let lkSel='';
+function showTab(which){
+  const l=which==='lockers';
+  document.getElementById('lockersMain').classList.toggle('hidden',!l);
+  document.getElementById('appMain').classList.toggle('hidden',l);
+  document.getElementById('tabLockers').classList.toggle('on',l);
+  document.getElementById('tabSearch').classList.toggle('on',!l);
+  if(l) drawLockers();
+}
+function drawLockers(){
+  const counts={}; parts.forEach(p=>{counts[p.location]=(counts[p.location]||0)+1});
+  const wrap=document.getElementById('lkMap');
+  wrap.innerHTML=`<div class="map-inner"><img src="locker-layout.png" alt="Van locker layout">`+Object.entries(coords).map(([k,b])=>
+    `<div class="lk ${k===lkSel?'sel':''} ${counts[k]?'':'empty-l'}" data-loc="${escapeHtml(k)}" style="left:${b.left}%;top:${b.top}%;width:${b.width}%;height:${b.height}%"><i>${counts[k]||0}</i></div>`).join('')+'</div>';
+  wrap.querySelectorAll('.lk').forEach(el=>el.addEventListener('click',()=>{lkSel=el.dataset.loc;drawLockers()}));
+  const list=document.getElementById('lkList');
+  if(!lkSel){list.innerHTML='';return}
+  const inside=parts.filter(p=>p.location===lkSel);
+  list.innerHTML=`<div class="lk-title">${escapeHtml(lkSel)} · ${inside.length} part${inside.length===1?'':'s'}</div>`+(inside.length?inside.map(p=>`<article class="result"><div class="part">${escapeHtml(p.part)}</div><div class="meta"><span class="click-show">Qty ${escapeHtml(p.qty)}</span></div></article>`).join(''):'<div class="empty"><p>Nothing is listed for this locker.</p></div>');
+}
+document.getElementById('tabSearch').addEventListener('click',()=>showTab('search'));
+document.getElementById('tabLockers').addEventListener('click',()=>showTab('lockers'));
