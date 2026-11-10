@@ -728,6 +728,62 @@ def cancel_own(rid):
     bc_sync_remove(rid)
     return jsonify({'success': True})
 
+
+# ── BigChange absences shown on the calendar (read-only, not counted against allowances) ──
+_bc_cal_cache = {}
+
+def _bc_month_absences(first, last):
+    """Absences from BigChange touching this month. Cached for five minutes."""
+    key = iso(first)
+    hit = _bc_cal_cache.get(key)
+    if hit and time.time() - hit[0] < 300:
+        return hit[1]
+    items, page = [], 1
+    while page <= 5:
+        data = bc_hooks['get']('/absences', {'dateFrom': iso(first) + 'T00:00:00Z',
+                                             'dateTo': iso(last + timedelta(days=1)) + 'T00:00:00Z',
+                                             'pageSize': 500, 'pageNumber': page})
+        got = data if isinstance(data, list) else (data.get('items') or [])
+        items.extend(got)
+        if len(got) < 500: break
+        page += 1
+    _bc_cal_cache[key] = (time.time(), items)
+    return items
+
+def bc_calendar_overlay(first, last, include_requested=False):
+    """({date: [names]} approved, {date: [names]} requested, unmatched_count, error)"""
+    if not bc_hooks.get('get'):
+        return {}, {}, 0, None
+    try:
+        items = _bc_month_absences(first, last)
+    except Exception as ex:
+        print(f'[LEAVE] BigChange calendar overlay failed: {ex}')
+        return {}, {}, 0, 'BigChange could not be reached'
+    emps = {str(e['bc_resource_id']).strip(): e['name'] for e in query('SELECT name, bc_resource_id FROM leave_employees WHERE active = 1')
+            if str(e.get('bc_resource_id') or '').strip()}
+    have = {str(r['bc_absence_id']) for r in query('SELECT bc_absence_id FROM leave_requests WHERE bc_absence_id IS NOT NULL')}
+    bhs = bank_holiday_set()
+    approved, requested, unmatched = {}, {}, 0
+    for a in items:
+        status = a.get('status')
+        if status not in ('approved', 'requested') or str(a.get('id')) in have:
+            continue
+        name = emps.get(str(a.get('resourceId')))
+        if not name:
+            unmatched += 1; continue
+        try:
+            d = max(_uk_date(a['startAt']).date(), first)
+            e = min(max(_uk_date(a['startAt']).date(), _uk_date(a['endAt'], True).date()), last)
+        except Exception:
+            continue
+        target = approved if status == 'approved' else requested
+        while d <= e:
+            if d.weekday() < 5 and iso(d) not in bhs:
+                lst = target.setdefault(iso(d), [])
+                if name not in lst: lst.append(name)
+            d += timedelta(days=1)
+    return approved, requested, unmatched, None
+
 @leave_bp.route('/api/leave/calendar')
 def calendar():
     """Who is off, per day, for ?month=YYYY-MM. Signed-in staff or admin."""
@@ -740,7 +796,14 @@ def calendar():
     last = (date(y + (m == 12), m % 12 + 1, 1)) - timedelta(days=1)
     approved = off_on(first, last)
     pending = off_on(first, last, statuses=('pending',)) if is_admin() else {}
+    bc_ok, bc_req, bc_unmatched, bc_err = bc_calendar_overlay(first, last)
+    for src, dst in ((bc_ok, approved), (bc_req if is_admin() else {}, pending)):
+        for d, names in src.items():
+            lst = dst.setdefault(d, [])
+            lst.extend(n for n in names if n not in lst)
     return jsonify({'month': first.strftime('%Y-%m'), 'approved': approved, 'pending': pending,
+                    'bcShown': bool(bc_hooks.get('get')) and not bc_err, 'bcError': bc_err,
+                    'bcUnmatched': bc_unmatched if is_admin() else 0,
                     'bankHolidays': [d for d in sorted(bank_holiday_set()) if iso(first) <= d <= iso(last)]})
 
 # ── Admin endpoints ───────────────────────────────────────────────────────
