@@ -10,6 +10,8 @@ CORS(app)
 
 from leave import leave_bp  # annual leave booking (/leave)
 app.register_blueprint(leave_bp)
+from parts import parts_bp  # van parts finder (/parts)
+app.register_blueprint(parts_bp)
 
 CLIENT_ID     = os.environ.get('BIGCHANGE_CLIENT_ID', '')
 CLIENT_SECRET = os.environ.get('BIGCHANGE_CLIENT_SECRET', '')

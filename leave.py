@@ -133,7 +133,7 @@ def _conn():
         return c, True
     return _connect(), False
 
-@leave_bp.teardown_request
+@leave_bp.teardown_app_request
 def _close_conn(exc=None):
     c = g.pop('_leave_conn', None)
     if c is not None:
