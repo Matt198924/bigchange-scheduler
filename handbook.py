@@ -45,6 +45,13 @@ def hb_redirect(): return redirect('/handbook/', code=301)
 @handbook_bp.route('/handbook/')
 def hb_page(): return send_from_directory(STATIC_DIR, 'index.html')
 
+@handbook_bp.route('/policies')
+def pol_redirect(): return redirect('/policies/', code=301)
+
+@handbook_bp.route('/policies/')
+def pol_page(): return send_from_directory(os.path.join(os.path.dirname(STATIC_DIR), 'policies'), 'index.html')
+
+
 @handbook_bp.route('/handbook/office')
 def hb_office(): return send_from_directory(STATIC_DIR, 'office.html')
 

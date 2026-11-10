@@ -1,0 +1,66 @@
+<!DOCTYPE html>
+<html lang="en"><head>
+<meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<meta name="theme-color" content="#0B2A4A"><title>Company Policies – R&amp;S Services</title>
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="/static/incident/common.css">
+<style>
+.wrap{max-width:860px}
+.bar{position:sticky;top:0;z-index:5;background:var(--bg,#F3F6FA);padding:.6rem 0 .5rem}
+.card{background:var(--surface);border:1px solid var(--line);border-radius:12px;box-shadow:var(--shadow);margin:0 0 .6rem;overflow:hidden}
+.pol{display:flex;width:100%;justify-content:space-between;align-items:center;gap:.5rem;text-align:left;border:0;border-bottom:1px solid var(--line);background:none;padding:.9rem 1rem;cursor:pointer;font:600 16px 'IBM Plex Sans',sans-serif;color:inherit}
+.pol:last-child{border-bottom:0}.pol small{font:500 12px 'IBM Plex Mono',monospace;color:var(--slate);font-weight:500}
+.pol::after{content:'›';font-size:22px;color:var(--cyan);font-weight:400;margin-left:.4rem}
+.pol span{flex:1}
+.hit b{font:600 12px 'IBM Plex Mono',monospace;color:var(--slate)}
+.hit span{display:block;margin-top:.2rem;line-height:1.45;font-size:14px;font-weight:400}
+.hit{display:block;font-weight:400}.hit::after{display:none}
+mark{background:#FFF1A8;padding:0 1px;border-radius:2px}
+.pg{background:#fff;border:1px solid var(--line);border-radius:6px;margin:0 0 .8rem;box-shadow:var(--shadow);scroll-margin-top:90px;min-height:300px}
+.pg img{display:block;width:100%;height:auto;border-radius:6px}.pg.flash{outline:3px solid #00C2FF}
+.meta{display:flex;justify-content:space-between;align-items:center;gap:.5rem;font:500 12px 'IBM Plex Mono',monospace;color:var(--slate);margin:.2rem 0 .6rem}
+.meta a{color:var(--ink-2)}
+h2{font-size:18px;margin:.3rem 0}
+</style></head><body>
+<div class="topbar"><div class="brand"><div class="brand-mark"><img src="/static/logo-mark.png" alt="R&amp;S"></div><span class="brand-name">Company Policies</span></div><a class="btn-home" href="/">⌂ Home</a></div>
+<div class="wrap">
+  <div class="bar"><input id="q" type="search" placeholder="Search all policies (e.g. drugs, password, stress)..." autocomplete="off"></div>
+  <div id="main"></div>
+</div>
+<script>
+const $ = id => document.getElementById(id);
+const esc = s => s.replace(/[&<>"]/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
+let P = [], REV = '', cur = null;
+const img = (s, i) => `/static/policies/${s}/p-${String(i).padStart(2, '0')}.jpg`;
+function list() {
+  cur = null; history.replaceState(null, '', '#');
+  $('main').innerHTML = `<div class="meta"><span>${esc(REV)}</span></div><div class="card">` + P.map(p => `<button class="pol" data-s="${p.slug}"><span>${esc(p.title)}</span><small>${p.pages.length} p</small></button>`).join('') + '</div>';
+}
+function open(slug, page) {
+  const p = P.find(x => x.slug === slug); if (!p) return list();
+  cur = slug; history.replaceState(null, '', '#' + slug); $('q').value = '';
+  $('main').innerHTML = `<button class="btn-home" id="back" style="margin:.2rem 0 .6rem">‹ All policies</button><h2>${esc(p.title)}</h2><div class="meta"><span>${esc(REV)}</span><a href="/static/policies/${slug}/policy.pdf" download="${esc(p.title)}.pdf">Download PDF</a></div>` +
+    p.pages.map((_, i) => `<div class="pg" id="pg${i + 1}"><img loading="lazy" src="${img(slug, i + 1)}" alt="${esc(p.title)} page ${i + 1}"></div>`).join('');
+  window.scrollTo(0, 0);
+  if (page > 1) setTimeout(() => { const el = $('pg' + page); el.scrollIntoView({behavior: 'smooth'}); el.classList.add('flash'); setTimeout(() => el.classList.remove('flash'), 1800); }, 150);
+}
+function search() {
+  const terms = $('q').value.toLowerCase().split(/\s+/).filter(t => t.length > 1);
+  if (!terms.length) return cur ? null : list();
+  const re = new RegExp('(' + terms.map(t => t.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')).join('|') + ')', 'gi'), out = [];
+  P.forEach(p => p.pages.forEach((t, i) => {
+    const low = t.toLowerCase(); if (!terms.every(w => low.includes(w))) return;
+    const at = Math.max(0, low.indexOf(terms[0]) - 70);
+    out.push(`<button class="pol hit" data-s="${p.slug}" data-p="${i + 1}"><b>${esc(p.title.toUpperCase())} · PAGE ${i + 1}</b><span>${esc((at ? '…' : '') + t.slice(at, at + 220) + '…').replace(re, '<mark>$1</mark>')}</span></button>`);
+  }));
+  cur = null;
+  $('main').innerHTML = `<div class="card">${out.length ? out.slice(0, 20).join('') : '<div class="pol hit">Nothing matches that search.</div>'}</div>`;
+}
+$('main').addEventListener('click', e => {
+  if (e.target.closest('#back')) return list();
+  const b = e.target.closest('.pol[data-s]'); if (b) open(b.dataset.s, +b.dataset.p || 1);
+});
+$('q').addEventListener('input', search);
+fetch('/static/policies/policies.json').then(r => r.json()).then(j => { P = j.policies; REV = 'Reviewed ' + j.reviewed; const h = location.hash.slice(1); h ? open(h, 1) : list(); })
+  .catch(() => { $('main').innerHTML = '<div class="err">Could not load the policies - try again.</div>'; });
+</script></body></html>
