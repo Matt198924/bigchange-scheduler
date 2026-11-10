@@ -24,7 +24,7 @@ APPS = [('scheduler', 'Scheduler'), ('leave', 'Annual leave'), ('parts', 'Van pa
 APP_KEYS = [k for k, _ in APPS]
 
 # (match, app). 'exact' paths must match whole; others match as a prefix.
-EXACT = {'/scheduler': 'scheduler', '/leave': 'leave', '/leave/': 'leave', '/incident/': 'incident', '/incident': 'incident',
+EXACT = {'/staff-admin': 'office', '/staff-admin/': 'office', '/scheduler': 'scheduler', '/leave': 'leave', '/leave/': 'leave', '/incident/': 'incident', '/incident': 'incident',
          '/handbook/': 'handbook', '/handbook': 'handbook', '/api/handbook': 'handbook', '/api/parts/stock': 'parts',
          '/api/incident/report': 'incident', '/static/handbook/pages.json': 'handbook', '/static/handbook/handbook.pdf': 'handbook'}
 PREFIX = [('/api/jobs', 'scheduler'), ('/api/schedule', 'scheduler'), ('/api/categories', 'scheduler'),
@@ -62,7 +62,7 @@ def _access():
 
 def _allowed(sess, acc=None):
     if not sess: return []
-    if sess['role'] == 'admin': return list(APP_KEYS)
+    if sess['role'] == 'admin': return list(APP_KEYS) + ['office']
     acc = acc or _access()
     return [k for k in APP_KEYS if acc[k]['mode'] == 'all' or sess['id'] in acc[k]['ids']]
 
@@ -73,7 +73,9 @@ def gate():
     if not app: return None
     if leave.is_admin(): return None                      # the office, signed in with its password
     sess = _session()
-    if sess and app in _allowed(sess): return None
+    if app == 'office':                                   # office-only pages: the office password, nobody else
+        if sess and sess['role'] == 'admin': return None
+    elif sess and app in _allowed(sess): return None
     is_page = request.method == 'GET' and not request.path.startswith(('/api/', '/static/'))
     if not sess:
         if is_page: return redirect('/login?next=' + request.path)
@@ -89,6 +91,11 @@ def _cookie(resp, payload):
     resp.set_cookie(COOKIE, leave._serializer.dumps(dict(payload, hub=1)), max_age=MAX_AGE, httponly=True,
                     samesite='Lax', secure=request.headers.get('X-Forwarded-Proto', request.scheme) == 'https')
     return resp
+
+
+@hub_bp.route('/staff-admin')
+@hub_bp.route('/staff-admin/')
+def staff_admin_page(): return send_from_directory(STATIC, 'leave.html')
 
 
 @hub_bp.route('/login')
