@@ -395,7 +395,8 @@ async function tabStaff() {
         <button class="sm" onclick="upd(${e.id},{isManager:${!e.isManager}})">${e.isManager ? 'Remove manager' : 'Make manager'}</button>
         <button class="sm" onclick="setEmail(${e.id},'${esc(e.email).replace(/'/g, "\\'")}')">Email</button>
         <button class="sm" onclick="setPin(${e.id})">Set PIN</button>
-        <button class="sm" onclick="setBC(${e.id},'${esc(e.bcResourceId)}')">BC ID</button>
+        <button class="sm" onclick="showReqs(${e.id})">Breakdown</button>
+          <button class="sm" onclick="setBC(${e.id},'${esc(e.bcResourceId)}')">BC ID</button>
         <button class="sm" onclick="toggleEmp(${e.id},${!e.active})">${e.active ? 'Deactivate' : 'Reactivate'}</button>
         <button class="sm no" onclick="delEmp(${e.id},'${esc(e.name).replace(/'/g, "\\'")}')">Delete</button>
       </div></div>`).join('') + `
@@ -561,6 +562,12 @@ async function importSheet() {
 async function testEmail() {
   const to = prompt('Send a test email to:'); if (!to) return;
   try { await api('/admin/test-email', 'POST', {to}); alert('Sent - check that inbox (and spam).'); } catch (e) { alert(e.message); }
+}
+async function showReqs(id) {
+  try { const j = await api('/admin/employees/' + id + '/requests');
+    const t = {annual: 'Annual', bankholiday: 'Bank holiday', sick: 'Sick (paid)', sickunpaid: 'Sick (unpaid)', unpaid: 'Unpaid', other: 'Appointment'};
+    alert(j.yearStart + ' to ' + j.yearEnd + '\n\n' + (j.requests.map(r => `${r.start}${r.end !== r.start ? ' → ' + r.end : ''}${r.half ? ' (half)' : ''} · ${t[r.type] || r.type} · ${r.status} · ${r.counted}d${r.fromBigChange ? ' · BC' : ''}`).join('\n') || 'No requests')); }
+  catch (e) { alert(e.message); }
 }
 async function upd(id, body) { try { await api('/admin/employees/' + id, 'PUT', body); tabStaff(); } catch (e) { alert(e.message); } }
 function setEmail(id, cur) { const a = prompt('Email address:', cur); if (a !== null) upd(id, {email: a}); }
