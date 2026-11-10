@@ -729,6 +729,23 @@ def cancel_own(rid):
     return jsonify({'success': True})
 
 
+
+def _bc_status(a):
+    return str(a.get('status') or '').strip().lower()
+
+def _bc_type(a):
+    """BigChange's absence type id, whichever way the field is named."""
+    for k in ('absenceTypeId', 'typeId'):
+        if a.get(k) is not None: return str(a[k])
+    t = a.get('absenceType') or a.get('type')
+    if isinstance(t, dict) and t.get('id') is not None: return str(t['id'])
+    if isinstance(t, (int, str)) and str(t): return str(t)
+    return None
+
+def _bc_type_name(a):
+    t = a.get('absenceType') or a.get('type')
+    return (t.get('name') if isinstance(t, dict) else None) or a.get('absenceTypeName') or ''
+
 # ── BigChange absences shown on the calendar (read-only, not counted against allowances) ──
 _bc_cal_cache = {}
 
@@ -765,7 +782,7 @@ def bc_calendar_overlay(first, last, include_requested=False):
     bhs = bank_holiday_set()
     approved, requested, unmatched = {}, {}, 0
     for a in items:
-        status = a.get('status')
+        status = _bc_status(a)
         if status not in ('approved', 'requested') or str(a.get('id')) in have:
             continue
         name = emps.get(str(a.get('resourceId')))
@@ -1152,12 +1169,14 @@ def admin_bc_absences():
     items = data if isinstance(data, list) else (data.get('items') or [])
     types = {}
     for a in items:
-        t = a.get('absenceTypeId')
+        t = _bc_type(a)
         if t is not None:
-            types.setdefault(str(t), {'count': 0, 'example': a.get('reason') or ''})['count'] += 1
+            types.setdefault(t, {'count': 0, 'example': _bc_type_name(a) or a.get('reason') or ''})['count'] += 1
     return jsonify({'count': len(items), 'types': types,
-                    'recent': [{k: a.get(k) for k in ('id', 'resourceId', 'startAt', 'endAt', 'status', 'absenceTypeId', 'reason')}
-                               for a in items[-15:]],
+                    'fields': sorted(items[0].keys()) if items else [],
+                    'recent': [{'id': a.get('id'), 'resourceId': a.get('resourceId'), 'startAt': a.get('startAt'),
+                                'endAt': a.get('endAt'), 'status': _bc_status(a), 'absenceTypeId': _bc_type(a),
+                                'reason': a.get('reason')} for a in items[-15:]],
                     'configured': {'annual': BC_TYPE_ANNUAL, 'other': BC_TYPE_OTHER, 'sick': BC_TYPE_SICK}})
 
 
@@ -1189,11 +1208,11 @@ def _bc_import_plan(type_map=None):
     bhs = bank_holiday_set()
     rows = []
     for a in _bc_fetch_absences():
-        tid = str(a.get('absenceTypeId'))
+        tid = str(_bc_type(a))
         default = 'annual' if tid == BC_TYPE_ANNUAL else 'sick' if tid == BC_TYPE_SICK else 'other'
         typ = type_map.get(tid, default)
         row = {'id': str(a.get('id')), 'resourceId': str(a.get('resourceId')), 'typeId': tid,
-               'status': a.get('status'), 'type': typ, 'action': 'import', 'why': ''}
+               'status': _bc_status(a), 'type': typ, 'action': 'import', 'why': ''}
         emp = emps.get(row['resourceId'])
         try:
             s_dt, e_dt = _uk_date(a['startAt']), _uk_date(a['endAt'], True)
@@ -1204,10 +1223,11 @@ def _bc_import_plan(type_map=None):
         if start == end and (a.get('daysRequested') or 1) <= 0.5:
             half = 'am' if e_dt.hour <= 12 else 'pm'
         days = working_days(start, end, half, bhs)
+        row['typeName'] = _bc_type_name(a)
         row.update(name=emp['name'] if emp else None, start=iso(start), end=iso(end), half=half, days=days,
                    note=(a.get('reason') or '')[:200])
         if row['id'] in have: row.update(action='skip', why='already in the leave system')
-        elif a.get('status') != 'approved': row.update(action='skip', why=f"status is {a.get('status')}")
+        elif _bc_status(a) != 'approved': row.update(action='skip', why=f"status is {_bc_status(a) or 'unknown'}")
         elif not emp: row.update(action='skip', why='no employee has this BigChange ID')
         elif typ == 'skip': row.update(action='skip', why='type set to skip')
         elif days == 0: row.update(action='skip', why='no working days')
@@ -1226,7 +1246,7 @@ def admin_bc_import_preview():
     except Exception as ex: return jsonify({'error': f'BigChange said: {ex}'}), 502
     types = {}
     for r in rows:
-        t = types.setdefault(r['typeId'], {'count': 0, 'type': r['type'], 'example': r.get('note', '')})
+        t = types.setdefault(r['typeId'], {'count': 0, 'type': r['type'], 'example': r.get('typeName') or r.get('note', '')})
         t['count'] += 1
     return jsonify({'types': types, 'rows': [{k: v for k, v in r.items() if k != '_emp'} for r in rows]})
 
