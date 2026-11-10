@@ -383,10 +383,12 @@ def _pin_ok(pin):
     return isinstance(pin, str) and pin.isdigit() and 4 <= len(pin) <= 6
 
 # ── Request helpers ───────────────────────────────────────────────────────
-def off_on(start, end, exclude_id=None, statuses=('approved',)):
+LEAVE_LABELS = {'annual': 'Annual leave', 'sick': 'Sick', 'unpaid': 'Unpaid leave', 'other': 'Other leave'}
+
+def off_on(start, end, exclude_id=None, statuses=('approved',), info=None):
     """Who else is off in this range: {date: [names]}."""
     ph = ','.join('?' * len(statuses))
-    rows = query(f'''SELECT r.id, r.start_date, r.end_date, e.name FROM leave_requests r
+    rows = query(f'''SELECT r.id, r.type, r.start_date, r.end_date, e.name FROM leave_requests r
                      JOIN leave_employees e ON e.id = r.employee_id
                      WHERE r.status IN ({ph}) AND r.type != 'bankholiday'
                      AND r.start_date <= ? AND r.end_date >= ?''',
@@ -399,6 +401,7 @@ def off_on(start, end, exclude_id=None, statuses=('approved',)):
         while d <= e:
             if d.weekday() < 5:
                 out.setdefault(iso(d), []).append(r['name'])
+                if info is not None: info.setdefault(iso(d), {})[r['name']] = {'k': r['type'], 't': LEAVE_LABELS.get(r['type'], 'Leave')}
             d += timedelta(days=1)
     return out
 
@@ -787,7 +790,7 @@ def _bc_resource_names():
         _bc_names_cache.update(t=time.time(), names=names)
     return names
 
-def bc_calendar_overlay(first, last, include_unmatched=False):
+def bc_calendar_overlay(first, last, include_unmatched=False, info=None):
     """({date: [names]} approved, {date: [names]} requested, other_people_count, error).
     include_unmatched also shows people with no BigChange ID here, under their BigChange name."""
     if not bc_hooks.get('get'):
@@ -824,6 +827,12 @@ def bc_calendar_overlay(first, last, include_unmatched=False):
             if d.weekday() < 5 and iso(d) not in bhs:
                 lst = target.setdefault(iso(d), [])
                 if name not in lst: lst.append(name)
+                if info is not None:
+                    tn = _bc_type_name(a) or ''
+                    kind = IMPORT_TYPE_MAP.get(str(_bc_type(a)), 'other')
+                    if kind == 'skip': kind = 'other'
+                    why = str(a.get('reason') or '').strip()
+                    info.setdefault(iso(d), {}).setdefault(name, {'k': kind, 't': (tn or LEAVE_LABELS.get(kind, 'Leave')) + (f' – {why}' if why else '') + ' (BigChange)'})
             d += timedelta(days=1)
     return approved, requested, unmatched, None
 
@@ -837,14 +846,15 @@ def calendar():
     except ValueError:
         return jsonify({'error': 'month must be YYYY-MM'}), 400
     last = (date(y + (m == 12), m % 12 + 1, 1)) - timedelta(days=1)
-    approved = off_on(first, last)
-    pending = off_on(first, last, statuses=('pending',)) if is_admin() else {}
-    bc_ok, bc_req, bc_unmatched, bc_err = bc_calendar_overlay(first, last, include_unmatched=False)
+    info = {}
+    approved = off_on(first, last, info=info)
+    pending = off_on(first, last, statuses=('pending',), info=info) if is_admin() else {}
+    bc_ok, bc_req, bc_unmatched, bc_err = bc_calendar_overlay(first, last, include_unmatched=False, info=info)
     for src, dst in ((bc_ok, approved), (bc_req if is_admin() else {}, pending)):
         for d, names in src.items():
             lst = dst.setdefault(d, [])
             lst.extend(n for n in names if n not in lst)
-    return jsonify({'month': first.strftime('%Y-%m'), 'approved': approved, 'pending': pending,
+    return jsonify({'month': first.strftime('%Y-%m'), 'approved': approved, 'pending': pending, 'info': info,
                     'bcShown': bool(bc_hooks.get('get')) and not bc_err, 'bcError': bc_err,
                     'bcUnmatched': bc_unmatched if is_admin() else 0, 'bcUnmatchedShown': False,
                     'bankHolidays': [d for d in sorted(bank_holiday_set()) if iso(first) <= d <= iso(last)]})
