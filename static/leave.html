@@ -72,7 +72,7 @@ button.no{background:#fff;color:var(--rust);border-color:#f1c4c6}button.no:hover
 .cal .d i{font-style:normal;font-weight:600;font-size:11px;display:block;margin-bottom:2px}
 .cal .n{background:var(--moss-bg);color:#1F5F2D;border-radius:4px;margin-top:2px;padding:1px 4px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .cal .n.p{background:var(--amber-bg);color:#7A4E00}
-.cal .n.k-sick,.legend .k-sick{background:#FBE0E0;color:#8A1C1C}
+.cal .n.k-sick,.cal .n.k-sickunpaid,.legend .k-sick{background:#FBE0E0;color:#8A1C1C}
 .cal .n.k-unpaid,.legend .k-unpaid{background:#E4E7EC;color:#3B4452}
 .cal .n.k-other,.legend .k-other{background:#EBE1F7;color:#4B2B80}
 .legend{display:flex;flex-wrap:wrap;gap:.3rem .9rem;margin-top:.5rem;font-size:.78rem;color:var(--muted,#667)}
@@ -135,6 +135,7 @@ details.card[open] summary{margin-bottom:.4rem}
       <div><label>Back at work on</label><input type="date" id="k-end"></div></div>
     <div class="row"><div><label>Half day (one day only)</label><select id="k-half"><option value="">Full day</option><option value="am">Morning off</option><option value="pm">Afternoon off</option></select></div>
       <div><label>Note (optional)</label><input id="k-note" maxlength="500"></div></div>
+    <label>Pay</label><select id="k-paid"><option value="1">Paid sick (counts towards sick allowance)</option><option value="0">Unpaid sick (recorded only)</option></select>
     <button class="primary" onclick="logSick()">Log sick days</button><div id="k-msg"></div>
     <div id="k-team" style="margin-top:.8rem"></div></div>
   <div class="card"><h2>Request leave</h2>
@@ -233,7 +234,7 @@ async function renderCal(el, month) {
   const note = [ROLE === 'admin' ? 'Amber with ? = pending.' : '', j.bcShown ? 'Includes absences booked in BigChange.' : '',
     j.bcError ? 'BigChange absences could not be loaded just now.' : '',
     j.bcUnmatched ? `${j.bcUnmatched} BigChange absence${j.bcUnmatched === 1 ? ' is' : 's'} this month for people with no BigChange ID here (shown by their BigChange name; they don't count against allowances).` : ''].filter(Boolean).join(' ');
-  const legend = `<div class="legend"><span><i class="n k-annual"></i>Annual leave</span><span><i class="n k-sick"></i>Sick</span><span><i class="n k-unpaid"></i>Unpaid</span><span><i class="n k-other"></i>Other / appointment</span>${ROLE === 'admin' ? '<span><i class="n p"></i>Pending</span>' : ''}<span><i class="n bhk"></i>Bank holiday</span></div>`;
+  const legend = `<div class="legend"><span><i class="n k-annual"></i>Annual leave</span><span><i class="n k-sick"></i>Sick (paid / unpaid)</span><span><i class="n k-unpaid"></i>Unpaid</span><span><i class="n k-other"></i>Other / appointment</span>${ROLE === 'admin' ? '<span><i class="n p"></i>Pending</span>' : ''}<span><i class="n bhk"></i>Bank holiday</span></div>`;
   $(el).innerHTML = h + '</div>' + legend + (note ? `<p class="muted" style="margin-top:.4rem">${esc(note)}</p>` : '');
 }
 function shiftCal(el, n) { const [y, m] = calMonth.split('-').map(Number); renderCal(el, new Date(y, m - 1 + n, 1).toISOString().slice(0, 7).replace(/^(\d{4}-\d{2}).*/, '$1')); }
@@ -276,7 +277,7 @@ async function logSick() {
   try {
     const st = $('k-start').value, half = $('k-half').value;
     if (badReturn(st, $('k-end').value, half)) throw new Error('"Back at work on" must be after the first day off');
-    const j = await api('/team/sick', 'POST', {employeeId: +$('k-emp').value, startDate: st, endDate: lastDayOff(st, $('k-end').value, half), halfDay: half, note: $('k-note').value});
+    const j = await api('/team/sick', 'POST', {employeeId: +$('k-emp').value, startDate: st, endDate: lastDayOff(st, $('k-end').value, half), halfDay: half, note: $('k-note').value, paid: $('k-paid').value === '1'});
     $('k-msg').innerHTML = `<div class="info">Logged. ${j.balance.sickRemaining} sick days left this year.</div>`;
     $('k-start').value = $('k-end').value = $('k-note').value = ''; loadSickTeam();
   } catch (e) { $('k-msg').innerHTML = `<div class="err">${esc(e.message)}</div>`; }
@@ -356,7 +357,7 @@ async function tabBook() {
   $('a-body').innerHTML = `<div class="card"><h2>Book leave for someone (auto-approved)</h2>
     <label>Employee</label><select id="b-emp">${j.employees.filter(e => e.active).map(e => `<option value="${e.id}">${esc(e.name)}</option>`).join('')}</select>
     <div class="row"><div><label>First day off</label><input type="date" id="b-start"></div><div><label>Back at work on</label><input type="date" id="b-end"></div></div>
-    <div class="row"><div><label>Type</label><select id="b-type"><option value="annual">Annual</option><option value="unpaid">Unpaid</option><option value="other">Other</option><option value="sick">Sick</option></select></div>
+    <div class="row"><div><label>Type</label><select id="b-type"><option value="annual">Annual</option><option value="unpaid">Unpaid</option><option value="other">Other</option><option value="sick">Sick (paid)</option><option value="sickunpaid">Sick (unpaid)</option></select></div>
     <div><label>Half day</label><select id="b-half"><option value="">Full day</option><option value="am">AM off</option><option value="pm">PM off</option></select></div></div>
     <label>Note</label><input id="b-note"><button class="primary" onclick="adminBook()">Book</button><div id="b-msg"></div></div>`;
 }
@@ -385,7 +386,7 @@ async function tabStaff() {
     </div>
     <div class="card"><h2>Staff (${j.employees.length})</h2>` + j.employees.map(e => `<div class="item" style="${e.active ? '' : 'opacity:.5'}">
       <div class="who">${avatar(e.name)}<div><b>${esc(e.name)}</b>${e.isManager ? ' <span class="pill approved">manager</span>' : ''}
-        <div class="muted">${e.balance.remaining} of ${e.allowance} days left · sick ${e.balance.sickTaken}/${e.balance.sickAllowance} · ${e.hasPin ? 'PIN set' : 'no PIN'}${e.email ? ' · ' + esc(e.email) : ' · no email'}${e.bcResourceId ? ' · BC ' + esc(e.bcResourceId) : ''}</div></div></div>
+        <div class="muted">${e.balance.remaining} of ${e.allowance} days left · sick ${e.balance.sickTaken}/${e.balance.sickAllowance}${e.balance.sickUnpaidTaken ? ' (+' + e.balance.sickUnpaidTaken + ' unpaid sick)' : ''}${e.balance.unpaidTaken ? ' · unpaid leave ' + e.balance.unpaidTaken : ''}${e.balance.appointmentTaken ? ' · appointments ' + e.balance.appointmentTaken : ''} · ${e.hasPin ? 'PIN set' : 'no PIN'}${e.email ? ' · ' + esc(e.email) : ' · no email'}${e.bcResourceId ? ' · BC ' + esc(e.bcResourceId) : ''}</div></div></div>
       <div class="controls">
         <select title="Who approves their leave" onchange="upd(${e.id},{managerId:this.value})">${mgrOpts(e.managerId)}</select>
         <span class="muted">Days</span><input class="allow" type="number" step="0.5" min="0" max="60" value="${e.allowance}" title="Yearly allowance" onchange="upd(${e.id},{allowance:this.value})">
@@ -456,7 +457,7 @@ async function bcMatchApply() {
 async function bcImportPreview(chosen) {
   $('bci-out').innerHTML = '<p class="muted">Asking BigChange...</p>';
   try {
-    const j = await api('/admin/bc-import' + (chosen ? '?types=' + encodeURIComponent(JSON.stringify(chosen)) : '')), opts = t => ['annual','sick','unpaid','other','skip'].map(o => `<option value="${o}" ${o === t ? 'selected' : ''}>${o === 'skip' ? "don't import" : o}</option>`).join('');
+    const j = await api('/admin/bc-import' + (chosen ? '?types=' + encodeURIComponent(JSON.stringify(chosen)) : '')), opts = t => ['annual','sick','sickunpaid','unpaid','other','skip'].map(o => `<option value="${o}" ${o === t ? 'selected' : ''}>${o === 'skip' ? "don't import" : o}</option>`).join('');
     const ready = j.rows.filter(r => r.action === 'import'), skipped = j.rows.filter(r => r.action !== 'import');
     $('bci-out').innerHTML = '<div class="muted" style="margin-bottom:.3rem">What should each BigChange absence type count as?</div>'
       + Object.entries(j.types).map(([id, t]) => `<div class="item"><span>Type <b>${esc(id)}</b> <span class="muted">· ${t.count} absence${t.count === 1 ? '' : 's'}${t.example ? ' · e.g. ' + esc(t.example) : ''}</span></span><select data-bctype="${esc(id)}" onchange="bcImportRefresh()">${opts(t.type)}</select></div>`).join('')

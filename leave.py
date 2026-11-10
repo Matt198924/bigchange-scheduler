@@ -48,6 +48,7 @@ YEAR_START_MONTH = min(12, max(1, int(os.environ.get('LEAVE_YEAR_START_MONTH', '
 # BIGCHANGE_ABSENCE_TYPE_ID_OTHER is used for unpaid/other leave (skipped if unset).
 BC_TYPE_ANNUAL = os.environ.get('BIGCHANGE_ABSENCE_TYPE_ID', '').strip()
 BC_TYPE_OTHER  = os.environ.get('BIGCHANGE_ABSENCE_TYPE_ID_OTHER', '').strip()
+BC_TYPE_SICK_UNPAID = os.environ.get('BIGCHANGE_ABSENCE_TYPE_ID_SICK_UNPAID', '').strip()   # optional; unpaid sick is not pushed without it
 BC_TYPE_SICK   = os.environ.get('BIGCHANGE_ABSENCE_TYPE_ID_SICK', '').strip()   # sick days logged by managers
 DEFAULT_SICK = float(os.environ.get('LEAVE_SICK_ALLOWANCE', '7'))
 bc_hooks = {'post': None, 'delete': None, 'get': None}   # filled in by app.py
@@ -61,7 +62,8 @@ EMAIL_REPLY_TO   = os.environ.get('LEAVE_EMAIL_REPLY_TO', '').strip()
 OFFICE_EMAIL     = os.environ.get('LEAVE_OFFICE_EMAIL', '').strip()  # gets requests from people with no manager
 SYNC_EMAIL       = False   # tests set True; normally emails go out on a background thread
 
-LEAVE_TYPES = ['annual', 'unpaid', 'other', 'sick']
+LEAVE_TYPES = ['annual', 'unpaid', 'other', 'sick', 'sickunpaid']
+SICK_TYPES = ('sick', 'sickunpaid')
 IS_PG = bool(DATABASE_URL)
 
 def _storage_persistent():
@@ -303,11 +305,14 @@ def year_bounds(on):
 
 def _balance(emp, rows, bhs, lo, hi, sick_allow):
     taken = pending = sick = 0.0
+    rec = {'sickunpaid': 0.0, 'unpaid': 0.0, 'other': 0.0}     # recorded only, never deducted
     for r in rows:
-        if r['type'] == 'sick':
+        if r['type'] in ('sick', 'sickunpaid', 'unpaid', 'other'):
             if r['status'] == 'approved':
-                sick += working_days(parse_date(r['start_date']), parse_date(r['end_date']),
-                                     r['half_day'], bhs, lo, hi)
+                d = working_days(parse_date(r['start_date']), parse_date(r['end_date']),
+                                 r['half_day'], bhs, lo, hi)
+                if r['type'] == 'sick': sick += d      # only paid sick counts towards the sick allowance
+                else: rec[r['type']] += d
             continue
         if r['status'] not in ('approved', 'pending'):
             continue
@@ -323,12 +328,13 @@ def _balance(emp, rows, bhs, lo, hi, sick_allow):
     return {'yearStart': iso(lo), 'yearEnd': iso(hi), 'allowance': emp['allowance'],
             'taken': taken, 'pending': pending,
             'remaining': emp['allowance'] - taken - pending,
-            'sickAllowance': sick_allow, 'sickTaken': sick, 'sickRemaining': sick_allow - sick}
+            'sickAllowance': sick_allow, 'sickTaken': sick, 'sickRemaining': sick_allow - sick,
+            'sickUnpaidTaken': rec['sickunpaid'], 'unpaidTaken': rec['unpaid'], 'appointmentTaken': rec['other']}
 
 def balance_for(emp, on=None):
     lo, hi = year_bounds(on or date.today())
     rows = query('''SELECT start_date, end_date, half_day, status, type FROM leave_requests
-                    WHERE employee_id = ? AND type IN ('annual', 'bankholiday', 'sick')''', (emp['id'],))
+                    WHERE employee_id = ? AND type IN ('annual', 'bankholiday', 'sick', 'sickunpaid', 'unpaid', 'other')''', (emp['id'],))
     return _balance(emp, rows, bank_holiday_set(), lo, hi, sick_allowance())
 
 def balances_for(emps, on=None):
@@ -337,7 +343,7 @@ def balances_for(emps, on=None):
     bhs, sa = bank_holiday_set(), sick_allowance()
     by = {}
     for r in query('''SELECT employee_id, start_date, end_date, half_day, status, type FROM leave_requests
-                      WHERE type IN ('annual', 'bankholiday', 'sick')'''):
+                      WHERE type IN ('annual', 'bankholiday', 'sick', 'sickunpaid', 'unpaid', 'other')'''):
         by.setdefault(r['employee_id'], []).append(r)
     return {e['id']: _balance(e, by.get(e['id'], []), bhs, lo, hi, sa) for e in emps}
 
@@ -383,7 +389,7 @@ def _pin_ok(pin):
     return isinstance(pin, str) and pin.isdigit() and 4 <= len(pin) <= 6
 
 # ── Request helpers ───────────────────────────────────────────────────────
-LEAVE_LABELS = {'annual': 'Annual leave', 'sick': 'Sick', 'unpaid': 'Unpaid leave', 'other': 'Other leave'}
+LEAVE_LABELS = {'annual': 'Annual leave', 'sick': 'Sick (paid)', 'sickunpaid': 'Sick (unpaid)', 'unpaid': 'Unpaid leave', 'other': 'Appointment / other'}
 
 def off_on(start, end, exclude_id=None, statuses=('approved',), info=None):
     """Who else is off in this range: {date: [names]}."""
@@ -500,7 +506,7 @@ def notify_request(rid, event, base_url, note=''):
     base = base_url.rstrip('/')
     if base.startswith('http://') and 'localhost' not in base and '127.0.0.1' not in base:
         base = 'https://' + base[len('http://'):]   # Render terminates TLS in front of the app
-    if r['type'] == 'sick':
+    if r['type'] in SICK_TYPES:
         return                              # sick days are recorded quietly, no email
     link = base + '/leave'
     when = _range_text(r)
@@ -558,7 +564,7 @@ def bc_sync_create(rid):
     r = rows[0]
     if r['type'] == 'bankholiday':
         return None                        # bank holidays are not pushed to BigChange
-    type_id = {'annual': BC_TYPE_ANNUAL, 'sick': BC_TYPE_SICK}.get(r['type'], BC_TYPE_OTHER)
+    type_id = {'annual': BC_TYPE_ANNUAL, 'sick': BC_TYPE_SICK, 'sickunpaid': BC_TYPE_SICK_UNPAID}.get(r['type'], BC_TYPE_OTHER)
     if r.get('bc_absence_id') or not bc_hooks['post'] or not type_id:
         return r.get('bc_sync')            # already synced, or sync switched off
     resource = _bcid(r.get('bc_resource_id'))
@@ -699,7 +705,7 @@ def request_leave():
     body = request.get_json(silent=True) or {}
     v, err = validate_range(body)
     if err: return jsonify({'error': err}), 400
-    if v['type'] == 'sick':
+    if v['type'] in SICK_TYPES:
         return jsonify({'error': 'Sick days are logged by your manager - tell them or call the office'}), 400
     if v['start'] < date.today():
         return jsonify({'error': 'Cannot request leave in the past - call the office'}), 400
@@ -939,7 +945,7 @@ def team_log_sick():
     rows = query('SELECT * FROM leave_employees WHERE id = ? AND manager_id = ? AND active = 1',
                  (body.get('employeeId'), mgr['id']))
     if not rows: return jsonify({'error': 'Pick someone on your team'}), 400
-    body['type'] = 'sick'
+    body['type'] = 'sickunpaid' if str(body.get('paid', True)).lower() in ('false', '0', 'no') else 'sick'
     v, err = validate_range(body)
     if err: return jsonify({'error': err}), 400
     if overlaps_own(rows[0]['id'], v['start'], v['end']):
@@ -1233,7 +1239,7 @@ def _uk_date(ts, minus_second=False):
 # 3701 "bank holiday" is deliberately left out: bank holidays are already booked for everyone here.
 IMPORT_TYPE_MAP = {'3700': 'annual',       # Approved Holiday
                    '37186': 'sick',        # Sick day paid
-                   '37187': 'sick',        # Sick pay unpaid
+                   '37187': 'sickunpaid',  # Sick pay unpaid (recorded, not counted)
                    '37409': 'unpaid',      # Unpaid leave
                    '37331': 'other'}       # Appointment
 for _pair in os.environ.get('LEAVE_IMPORT_TYPES', '').split(','):
