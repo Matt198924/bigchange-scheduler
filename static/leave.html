@@ -411,6 +411,10 @@ async function tabStaff() {
     <details class="card"><summary>BigChange check</summary>
       <p class="muted">Shows the absence type IDs BigChange already uses (copy them into the Render settings) and the latest absences, so you can confirm synced leave arrived.</p>
       <button class="sm" onclick="bcCheck()">Check BigChange</button><div id="bc-out" style="margin-top:.6rem"></div>
+
+      <h2 style="margin-top:1.2rem">Match staff to BigChange</h2>
+      <p class="muted">Fills in missing BigChange IDs by matching names against BigChange's resource list. You see the matches before anything is saved.</p>
+      <button class="sm" onclick="bcMatchPreview()">Find BigChange IDs</button><div id="bcm-out" style="margin-top:.6rem"></div>
       <h2 style="margin-top:1.2rem">Import existing BigChange absences</h2>
       <p class="muted">Pulls every approved absence from 1 January 2026 onwards (including next year) from BigChange into the leave system (matched by BigChange ID, so add IDs first). Already-imported and overlapping ones are skipped.</p>
       <button class="sm" onclick="bcImportPreview()">Preview import</button><div id="bci-out" style="margin-top:.6rem"></div></details>
@@ -421,6 +425,22 @@ async function tabStaff() {
 async function saveDefaultAllowance() {
   try { const j = await api('/admin/settings', 'PUT', {defaultAllowance: $('def-all').value}); $('al-msg').innerHTML = `<div class="info">New staff will start with ${j.defaultAllowance} days.</div>`; }
   catch (e) { $('al-msg').innerHTML = `<div class="err">${esc(e.message)}</div>`; }
+}
+let bcMatchList = [];
+async function bcMatchPreview() {
+  $('bcm-out').innerHTML = '<p class="muted">Asking BigChange...</p>';
+  try {
+    const j = await api('/admin/bc-match'); bcMatchList = j.proposals;
+    $('bcm-out').innerHTML = `<p class="muted">${j.alreadySet} staff already have an ID. BigChange has ${j.bcResources} resources.</p>`
+      + (j.proposals.length ? `<p style="margin:.4rem 0 .2rem"><b>${j.proposals.length}</b> matches found</p>` + j.proposals.map(p => `<div class="muted">${esc(p.name)} → ${esc(p.resourceId)}${p.bcName !== p.name ? ' (' + esc(p.bcName) + ')' : ''}</div>`).join('') + `<button class="primary" style="margin-top:.5rem" onclick="bcMatchApply()">Save ${j.proposals.length} IDs</button>` : '<p class="muted">No new matches.</p>')
+      + (j.ambiguous.length ? `<p class="muted" style="margin-top:.5rem">More than one BigChange match, add by hand: ${esc(j.ambiguous.join(', '))}</p>` : '')
+      + (j.notFound.length ? `<p class="muted" style="margin-top:.5rem">Not found in BigChange (add by hand): ${esc(j.notFound.join(', '))}</p>` : '');
+  } catch (e) { $('bcm-out').innerHTML = `<div class="err">${esc(e.message)}</div>`; }
+}
+async function bcMatchApply() {
+  try { const j = await api('/admin/bc-match', 'POST', {assign: bcMatchList.map(p => ({employeeId: p.employeeId, resourceId: p.resourceId}))});
+    $('bcm-out').innerHTML = `<div class="info">Saved ${j.updated} BigChange IDs.</div>`; loadEmployees(); }
+  catch (e) { $('bcm-out').innerHTML = `<div class="err">${esc(e.message)}</div>`; }
 }
 async function bcImportPreview(chosen) {
   $('bci-out').innerHTML = '<p class="muted">Asking BigChange...</p>';
