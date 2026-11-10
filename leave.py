@@ -853,14 +853,27 @@ def calendar():
         return jsonify({'error': 'month must be YYYY-MM'}), 400
     last = (date(y + (m == 12), m % 12 + 1, 1)) - timedelta(days=1)
     info = {}
+    me = None if is_admin() else current_employee()
+    team = None                                   # names in my team: my manager, everyone under them, and my own reports
+    if me:
+        mgr_id = me['id'] if me.get('is_manager') else me.get('manager_id')
+        team = {r['name'] for r in query('SELECT name FROM leave_employees WHERE active = 1 AND (id = ? OR manager_id = ?)',
+                                         (mgr_id, mgr_id))} if mgr_id else {me['name']}
+        team.add(me['name'])
     approved = off_on(first, last, info=info)
-    pending = off_on(first, last, statuses=('pending',), info=info) if is_admin() else {}
+    pending = off_on(first, last, statuses=('pending',), info=info) if (is_admin() or team) else {}
     bc_ok, bc_req, bc_unmatched, bc_err = bc_calendar_overlay(first, last, include_unmatched=False, info=info)
-    for src, dst in ((bc_ok, approved), (bc_req if is_admin() else {}, pending)):
+    for src, dst in ((bc_ok, approved), (bc_req if (is_admin() or team) else {}, pending)):
         for d, names in src.items():
             lst = dst.setdefault(d, [])
             lst.extend(n for n in names if n not in lst)
-    return jsonify({'month': first.strftime('%Y-%m'), 'approved': approved, 'pending': pending, 'info': info,
+    if team is not None:                          # pending leave is only visible within the team, to avoid clashes
+        pending = {d: [n for n in ns if n in team] for d, ns in pending.items()}
+        pending = {d: ns for d, ns in pending.items() if ns}
+    if request.args.get('team') == '1' and team is not None:
+        approved = {d: [n for n in ns if n in team] for d, ns in approved.items()}
+        approved = {d: ns for d, ns in approved.items() if ns}
+    return jsonify({'team': sorted(team) if team is not None else None, 'month': first.strftime('%Y-%m'), 'approved': approved, 'pending': pending, 'info': info,
                     'bcShown': bool(bc_hooks.get('get')) and not bc_err, 'bcError': bc_err,
                     'bcUnmatched': bc_unmatched if is_admin() else 0, 'bcUnmatchedShown': False,
                     'bankHolidays': [d for d in sorted(bank_holiday_set()) if iso(first) <= d <= iso(last)]})

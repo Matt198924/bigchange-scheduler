@@ -213,16 +213,18 @@ async function adminLogin() {
 
 // ── calendar (shared) ──
 let calMonth = new Date().toISOString().slice(0, 7);
+let calTeam = localStorage.getItem('calTeam') === '1';
 async function renderCal(el, month) {
   calMonth = month;
   let j;
-  try { j = await api('/calendar?month=' + month); }
+  try { j = await api('/calendar?month=' + month + (calTeam ? '&team=1' : '')); }
   catch (e) { $(el).innerHTML = `<div class="err">Could not load the calendar: ${esc(e.message)} <button class="sm" onclick="renderCal('${el}', calMonth)">Try again</button></div>`; return; }
   const [y, m] = month.split('-').map(Number);
   const first = new Date(y, m - 1, 1), days = new Date(y, m, 0).getDate(), lead = (first.getDay() + 6) % 7;
   let h = `<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:.5rem">
     <button class="sm" onclick="shiftCal('${el}',-1)">‹</button><b>${first.toLocaleDateString('en-GB',{month:'long',year:'numeric'})}</b>
-    <button class="sm" onclick="shiftCal('${el}',1)">›</button></div><div class="cal">`;
+    <button class="sm" onclick="shiftCal('${el}',1)">›</button></div>`
+    + (j.team ? `<label class="muted" style="display:block;margin-bottom:.4rem"><input type="checkbox" ${calTeam ? 'checked' : ''} onchange="calTeam = this.checked; localStorage.setItem('calTeam', calTeam ? '1' : '0'); renderCal('${el}', calMonth)"> Only show my team (${j.team.length} people)</label>` : '') + '<div class="cal">';
   h += ['Mon','Tue','Wed','Thu','Fri','Sat','Sun'].map(d => `<div class="h">${d}</div>`).join('');
   for (let i = 0; i < lead; i++) h += '<div></div>';
   for (let d = 1; d <= days; d++) {
@@ -231,10 +233,10 @@ async function renderCal(el, month) {
     const names = (j.approved[ds] || []).map(n => `<div class="n k-${esc(inf(n).k)}" title="${esc(n + ' – ' + inf(n).t)}">${esc(n)}</div>`).join('') + (j.pending[ds] || []).map(n => `<div class="n p" title="${esc(n + ' – ' + inf(n).t + ' (waiting for approval)')}">${esc(n)}?</div>`).join('');
     h += `<div class="d ${dow > 4 ? 'we' : ''} ${j.bankHolidays.includes(ds) ? 'bh' : ''} ${ds === new Date().toISOString().slice(0, 10) ? 'today' : ''}"><i>${d}</i>${names}</div>`;
   }
-  const note = [ROLE === 'admin' ? 'Amber with ? = pending.' : '', j.bcShown ? 'Includes absences booked in BigChange.' : '',
+  const note = [(ROLE === 'admin' || j.team) ? 'Amber with ? = waiting for approval' + (ROLE === 'admin' ? '.' : ' (your team only).') : '', j.bcShown ? 'Includes absences booked in BigChange.' : '',
     j.bcError ? 'BigChange absences could not be loaded just now.' : '',
     j.bcUnmatched ? `${j.bcUnmatched} BigChange absence${j.bcUnmatched === 1 ? ' is' : 's'} this month for people with no BigChange ID here (shown by their BigChange name; they don't count against allowances).` : ''].filter(Boolean).join(' ');
-  const legend = `<div class="legend"><span><i class="n k-annual"></i>Annual leave</span><span><i class="n k-sick"></i>Sick (paid / unpaid)</span><span><i class="n k-unpaid"></i>Unpaid</span><span><i class="n k-other"></i>Other / appointment</span>${ROLE === 'admin' ? '<span><i class="n p"></i>Pending</span>' : ''}<span><i class="n bhk"></i>Bank holiday</span></div>`;
+  const legend = `<div class="legend"><span><i class="n k-annual"></i>Annual leave</span><span><i class="n k-sick"></i>Sick (paid / unpaid)</span><span><i class="n k-unpaid"></i>Unpaid</span><span><i class="n k-other"></i>Other / appointment</span>${(ROLE === 'admin' || j.team) ? '<span><i class="n p"></i>Pending</span>' : ''}<span><i class="n bhk"></i>Bank holiday</span></div>`;
   $(el).innerHTML = h + '</div>' + legend + (note ? `<p class="muted" style="margin-top:.4rem">${esc(note)}</p>` : '');
 }
 function shiftCal(el, n) { const [y, m] = calMonth.split('-').map(Number); renderCal(el, new Date(y, m - 1 + n, 1).toISOString().slice(0, 7).replace(/^(\d{4}-\d{2}).*/, '$1')); }
