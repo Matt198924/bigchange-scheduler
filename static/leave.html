@@ -412,7 +412,7 @@ async function tabStaff() {
       <p class="muted">Shows the absence type IDs BigChange already uses (copy them into the Render settings) and the latest absences, so you can confirm synced leave arrived.</p>
       <button class="sm" onclick="bcCheck()">Check BigChange</button><div id="bc-out" style="margin-top:.6rem"></div>
       <h2 style="margin-top:1.2rem">Import existing BigChange absences</h2>
-      <p class="muted">Pulls this leave year's approved absences from BigChange into the leave system (matched by BigChange ID, so add IDs first). Already-imported and overlapping ones are skipped.</p>
+      <p class="muted">Pulls every approved absence from 1 January 2026 onwards (including next year) from BigChange into the leave system (matched by BigChange ID, so add IDs first). Already-imported and overlapping ones are skipped.</p>
       <button class="sm" onclick="bcImportPreview()">Preview import</button><div id="bci-out" style="margin-top:.6rem"></div></details>
     <details class="card"><summary>Email notifications ${es.enabled ? '<span class="pill approved">on</span>' : '<span class="pill pending">off</span>'}</summary>
       ${es.enabled ? `<p class="muted">Sending from ${esc(es.from)}. Staff get approved/rejected/cancelled emails; managers get new-request emails${es.office ? '; people with no manager go to ' + esc(es.office) : ' (set LEAVE_OFFICE_EMAIL so requests with no manager reach you)'}.</p>
