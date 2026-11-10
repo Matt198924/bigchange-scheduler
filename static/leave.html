@@ -321,7 +321,8 @@ async function submitRequest() {
 async function cancelReq(id) { if (confirm('Cancel this request?')) { await api(`/requests/${id}/cancel`, 'POST'); loadStaff(); } }
 
 // ── admin ──
-const TABS = {pending:'Pending', calendar:'Calendar', book:'Book leave', all:'All requests', staff:'Staff', access:'Hub access', bh:'Bank holidays'};
+const ADMIN_PAGE = location.pathname.startsWith('/staff-admin');   // office-only page: people, PINs, hub access
+const TABS = ADMIN_PAGE ? {staff:'Staff', access:'Hub access'} : {pending:'Pending', calendar:'Calendar', book:'Book leave', all:'All requests', bh:'Bank holidays'};
 let tab = 'pending';
 function showTab(t) { tab = t; if ($('a-body')) $('a-body').innerHTML = '<div class="card"><p class="muted">Loading…</p></div>'; $('a-tabs').innerHTML = Object.entries(TABS).map(([k, v]) => `<button class="${k === t ? 'on' : ''}" onclick="showTab('${k}')">${v}</button>`).join(''); Promise.resolve(({pending: tabPending, calendar: tabCal, book: tabBook, all: tabAll, staff: tabStaff, access: tabAccess, bh: tabBH})[t]()).catch(e => { $('a-body').innerHTML = `<div class="card"><div class="err">Could not load this tab: ${esc(e.message)}</div></div>`; }); }
 
@@ -659,7 +660,7 @@ async function start() {
   if (!TOKEN) { $('login').classList.remove('hidden'); $('signout').classList.add('hidden'); return loadEmployees(); }
   $('signout').classList.remove('hidden');
   try {
-    if (ROLE === 'admin') { $('admin').classList.remove('hidden'); showTab('pending'); dbWarn(); }
+    if (ROLE === 'admin') { $('admin').classList.remove('hidden'); showTab(ADMIN_PAGE ? 'staff' : 'pending'); dbWarn(); }
     else { $('staff').classList.remove('hidden'); await loadStaff(); }
   } catch (e) { /* api() already signed out on 401 */ }
 }
