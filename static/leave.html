@@ -190,7 +190,7 @@ async function api(path, method='GET', body) {
   if (!r.ok) throw new Error(j.error || `Server problem (HTTP ${r.status}) on ${path}`);
   return j;
 }
-function signOut() { sessionStorage.clear(); TOKEN = ROLE = null; location.reload(); }
+async function signOut() { try { await fetch('/api/hub/logout', {method: 'POST'}); } catch (e) {} sessionStorage.clear(); TOKEN = ROLE = null; location.href = '/login'; }
 function setSession(t, role) { TOKEN = t; ROLE = role; sessionStorage.setItem('leaveToken', t); sessionStorage.setItem('leaveRole', role); start(); }
 
 // ── login ──
@@ -386,6 +386,7 @@ async function tabStaff() {
       <p class="muted" style="margin-top:.6rem">Includes bank holidays, which are booked automatically and deducted. Change one person's allowance with the number box on their row below.</p>
       <div id="al-msg"></div>
     </div>
+    <div class="card" id="ha-card"><h2>Hub access</h2><p class="muted">Loading...</p></div>
     <div class="card"><h2>Staff (${j.employees.length})</h2>` + j.employees.map(e => `<div class="item" style="${e.active ? '' : 'opacity:.5'}">
       <div class="who">${avatar(e.name)}<div><b>${esc(e.name)}</b>${e.isManager ? ' <span class="pill approved">manager</span>' : ''}
         <div class="muted">Annual: <b>${e.balance.remaining}</b> of ${e.allowance} left (${e.balance.taken} taken incl. bank holidays${e.balance.pending ? ', ' + e.balance.pending + ' pending' : ''}) · Sick (paid): ${e.balance.sickTaken}/${e.balance.sickAllowance}</div>
@@ -442,6 +443,28 @@ async function tabStaff() {
     <details class="card"><summary>Email notifications ${es.enabled ? '<span class="pill approved">on</span>' : '<span class="pill pending">off</span>'}</summary>
       ${es.enabled ? `<p class="muted">Sending from ${esc(es.from)}. Staff get approved/rejected/cancelled emails; managers get new-request emails${es.office ? '; people with no manager go to ' + esc(es.office) : ' (set LEAVE_OFFICE_EMAIL so requests with no manager reach you)'}.</p>
       <button class="sm" style="margin-top:.6rem" onclick="testEmail()">Send test email</button>` : `<p class="muted">Off. Set RESEND_API_KEY and LEAVE_EMAIL_FROM on Render to switch on (see README).</p>`}</details>`;
+  loadHubAccess();
+}
+let HA = null;
+async function loadHubAccess() {
+  try { HA = await api('/../hub/admin/access'); } catch (e) { $('ha-card').innerHTML = `<h2>Hub access</h2><div class="err">${esc(e.message)}</div>`; return; }
+  $('ha-card').innerHTML = `<h2>Hub access</h2><p class="muted">Staff sign in at the hub with their name and PIN. For each tool choose whether every signed-in person can use it, or only the people you tick. The office password always has full access.</p>`
+    + HA.apps.map(a => `<details style="margin-top:.6rem" ${a.mode === 'some' ? 'open' : ''}><summary><b>${esc(a.label)}</b> <span class="pill ${a.mode === 'some' ? 'pending' : 'approved'}" id="ha-pill-${a.key}">${a.mode === 'some' ? a.ids.length + ' people' : 'everyone'}</span></summary>
+      <div style="margin:.5rem 0"><label style="display:inline-flex;gap:6px;align-items:center"><input type="radio" name="ha-${a.key}" value="all" ${a.mode === 'all' ? 'checked' : ''} onchange="haSet('${a.key}')" style="width:auto"> Everyone signed in</label>
+      <label style="display:inline-flex;gap:6px;align-items:center;margin-left:1rem"><input type="radio" name="ha-${a.key}" value="some" ${a.mode === 'some' ? 'checked' : ''} onchange="haSet('${a.key}')" style="width:auto"> Only selected people</label></div>
+      <div id="ha-list-${a.key}" style="columns:2 180px;${a.mode === 'some' ? '' : 'display:none'}">${HA.employees.map(e => `<label style="display:flex;gap:6px;align-items:center;margin:.15rem 0;font-weight:400"><input type="checkbox" style="width:auto" data-app="${a.key}" value="${e.id}" ${a.ids.includes(e.id) ? 'checked' : ''} onchange="haSet('${a.key}')"> ${esc(e.name)}</label>`).join('')}</div></details>`).join('')
+    + '<div id="ha-msg"></div>';
+}
+async function haSet(key) {
+  const mode = document.querySelector(`input[name="ha-${key}"]:checked`).value;
+  $('ha-list-' + key).style.display = mode === 'some' ? '' : 'none';
+  const access = {};
+  HA.apps.forEach(a => { const m = document.querySelector(`input[name="ha-${a.key}"]:checked`).value;
+    access[a.key] = {mode: m, ids: [...document.querySelectorAll(`input[data-app="${a.key}"]:checked`)].map(c => +c.value)}; });
+  try { await api('/../hub/admin/access', 'POST', {access});
+    HA.apps.forEach(a => { $('ha-pill-' + a.key).textContent = access[a.key].mode === 'some' ? access[a.key].ids.length + ' people' : 'everyone'; });
+    $('ha-msg').innerHTML = '<div class="info">Saved.</div>'; }
+  catch (e) { $('ha-msg').innerHTML = `<div class="err">${esc(e.message)}</div>`; }
 }
 async function saveDefaultAllowance() {
   try { const j = await api('/admin/settings', 'PUT', {defaultAllowance: $('def-all').value}); $('al-msg').innerHTML = `<div class="info">New staff will start with ${j.defaultAllowance} days.</div>`; }
@@ -618,6 +641,7 @@ async function delBH(d) { await api('/admin/bank-holidays/' + d, 'DELETE'); tabB
 // ── boot ──
 async function start() {
   ['login', 'staff', 'admin'].forEach(x => $(x).classList.add('hidden'));
+  if (!TOKEN) { try { const r = await fetch('/api/hub/leave-token'); if (r.ok) { const j = await r.json(); TOKEN = j.token; ROLE = j.role; sessionStorage.setItem('leaveToken', TOKEN); sessionStorage.setItem('leaveRole', ROLE); } } catch (e) {} }
   if (!TOKEN) { $('login').classList.remove('hidden'); $('signout').classList.add('hidden'); return loadEmployees(); }
   $('signout').classList.remove('hidden');
   try {

@@ -1,0 +1,43 @@
+<!DOCTYPE html>
+<html lang="en"><head>
+<meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<meta name="theme-color" content="#0B2A4A"><title>Sign in – R&amp;S Staff Hub</title>
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="/static/incident/common.css">
+<style>.wrap{max-width:420px;padding-top:2rem}.logo{width:72px;height:72px;border-radius:16px;background:#fff;padding:10px;box-shadow:var(--shadow);margin:0 auto 1rem;display:block}h1{text-align:center;font-size:22px}.sub{text-align:center;color:var(--slate);margin:.3rem 0 1.2rem}.lnk{display:block;text-align:center;margin-top:1rem;color:var(--ink-2);font-size:13px;background:none;border:0;cursor:pointer;width:100%}</style>
+</head><body>
+<div class="topbar"><div class="brand"><div class="brand-mark"><img src="/static/logo-mark.png" alt="R&amp;S"></div><span class="brand-name">Staff Hub</span></div></div>
+<div class="wrap">
+  <img class="logo" src="/static/logo-mark.png" alt="R&amp;S"><h1>Sign in</h1><p class="sub">R&amp;S Services (Yorkshire) Ltd</p>
+  <form class="card" id="emp" onsubmit="go(event)">
+    <label for="who">Your name</label><select id="who"></select>
+    <label for="pin">PIN</label><input id="pin" type="password" inputmode="numeric" autocomplete="current-password" maxlength="6" placeholder="4-6 digit PIN">
+    <div class="hint">Don't have a PIN? Ask the office.</div>
+    <div id="err"></div>
+    <button class="btn primary" style="width:100%;margin-top:1rem" id="btn">Sign in</button>
+    <button type="button" class="lnk" onclick="swap(true)">Office sign-in</button>
+  </form>
+  <form class="card hidden" id="off" onsubmit="go(event, true)">
+    <label for="pw">Office password</label><input id="pw" type="password" autocomplete="current-password">
+    <div id="err2"></div>
+    <button class="btn primary" style="width:100%;margin-top:1rem">Sign in as office</button>
+    <button type="button" class="lnk" onclick="swap(false)">Staff sign-in</button>
+  </form>
+</div>
+<script>
+const $ = id => document.getElementById(id), esc = s => String(s).replace(/[&<>"]/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
+const next = (() => { const n = new URLSearchParams(location.search).get('next') || '/'; return n.startsWith('/') && !n.startsWith('//') ? n : '/'; })();
+function swap(office) { $('emp').classList.toggle('hidden', office); $('off').classList.toggle('hidden', !office); }
+fetch('/api/hub/me').then(r => r.json()).then(j => { if (j.signedIn) location.replace(next); });
+fetch('/api/leave/employees').then(r => r.json()).then(j => { $('who').innerHTML = j.employees.map(e => `<option value="${e.id}">${esc(e.name)}</option>`).join(''); });
+async function go(e, office) {
+  e.preventDefault(); const box = office ? 'err2' : 'err'; $(box).innerHTML = '';
+  try {
+    const r = await fetch('/api/hub/login', {method: 'POST', headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify(office ? {admin: true, password: $('pw').value} : {employeeId: +$('who').value, pin: $('pin').value})});
+    const j = await r.json(); if (!r.ok) throw new Error(j.error || 'Could not sign in');
+    sessionStorage.setItem('leaveToken', j.leaveToken); sessionStorage.setItem('leaveRole', j.role);
+    location.replace(next);
+  } catch (x) { $(box).innerHTML = `<div class="err">${esc(x.message)}</div>`; }
+}
+</script></body></html>

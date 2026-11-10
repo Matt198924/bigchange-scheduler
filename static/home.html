@@ -35,7 +35,7 @@ body{font-family:'IBM Plex Sans',system-ui,sans-serif;background:var(--paper);co
 </style>
 </head>
 <body>
-<div class="topbar"><div class="brand"><div class="brand-mark"><img src="/static/logo-mark.png" alt="R&amp;S Services"></div><span class="brand-name">Staff Hub</span></div></div>
+<div class="topbar" style="justify-content:space-between"><div class="brand"><div class="brand-mark"><img src="/static/logo-mark.png" alt="R&amp;S Services"></div><span class="brand-name">Staff Hub</span></div><div id="who" style="color:#fff;font-size:13px"></div></div>
 <div class="hero"><div class="hero-in">
   <div class="mark"><img src="/static/logo-mark.png" alt="R&amp;S"></div>
   <div><h1>R&amp;S Staff Hub</h1><p>Pick a tool to get started.</p></div>
@@ -54,11 +54,18 @@ const APPS = [
   {name: 'Company handbook', icon: '📘', url: '/handbook/', desc: 'Policies and procedures. Searchable.'},
   {name: 'Company policies', icon: '📋', url: '/policies/', desc: 'Health & safety, drugs & alcohol, GDPR and more. Searchable.'},
 ];
-document.getElementById('grid').innerHTML = APPS.map(a => `
+const KEYS = {'/scheduler': 'scheduler', '/leave': 'leave', '/parts/': 'parts', '/incident/': 'incident', '/handbook/': 'handbook', '/policies/': 'policies'};
+fetch('/api/hub/me').then(r => r.json()).then(me => {
+  if (!me.signedIn) { location.replace('/login'); return; }
+  document.getElementById('who').innerHTML = `${me.name.replace(/[<>&]/g, '')} · <a href="#" id="out" style="color:var(--cyan)">Sign out</a>`;
+  document.getElementById('out').onclick = async e => { e.preventDefault(); await fetch('/api/hub/logout', {method: 'POST'}); sessionStorage.clear(); location.replace('/login'); };
+  const shown = APPS.filter(a => me.apps.includes(KEYS[a.url]));
+  document.getElementById('grid').innerHTML = shown.length ? shown.map(a => `
   <a class="tile ${a.soon ? 'soon' : ''}" ${a.soon ? '' : `href="${a.url}"`}>
     <div class="icon">${a.icon}</div><b>${a.name}</b><p>${a.desc}</p>
     ${a.soon ? '<span class="badge">Coming soon</span>' : '<span class="go">Open →</span>'}
-  </a>`).join('');
+  </a>`).join('') : '<p class="foot">You have not been given access to any tools yet. Ask the office.</p>';
+});
 </script>
 </body>
 </html>
