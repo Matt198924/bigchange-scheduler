@@ -1308,6 +1308,15 @@ def admin_bc_match():
     if not bc_hooks.get('get'): return jsonify({'error': 'BigChange is not connected'}), 400
     try: resources = _bc_resources()
     except Exception as ex: return jsonify({'error': f'BigChange said: {ex}'}), 502
+    try:                                   # staff may not be in /resources; absences also carry the person's name
+        known = {_bcid(r.get('id')) for r in resources}
+        for a in _bc_fetch_absences():
+            rid, o = _bcid(a.get('resourceId')), a.get('owner')
+            nm = (o if isinstance(o, str) else _bc_res_name(o) if isinstance(o, dict) else '') or ''
+            if rid and rid not in known and nm.strip():
+                resources.append({'id': rid, 'name': nm.strip()}); known.add(rid)
+    except Exception as ex:
+        print(f'[LEAVE] could not read absence owners: {ex}')
     by = {}
     for r in resources:
         key = _norm_name(_bc_res_name(r))
