@@ -166,10 +166,34 @@ def parse_docx(data):
                 if not text: continue
                 cur = ['Introduction', []]; secs.append(cur)
             cur[1].append(f"## {text}" if level else text)
-    out = []
+    # tidy: a heading written in ALL CAPS inside a section starts a new section of its own
+    # (policies like EMAIL AND INTERNET POLICY often sit under a bigger heading), the contents
+    # page is dropped, and a lone sub-heading repeating its section title is removed.
+    split = []
     for title, lines in secs:
+        cur = [title, []]; split.append(cur)
+        for ln in lines:
+            m = re.match(r'^## \**(.+?)\**\s*$', ln)
+            if m and m.group(1).isupper() and len(m.group(1)) > 8:
+                cur = [m.group(1), []]; split.append(cur)
+            else:
+                cur[1].append(ln)
+
+    def nice(t):
+        t = t.replace('**', '').strip()
+        if not t.isupper(): return t
+        w = t.replace('&', 'and').title().split()
+        w = [x.lower() if i and x.lower() in ('and', 'of', 'to', 'with', 'for', 'the', 'in', 'our') else x for i, x in enumerate(w)]
+        return ' '.join(w).replace('Randands', 'R&S')
+
+    out = []
+    for title, lines in split:
+        if re.search(r'\bcontents\b', title, re.I): continue
+        title = nice(title)
+        lines = [re.sub(r'^## \*\*(.+?)\*\*\s*$', r'## \1', l) for l in lines]
+        if lines and lines[0].strip().lower() == f'## {title}'.lower(): lines = lines[1:]
         body_txt = re.sub(r'\n{3,}', '\n\n', '\n'.join(lines)).strip()
-        out.append((title[:200], body_txt))
+        if body_txt: out.append((title[:200], body_txt))
     return out
 
 
