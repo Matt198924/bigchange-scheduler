@@ -14,6 +14,8 @@ from parts import parts_bp  # van parts finder (/parts)
 app.register_blueprint(parts_bp)
 from incident import incident_bp  # accident / incident reports (/incident)
 app.register_blueprint(incident_bp)
+from handbook import handbook_bp  # company handbook (/handbook)
+app.register_blueprint(handbook_bp)
 
 CLIENT_ID     = os.environ.get('BIGCHANGE_CLIENT_ID', '')
 CLIENT_SECRET = os.environ.get('BIGCHANGE_CLIENT_SECRET', '')

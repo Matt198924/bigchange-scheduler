@@ -1,0 +1,54 @@
+<!DOCTYPE html>
+<html lang="en"><head>
+<meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="theme-color" content="#0B2A4A"><title>Handbook editor – R&amp;S Services (office)</title>
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="/static/incident/common.css">
+<style>.wrap{max-width:900px}.sec{border-top:1px solid var(--line);padding:.8rem 0}.sec:first-child{border-top:0}.acts{display:flex;gap:.4rem;flex-wrap:wrap;margin-top:.5rem}textarea.big{min-height:260px;font-family:'IBM Plex Mono',monospace;font-size:14px}</style></head><body>
+<div class="topbar"><div class="brand"><div class="brand-mark"><img src="/static/logo-mark.png" alt="R&amp;S"></div><span class="brand-name">Handbook editor (office)</span></div><a class="btn-home" href="/handbook/">View handbook</a></div>
+<div class="wrap">
+<div id="login" class="card" style="max-width:420px;margin:2rem auto"><h2>Office login</h2><label>Office password</label><input id="pw" type="password" onkeydown="if(event.key==='Enter')login()"><div id="lmsg"></div><button class="btn primary" style="margin-top:.8rem" onclick="login()">Sign in</button></div>
+<div id="app" class="hidden">
+  <div class="card"><h2>Import a Word document</h2><p class="muted">Upload the handbook as a .docx. It is split into sections at its main headings (Heading 1). You can then tidy each section below.</p>
+    <input type="file" id="docx" accept=".docx"><div class="row" style="margin-top:.6rem"><select id="mode"><option value="replace">Replace the whole handbook</option><option value="append">Add to the end</option></select><button class="btn primary" onclick="importDoc()">Import</button></div><div id="imsg"></div></div>
+  <div class="card"><h2>Version label</h2><div class="row"><input id="ver" placeholder="e.g. Version 3 – updated November 2026"><button class="btn ghost" onclick="saveVer()">Save</button></div><div id="vmsg"></div></div>
+  <div class="card"><h2>Sections</h2><p class="muted">Formatting: <code>## Sub-heading</code>, lines starting <code>- </code> for bullets, <code>1. </code> for numbered, <code>**bold**</code>. A blank line starts a new paragraph.</p><div id="secs"></div>
+    <div class="acts"><button class="btn ghost" onclick="add()">+ Add a section</button></div></div>
+</div></div>
+<script src="/static/handbook/render.js"></script>
+<script>
+const $ = id => document.getElementById(id);
+let TOKEN = sessionStorage.getItem('incToken'), SECS = [];
+async function api(path, method = 'GET', body, raw) {
+  const r = await fetch(path, {method, headers: {...(raw ? {} : {'Content-Type': 'application/json'}), Authorization: 'Bearer ' + TOKEN}, body: raw ? body : (body ? JSON.stringify(body) : undefined)});
+  const j = await r.json().catch(() => ({}));
+  if (r.status === 401) { sessionStorage.removeItem('incToken'); TOKEN = null; $('login').classList.remove('hidden'); $('app').classList.add('hidden'); throw new Error('Session expired - sign in again'); }
+  if (!r.ok) throw new Error(j.error || 'Server problem (HTTP ' + r.status + ')');
+  return j;
+}
+async function login() {
+  try { const r = await fetch('/api/leave/admin/login', {method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({password: $('pw').value})});
+    const j = await r.json().catch(() => ({})); if (!r.ok) throw new Error(j.error || 'Wrong password');
+    TOKEN = j.token; sessionStorage.setItem('incToken', TOKEN); start(); } catch (e) { $('lmsg').innerHTML = `<div class="err">${hbEsc(e.message)}</div>`; }
+}
+async function start() { $('login').classList.add('hidden'); $('app').classList.remove('hidden'); await load(); }
+async function load() {
+  const j = await (await fetch('/api/handbook')).json(); SECS = j.sections; $('ver').value = j.version;
+  $('secs').innerHTML = SECS.length ? SECS.map((s, i) => `<div class="sec" id="s${s.id}"><label>Title</label><input value="${hbEsc(s.title)}" id="t${s.id}">
+    <label>Text</label><textarea class="big" id="b${s.id}">${hbEsc(s.body)}</textarea>
+    <div class="acts"><button class="btn primary sm" onclick="save(${s.id})">Save</button><button class="btn ghost sm" onclick="mv(${s.id},'up')" ${i ? '' : 'disabled'}>↑ Up</button><button class="btn ghost sm" onclick="mv(${s.id},'down')" ${i < SECS.length - 1 ? '' : 'disabled'}>↓ Down</button><button class="btn ghost sm" onclick="del(${s.id})">Delete</button><span class="muted" id="m${s.id}"></span></div></div>`).join('') : '<p class="muted">No sections yet. Import a Word document or add one.</p>';
+}
+const note = (id, t) => { const e = $('m' + id); if (e) e.textContent = t; };
+async function save(id) { try { await api('/api/handbook/admin/section/' + id, 'PUT', {title: $('t' + id).value, body: $('b' + id).value}); note(id, 'Saved'); } catch (e) { note(id, e.message); } }
+async function mv(id, dir) { try { await api(`/api/handbook/admin/section/${id}/move`, 'POST', {dir}); await load(); } catch (e) { alert(e.message); } }
+async function del(id) { if (!confirm('Delete this section?')) return; try { await api('/api/handbook/admin/section/' + id, 'DELETE'); await load(); } catch (e) { alert(e.message); } }
+async function add() { const t = prompt('Section title:'); if (!t) return; try { await api('/api/handbook/admin/section', 'POST', {title: t, body: ''}); await load(); } catch (e) { alert(e.message); } }
+async function saveVer() { try { await api('/api/handbook/admin/version', 'PUT', {version: $('ver').value}); $('vmsg').innerHTML = '<div class="ok">Saved.</div>'; } catch (e) { $('vmsg').innerHTML = `<div class="err">${hbEsc(e.message)}</div>`; } }
+async function importDoc() {
+  const f = $('docx').files[0]; if (!f) { $('imsg').innerHTML = '<div class="err">Choose a .docx file first.</div>'; return; }
+  if ($('mode').value === 'replace' && SECS.length && !confirm('This replaces everything currently in the handbook. Continue?')) return;
+  try { const j = await api('/api/handbook/admin/import?mode=' + $('mode').value, 'POST', await f.arrayBuffer(), true); $('imsg').innerHTML = `<div class="ok">Imported ${j.count} sections.</div>`; await load(); }
+  catch (e) { $('imsg').innerHTML = `<div class="err">${hbEsc(e.message)}</div>`; }
+}
+if (TOKEN) start().catch(() => {});
+</script></body></html>
