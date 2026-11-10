@@ -386,7 +386,9 @@ async function tabStaff() {
     </div>
     <div class="card"><h2>Staff (${j.employees.length})</h2>` + j.employees.map(e => `<div class="item" style="${e.active ? '' : 'opacity:.5'}">
       <div class="who">${avatar(e.name)}<div><b>${esc(e.name)}</b>${e.isManager ? ' <span class="pill approved">manager</span>' : ''}
-        <div class="muted">${e.balance.remaining} of ${e.allowance} days left · sick ${e.balance.sickTaken}/${e.balance.sickAllowance}${e.balance.sickUnpaidTaken ? ' (+' + e.balance.sickUnpaidTaken + ' unpaid sick)' : ''}${e.balance.unpaidTaken ? ' · unpaid leave ' + e.balance.unpaidTaken : ''}${e.balance.appointmentTaken ? ' · appointments ' + e.balance.appointmentTaken : ''} · ${e.hasPin ? 'PIN set' : 'no PIN'}${e.email ? ' · ' + esc(e.email) : ' · no email'}${e.bcResourceId ? ' · BC ' + esc(e.bcResourceId) : ''}</div></div></div>
+        <div class="muted">Annual: <b>${e.balance.remaining}</b> of ${e.allowance} left (${e.balance.taken} taken incl. bank holidays${e.balance.pending ? ', ' + e.balance.pending + ' pending' : ''}) · Sick (paid): ${e.balance.sickTaken}/${e.balance.sickAllowance}</div>
+        <div class="muted">Recorded only: unpaid sick ${e.balance.sickUnpaidTaken || 0} · unpaid leave ${e.balance.unpaidTaken || 0} · appointments ${e.balance.appointmentTaken || 0}</div>
+        <div class="muted">${e.hasPin ? 'PIN set' : 'no PIN'}${e.email ? ' · ' + esc(e.email) : ' · no email'}${e.bcResourceId ? ' · BC ' + esc(e.bcResourceId) : ''}</div></div></div></div>
       <div class="controls">
         <select title="Who approves their leave" onchange="upd(${e.id},{managerId:this.value})">${mgrOpts(e.managerId)}</select>
         <span class="muted">Days</span><input class="allow" type="number" step="0.5" min="0" max="60" value="${e.allowance}" title="Yearly allowance" onchange="upd(${e.id},{allowance:this.value})">
