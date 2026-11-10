@@ -18,6 +18,7 @@ Env vars
   LEAVE_DEFAULT_ALLOWANCE default days for new employees (default 28, incl. bank holidays)
   LEAVE_YEAR_START_MONTH  1-12, month the leave year starts (default 1)
 """
+import re
 import json
 import os
 import hmac
@@ -557,7 +558,7 @@ def bc_sync_create(rid):
     type_id = {'annual': BC_TYPE_ANNUAL, 'sick': BC_TYPE_SICK}.get(r['type'], BC_TYPE_OTHER)
     if r.get('bc_absence_id') or not bc_hooks['post'] or not type_id:
         return r.get('bc_sync')            # already synced, or sync switched off
-    resource = str(r.get('bc_resource_id') or '').strip()
+    resource = _bcid(r.get('bc_resource_id'))
     if not resource.isdigit():
         _set_sync(rid, None, 'skipped: no BigChange ID set for this person')
         return 'skipped'
@@ -794,8 +795,8 @@ def bc_calendar_overlay(first, last, include_unmatched=False):
     except Exception as ex:
         print(f'[LEAVE] BigChange calendar overlay failed: {ex}')
         return {}, {}, 0, 'BigChange could not be reached'
-    emps = {str(e['bc_resource_id']).strip(): e['name'] for e in query('SELECT name, bc_resource_id FROM leave_employees WHERE active = 1')
-            if str(e.get('bc_resource_id') or '').strip()}
+    emps = {_bcid(e['bc_resource_id']): e['name'] for e in query('SELECT name, bc_resource_id FROM leave_employees WHERE active = 1')
+            if _bcid(e.get('bc_resource_id'))}
     have = {str(r['bc_absence_id']) for r in query('SELECT bc_absence_id FROM leave_requests WHERE bc_absence_id IS NOT NULL')}
     bhs = bank_holiday_set()
     approved, requested, unmatched = {}, {}, 0
@@ -804,12 +805,12 @@ def bc_calendar_overlay(first, last, include_unmatched=False):
         if status not in ('approved', 'requested') or str(a.get('id')) in have:
             continue
         if _bc_type(a) in BANKHOL_TYPES or 'bank holiday' in _bc_type_name(a).lower():
-            continue                                   # bank holidays are shown as shaded days instead
-        name = emps.get(str(a.get('resourceId')))
+            continue                                      # bank holidays are shown as shaded days instead
+        name = emps.get(_bcid(a.get('resourceId')))
         if not name:
             unmatched += 1
             if not include_unmatched: continue
-            rid = str(a.get('resourceId'))
+            rid = _bcid(a.get('resourceId'))
             name = _bc_resource_names().get(rid) or f'BigChange #{rid}'
         try:
             d = max(_uk_date(a['startAt']).date(), first)
@@ -1001,7 +1002,7 @@ def admin_add_employee():
                      VALUES (?,?,?,?,?,?,?)''',
                   (name, generate_password_hash(str(pin)) if pin else None,
                    float(b.get('allowance') if b.get('allowance') not in (None, '') else default_allowance()),
-                   str(b.get('bcResourceId', '') or ''), mid, 1 if b.get('isManager') else 0,
+                   _bcid(b.get('bcResourceId')), mid, 1 if b.get('isManager') else 0,
                    _clean(b.get('email')).lower()),
                   returning_id=True)
     book_bank_holidays(date.today(), [eid])
@@ -1051,6 +1052,12 @@ def default_allowance():
     try: return float(get_setting('default_allowance'))
     except (TypeError, ValueError): return DEFAULT_ALLOWANCE
 
+def _bcid(x):
+    """Normalise a BigChange resource ID: '88935', ' 88935 ', '88935.0', 'BC 88935' all become '88935'."""
+    t = str(x if x is not None else '').strip()
+    t = re.sub(r'\.0+$', '', t)
+    return re.sub(r'\D', '', t)
+
 def _clean(x):
     return ' '.join(str(x or '').split())
 
@@ -1067,7 +1074,7 @@ def admin_import():
         if not name or name.lower() in seen: continue
         seen.add(name.lower())
         rows.append({'name': name, 'manager': _clean(r.get('manager')),
-                     'allowance': _clean(r.get('allowance')), 'bc': _clean(r.get('bcResourceId')),
+                     'allowance': _clean(r.get('allowance')), 'bc': _bcid(r.get('bcResourceId')),
                      'email': _clean(r.get('email')).lower()})
     if not rows: return jsonify({'error': 'No rows found'}), 400
     if len(rows) > 300: return jsonify({'error': 'Max 300 rows at a time'}), 400
@@ -1122,7 +1129,7 @@ def admin_update_employee(eid):
                              ('email', 'email', lambda x: _clean(x).lower()),
                              ('managerId', 'manager_id', lambda x: int(x) if x not in (None, '') else None),
                              ('isManager', 'is_manager', lambda x: 1 if x else 0),
-                             ('bcResourceId', 'bc_resource_id', str),
+                             ('bcResourceId', 'bc_resource_id', _bcid),
                              ('active', 'active', lambda x: 1 if x else 0)):
         if field in b:
             sets.append(f'{col} = ?'); params.append(cast(b[field]))
@@ -1237,8 +1244,8 @@ def _bc_fetch_absences():
 def _bc_import_plan(type_map=None):
     """Work out what each BigChange absence would become. Nothing is written."""
     type_map = type_map or {}
-    emps = {str(e['bc_resource_id']).strip(): e for e in query('SELECT * FROM leave_employees WHERE active = 1')
-            if str(e.get('bc_resource_id') or '').strip()}
+    emps = {_bcid(e['bc_resource_id']): e for e in query('SELECT * FROM leave_employees WHERE active = 1')
+            if _bcid(e.get('bc_resource_id'))}
     have = {str(r['bc_absence_id']) for r in query("SELECT bc_absence_id FROM leave_requests WHERE bc_absence_id IS NOT NULL")}
     bhs = bank_holiday_set()
     rows = []
@@ -1247,7 +1254,7 @@ def _bc_import_plan(type_map=None):
         typ = type_map.get(tid, IMPORT_TYPE_MAP.get(tid, 'skip'))
         row = {'id': str(a.get('id')), 'resourceId': str(a.get('resourceId')), 'typeId': tid,
                'status': _bc_status(a), 'type': typ, 'action': 'import', 'why': ''}
-        emp = emps.get(row['resourceId'])
+        emp = emps.get(_bcid(row['resourceId']))
         try:
             s_dt, e_dt = _uk_date(a['startAt']), _uk_date(a['endAt'], True)
             start, end = s_dt.date(), max(s_dt.date(), e_dt.date())
@@ -1306,7 +1313,7 @@ def admin_bc_match():
             by.setdefault(key, []).append({'id': str(r['id']), 'name': _bc_res_name(r)})
     proposals, missing, ambiguous, have = [], [], [], 0
     for e in query('SELECT id, name, bc_resource_id FROM leave_employees WHERE active = 1 ORDER BY name'):
-        if str(e.get('bc_resource_id') or '').strip():
+        if _bcid(e.get('bc_resource_id')):
             have += 1; continue
         words = _norm_name(e['name']).split()
         keys = {' '.join(words), ' '.join(reversed(words))}
