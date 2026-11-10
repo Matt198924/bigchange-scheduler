@@ -386,7 +386,7 @@ async function tabStaff() {
       <p class="muted" style="margin-top:.6rem">Includes bank holidays, which are booked automatically and deducted. Change one person's allowance with the number box on their row below.</p>
       <div id="al-msg"></div>
     </div>
-    <div class="card"><h2>Staff (${j.employees.length})</h2>` + j.employees.map(e => `<div class="item" style="${e.active ? '' : 'opacity:.5'}">
+    <div class="card"><h2>Staff (${j.employees.length})</h2><div style="margin-bottom:.8rem"><button class="sm" onclick="emailPins(null)">Email everyone their PIN</button> <span class="muted">Sends each person a NEW PIN with sign-in instructions (needs an email address on file).</span><div id="ep-msg"></div></div>` + j.employees.map(e => `<div class="item" style="${e.active ? '' : 'opacity:.5'}">
       <div class="who">${avatar(e.name)}<div><b>${esc(e.name)}</b>${e.isManager ? ' <span class="pill approved">manager</span>' : ''}
         <div class="muted">Annual: <b>${e.balance.remaining}</b> of ${e.allowance} left (${e.balance.taken} taken incl. bank holidays${e.balance.pending ? ', ' + e.balance.pending + ' pending' : ''}) · Sick (paid): ${e.balance.sickTaken}/${e.balance.sickAllowance}</div>
         <div class="muted">Recorded only: unpaid sick ${e.balance.sickUnpaidTaken || 0} · unpaid leave ${e.balance.unpaidTaken || 0} · appointments ${e.balance.appointmentTaken || 0}</div>
@@ -397,6 +397,7 @@ async function tabStaff() {
         <button class="sm" onclick="upd(${e.id},{isManager:${!e.isManager}})">${e.isManager ? 'Remove manager' : 'Make manager'}</button>
         <button class="sm" onclick="setEmail(${e.id},'${esc(e.email).replace(/'/g, "\\'")}')">Email</button>
         <button class="sm" onclick="setPin(${e.id})">Set PIN</button>
+        <button class="sm" onclick="emailPins([${e.id}], '${esc(e.name).replace(/'/g, "\\'")}')">Email PIN</button>
         <button class="sm" onclick="showReqs(${e.id})">Breakdown</button>
           <button class="sm" onclick="setBC(${e.id},'${esc(e.bcResourceId)}')">BC ID</button>
         <button class="sm" onclick="toggleEmp(${e.id},${!e.active})">${e.active ? 'Deactivate' : 'Reactivate'}</button>
@@ -618,6 +619,17 @@ async function showReqs(id) {
 }
 async function upd(id, body) { try { await api('/admin/employees/' + id, 'PUT', body); tabStaff(); } catch (e) { alert(e.message); } }
 function setEmail(id, cur) { const a = prompt('Email address:', cur); if (a !== null) upd(id, {email: a}); }
+async function emailPins(ids, name) {
+  const n = ids ? name : 'EVERYONE with an email address';
+  if (!confirm(`Email a NEW PIN to ${n}? Their current PIN will stop working.`)) return;
+  $('ep-msg').innerHTML = '<p class="muted">Sending...</p>';
+  try {
+    const j = await api('/../hub/admin/email-pins', 'POST', ids ? {ids} : {all: true});
+    $('ep-msg').innerHTML = `<div class="info">Emailed ${j.sent.length}: ${j.sent.map(esc).join(', ') || 'nobody'}.</div>`
+      + (j.noEmail.length ? `<div class="err">No email address on file for: ${j.noEmail.map(esc).join(', ')} (use the Email button on their row).</div>` : '')
+      + (j.failed.length ? `<div class="err">Could not send to: ${j.failed.map(f => esc(f.name) + ' (' + esc(f.error) + ')').join('; ')}. Their PIN was not changed.</div>` : '');
+  } catch (e) { $('ep-msg').innerHTML = `<div class="err">${esc(e.message)}</div>`; }
+}
 function setPin(id) { const p = prompt('New PIN (4-6 digits):'); if (p) upd(id, {pin: p}); }
 function setAllow(id, cur) { const a = prompt('Allowance in days:', cur); if (a !== null && a !== '') upd(id, {allowance: +a}); }
 function setBC(id, cur) { const a = prompt('BigChange resource ID:', cur); if (a !== null) upd(id, {bcResourceId: a}); }

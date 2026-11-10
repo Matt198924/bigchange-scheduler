@@ -145,3 +145,51 @@ def hub_access():
     emps = leave.query('SELECT id, name FROM leave_employees WHERE active = 1 ORDER BY name')
     return jsonify({'apps': [{'key': k, 'label': l, **acc[k]} for k, l in APPS],
                     'employees': [{'id': e['id'], 'name': e['name']} for e in emps]})
+
+
+# ── Email PINs ─────────────────────────────────────────────────────────────
+import secrets
+from werkzeug.security import generate_password_hash
+
+
+def _pin_email(name, pin, url):
+    first = (name or '').split(' ')[0] or 'there'
+    return (f"Hi {first},\n\n"
+            "Welcome to the R&S Staff Hub - one place on your phone or computer for the things you need at work:\n\n"
+            "  - Annual leave: book time off, check your allowance and see your team's calendar\n"
+            "  - Van parts finder: search van stock by part number and see which locker it is in\n"
+            "  - Accident / incident reports: report an accident, near miss or hazard in a couple of minutes\n"
+            "  - Company handbook and policies: read and search them any time\n"
+            "  - Scheduler: job scheduling (for those who use it)\n\n"
+            "HOW TO SIGN IN\n"
+            f"  1. Go to {url}\n"
+            "  2. Choose your name from the list\n"
+            f"  3. Enter your PIN: {pin}\n\n"
+            "Tip: once you are in, add the page to your phone's home screen so it is always one tap away.\n\n"
+            "Please keep your PIN to yourself - it is your personal sign-in. If you lose it or think someone else knows it, "
+            "ask the office and we will send you a new one. Anything you cannot see in the hub is not available to your role.\n\n"
+            "R&S Services (Yorkshire) Ltd")
+
+
+@hub_bp.route('/api/hub/admin/email-pins', methods=['POST'])
+def hub_email_pins():
+    """Give people a NEW random PIN and email it to them (existing PINs are stored scrambled, so cannot be re-sent)."""
+    if not leave.is_admin(): return leave._auth_error()
+    if not leave.email_enabled():
+        return jsonify({'error': 'Email is not set up yet (RESEND_API_KEY / LEAVE_EMAIL_FROM missing on Render)'}), 400
+    b = request.get_json(silent=True) or {}
+    rows = leave.query('SELECT id, name, email FROM leave_employees WHERE active = 1 ORDER BY name')
+    if not b.get('all'):
+        want = {int(i) for i in b.get('ids', []) if str(i).isdigit()}
+        rows = [r for r in rows if r['id'] in want]
+    url = f"{request.headers.get('X-Forwarded-Proto', request.scheme)}://{request.host}/"
+    sent, skipped, failed = [], [], []
+    for r in rows:
+        email = (r['email'] or '').strip()
+        if '@' not in email: skipped.append(r['name']); continue
+        pin = f'{secrets.randbelow(10000):04d}'
+        try: leave.send_email(email, 'Your R&S Staff Hub sign-in', _pin_email(r['name'], pin, url))
+        except Exception as ex: failed.append({'name': r['name'], 'error': str(ex)[:120]}); continue
+        leave.execute('UPDATE leave_employees SET pin_hash = ? WHERE id = ?', (generate_password_hash(pin), r['id']))
+        sent.append(r['name'])
+    return jsonify({'sent': sent, 'noEmail': skipped, 'failed': failed})
