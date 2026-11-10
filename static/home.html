@@ -41,7 +41,7 @@ body{font-family:'IBM Plex Sans',system-ui,sans-serif;background:var(--paper);co
 <div class="topbar" style="justify-content:space-between"><div class="brand"><div class="brand-mark"><img src="/static/logo-mark.png" alt="R&amp;S Services"></div><span class="brand-name">Staff Hub</span></div><div id="who" style="color:#fff;font-size:13px"></div></div>
 <div class="hero"><div class="hero-in">
   <div class="logo-wide"><img src="/static/logo-wide.png" alt="R&amp;S Services (Yorkshire) Ltd"></div>
-  <div><h1>Staff Hub</h1><p>Pick a tool to get started.</p></div>
+  <div><h1 id="hi">Staff Hub</h1><p>Pick a tool to get started.</p></div>
 </div></div>
 <div class="wrap">
   <div class="grid" id="grid"></div>
@@ -60,6 +60,7 @@ const APPS = [
 const KEYS = {'/scheduler': 'scheduler', '/leave': 'leave', '/parts/': 'parts', '/incident/': 'incident', '/handbook/': 'handbook', '/policies/': 'policies'};
 fetch('/api/hub/me').then(r => r.json()).then(me => {
   if (!me.signedIn) { location.replace('/login'); return; }
+  document.getElementById('hi').textContent = 'Hi ' + (me.role === 'admin' ? 'Office' : me.name.split(' ')[0]);
   document.getElementById('who').innerHTML = `${me.name.replace(/[<>&]/g, '')} · <a href="#" id="out" style="color:var(--cyan)">Sign out</a>`;
   document.getElementById('out').onclick = async e => { e.preventDefault(); await fetch('/api/hub/logout', {method: 'POST'}); sessionStorage.clear(); location.replace('/login'); };
   const shown = APPS.filter(a => me.apps.includes(KEYS[a.url]));
