@@ -223,7 +223,7 @@ async function renderCal(el, month) {
   }
   const note = [ROLE === 'admin' ? 'Amber with ? = pending.' : '', j.bcShown ? 'Includes absences booked in BigChange.' : '',
     j.bcError ? 'BigChange absences could not be loaded just now.' : '',
-    j.bcUnmatched ? `${j.bcUnmatched} BigChange absence${j.bcUnmatched === 1 ? ' is' : 's are'} not shown because that person has no BigChange ID here.` : ''].filter(Boolean).join(' ');
+    j.bcUnmatched ? `${j.bcUnmatched} BigChange absence${j.bcUnmatched === 1 ? ' is' : 's'} this month for people with no BigChange ID here (shown by their BigChange name; they don't count against allowances).` : ''].filter(Boolean).join(' ');
   $(el).innerHTML = h + '</div>' + (note ? `<p class="muted" style="margin-top:.4rem">${esc(note)}</p>` : '');
 }
 function shiftCal(el, n) { const [y, m] = calMonth.split('-').map(Number); renderCal(el, new Date(y, m - 1 + n, 1).toISOString().slice(0, 7).replace(/^(\d{4}-\d{2}).*/, '$1')); }
