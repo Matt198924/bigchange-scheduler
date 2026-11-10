@@ -131,3 +131,7 @@ Emails are stored per person (import column `Email`, or the Email button in the 
 ## Van parts finder
 
 Served at `/parts` (static files in `static/parts`, `parts.py`). The stock list is stored in the leave database; upload a new Excel file from Staff -> "Van parts stock list". Until one is uploaded the bundled `static/parts/stock.json` is used.
+
+## Accident / incident reports
+
+Form at `/incident/` (anyone with the link can submit); office list at `/incident/office` (office password). Reports and photos are stored in the leave database. Set `INCIDENT_EMAIL` on Render for the alert email (falls back to `LEAVE_OFFICE_EMAIL`); the email carries no injury details.
