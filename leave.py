@@ -1187,11 +1187,12 @@ def _uk_date(ts, minus_second=False):
     if minus_second: dt -= timedelta(seconds=1)
     return dt.astimezone(UK)
 
+IMPORT_FROM = os.environ.get('LEAVE_IMPORT_FROM', '2026-01-01')   # import absences starting on or after this date
+
 def _bc_fetch_absences():
-    lo, _ = year_bounds(date.today())
     out, page = [], 1
-    while page <= 10:
-        data = bc_hooks['get']('/absences', {'dateFrom': lo.isoformat() + 'T00:00:00Z',
+    while page <= 20:
+        data = bc_hooks['get']('/absences', {'dateFrom': IMPORT_FROM + 'T00:00:00Z',
                                              'pageSize': 500, 'pageNumber': page})
         items = data if isinstance(data, list) else (data.get('items') or [])
         out.extend(items)
