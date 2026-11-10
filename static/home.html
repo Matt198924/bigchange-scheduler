@@ -49,6 +49,7 @@ body{font-family:'IBM Plex Sans',system-ui,sans-serif;background:var(--paper);co
 const APPS = [
   {name: 'Scheduler',    icon: '🗓️', url: '/scheduler', desc: 'Job scheduling and engineer assignment (BigChange).'},
   {name: 'Annual leave', icon: '🌴', url: '/leave',     desc: 'Request leave, check your balance, approve your team.'},
+  {name: 'Van parts finder', icon: '🔧', url: '/parts/', desc: 'Search van stock by part number and find it in the locker.'},
 ];
 document.getElementById('grid').innerHTML = APPS.map(a => `
   <a class="tile ${a.soon ? 'soon' : ''}" ${a.soon ? '' : `href="${a.url}"`}>

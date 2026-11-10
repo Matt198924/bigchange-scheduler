@@ -127,3 +127,7 @@ Staff get an email when leave is approved, rejected, cancelled or booked for the
 | `LEAVE_EMAIL_REPLY_TO` | Optional |
 
 Emails are stored per person (import column `Email`, or the Email button in the Staff tab). Use the "Send test email" button in the Staff tab to check it works.
+
+## Van parts finder
+
+Served at `/parts` (static files in `static/parts`, `parts.py`). The stock list is stored in the leave database; upload a new Excel file from Staff -> "Van parts stock list". Until one is uploaded the bundled `static/parts/stock.json` is used.

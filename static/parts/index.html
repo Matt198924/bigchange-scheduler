@@ -1,0 +1,35 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<!-- This site is hosted on Netlify. Anyone can build and deploy a site
+     like this one for free: https://netlify.new/?utm_campaign=loops&utm_source=ai-legible&utm_medium=owned&utm_content=comment&utm_id=ca36ccb0-b45c-47ef-b0ef-41de4098f26b
+     Netlify hosting facts for this site: static/SSR served via Netlify Edge. -->
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<meta name="theme-color" content="#0f172a">
+<meta name="description" content="Van parts stock finder">
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="icon" href="icons/icon-192.png">
+<link rel="apple-touch-icon" href="icons/icon-192.png">
+<link rel="stylesheet" href="styles.css">
+<title>Van Parts Finder</title>
+</head>
+<body>
+<header class="topbar">
+  <div><div class="eyebrow"><a href="/" style="color:inherit;text-decoration:none">← STAFF HUB</a> · VAN STOCK</div><h1>Parts Finder</h1></div>
+  <div class="top-actions"><button id="refreshBtn" class="install" type="button">Reload stock</button><button id="installBtn" class="install hidden" type="button">Install app</button></div>
+</header>
+<main id="appMain">
+<section class="search-card">
+<label for="search">Search part number or description</label>
+<div class="search-row"><input id="search" type="search" autocomplete="off" placeholder="e.g. 1013, bearing, bolt" autofocus><button id="clearBtn" class="clear" type="button" aria-label="Clear search">×</button></div>
+<div id="summary" class="summary">Loading stock…</div><div id="status" class="status" role="status" aria-live="polite"></div>
+</section>
+<section id="results" class="results" aria-live="polite"></section>
+<section id="empty" class="empty"><div class="empty-icon">🔎</div><h2>Find a part</h2><p>Search by part number, description, or locker location.</p></section>
+</main>
+<div id="mapModal" class="modal hidden" role="dialog" aria-modal="true" aria-labelledby="mapTitle">
+<div class="modal-panel"><div class="modal-head"><div><div class="eyebrow">LOCATION</div><h2 id="mapTitle">Locker</h2></div><button id="closeMap" class="close" type="button" aria-label="Close">×</button></div>
+<div id="mapWrap" class="map-wrap"><img id="lockerMap" src="locker-layout.png" alt="Van locker layout"></div><div id="mapNote" class="map-note"></div></div></div>
+<script src="config.js"></script><script src="app.js"></script>
+</body></html>

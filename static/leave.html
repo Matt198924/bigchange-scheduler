@@ -424,6 +424,9 @@ async function tabStaff() {
       <label style="display:flex;gap:6px;align-items:center"><input type="checkbox" id="bk-ismgr" style="width:auto"> These are managers (supervisors)</label>
       <button class="primary" onclick="bulkAdd()">Add all</button><div id="bk-msg"></div></details>
 
+    <details class="card"><summary>Van parts stock list</summary>
+      <p class="muted">Upload the stock Excel file (first sheet: header row, then part, quantity, locker location). It replaces the list in the <a href="/parts/">Van parts finder</a> straight away.</p>
+      <input type="file" id="parts-file" accept=".xlsx"> <button class="sm" onclick="uploadParts()">Upload</button><div id="parts-msg" style="margin-top:.5rem"></div></details>
     <details class="card"><summary>BigChange check</summary>
       <p class="muted">Shows the absence type IDs BigChange already uses (copy them into the Render settings) and the latest absences, so you can confirm synced leave arrived.</p>
       <button class="sm" onclick="bcCheck()">Check BigChange</button><div id="bc-out" style="margin-top:.6rem"></div>
@@ -569,6 +572,16 @@ async function importSheet() {
 async function testEmail() {
   const to = prompt('Send a test email to:'); if (!to) return;
   try { await api('/admin/test-email', 'POST', {to}); alert('Sent - check that inbox (and spam).'); } catch (e) { alert(e.message); }
+}
+async function uploadParts() {
+  const f = $('parts-file').files[0]; if (!f) { $('parts-msg').innerHTML = '<div class="err">Choose the Excel file first.</div>'; return; }
+  $('parts-msg').innerHTML = '<p class="muted">Uploading...</p>';
+  try {
+    const r = await fetch('/api/parts/admin/stock', {method: 'POST', headers: {Authorization: 'Bearer ' + TOKEN}, body: await f.arrayBuffer()});
+    const j = await r.json().catch(() => ({}));
+    if (!r.ok) throw new Error(j.error || 'Server problem (HTTP ' + r.status + ')');
+    $('parts-msg').innerHTML = `<div class="info">Stock list replaced: ${j.count} parts (${esc(j.updated)}).</div>`;
+  } catch (e) { $('parts-msg').innerHTML = `<div class="err">${esc(e.message)}</div>`; }
 }
 async function showReqs(id) {
   try { const j = await api('/admin/employees/' + id + '/requests');

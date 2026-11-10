@@ -4,3 +4,4 @@ requests==2.32.3
 gunicorn==22.0.0
 psycopg2-binary==2.9.11
 tzdata
+openpyxl==3.1.5
