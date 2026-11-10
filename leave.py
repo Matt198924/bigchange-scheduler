@@ -1303,7 +1303,7 @@ def _bc_res_name(r):
 
 @leave_bp.route('/api/leave/admin/bc-match')
 def admin_bc_match():
-    """Suggest BigChange resource IDs for staff who have none, by matching names. Writes nothing."""
+    """Suggest BigChange resource IDs for staff who have none, or whose saved ID is not a BigChange resource, by matching names. Writes nothing."""
     if not is_admin(): return _auth_error()
     if not bc_hooks.get('get'): return jsonify({'error': 'BigChange is not connected'}), 400
     try: resources = _bc_resources()
@@ -1313,20 +1313,22 @@ def admin_bc_match():
         key = _norm_name(_bc_res_name(r))
         if key and r.get('id') is not None:
             by.setdefault(key, []).append({'id': str(r['id']), 'name': _bc_res_name(r)})
+    valid = {_bcid(r.get('id')) for r in resources if r.get('id') is not None}
     proposals, missing, ambiguous, have = [], [], [], 0
     for e in query('SELECT id, name, bc_resource_id FROM leave_employees WHERE active = 1 ORDER BY name'):
-        if _bcid(e.get('bc_resource_id')):
+        old = _bcid(e.get('bc_resource_id'))
+        if old and (old in valid or not valid):
             have += 1; continue
         words = _norm_name(e['name']).split()
         keys = {' '.join(words), ' '.join(reversed(words))}
         found = {c['id']: c for k in keys for c in by.get(k, [])}
         if len(found) == 1:
             c = list(found.values())[0]
-            proposals.append({'employeeId': e['id'], 'name': e['name'], 'resourceId': c['id'], 'bcName': c['name']})
+            proposals.append({'employeeId': e['id'], 'name': e['name'], 'resourceId': c['id'], 'bcName': c['name'], 'old': old})
         elif found:
             ambiguous.append(e['name'])
         else:
-            missing.append(e['name'])
+            missing.append(e['name'] + (f' (saved ID {old} is not a BigChange resource)' if old else ''))
     return jsonify({'proposals': proposals, 'notFound': missing, 'ambiguous': ambiguous,
                     'alreadySet': have, 'bcResources': len(resources)})
 
