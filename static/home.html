@@ -51,6 +51,7 @@ const APPS = [
   {name: 'Annual leave', icon: '🌴', url: '/leave',     desc: 'Request leave, check your balance, approve your team.'},
   {name: 'Van parts finder', icon: '🔧', url: '/parts/', desc: 'Search van stock by part number and find it in the locker.'},
   {name: 'Accident / incident report', icon: '🚨', url: '/incident/', desc: 'Report an accident, near miss or hazard.'},
+  {name: 'Company handbook', icon: '📘', url: '/handbook/', desc: 'Policies and procedures. Searchable.'},
 ];
 document.getElementById('grid').innerHTML = APPS.map(a => `
   <a class="tile ${a.soon ? 'soon' : ''}" ${a.soon ? '' : `href="${a.url}"`}>

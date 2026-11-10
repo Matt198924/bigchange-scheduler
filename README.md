@@ -135,3 +135,7 @@ Served at `/parts` (static files in `static/parts`, `parts.py`). The stock list 
 ## Accident / incident reports
 
 Form at `/incident/` (anyone with the link can submit); office list at `/incident/office` (office password). Reports and photos are stored in the leave database. Set `INCIDENT_EMAIL` on Render for the alert email (falls back to `LEAVE_OFFICE_EMAIL`); the email carries no injury details.
+
+## Company handbook
+
+Staff view at `/handbook/` (searchable, collapsible sections); office editor at `/handbook/office` (office password) with Word (.docx) import split at Heading 1. Sections are stored in the leave database. No extra packages: the .docx is read with the standard library.
