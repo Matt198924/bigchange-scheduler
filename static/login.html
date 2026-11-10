@@ -19,6 +19,8 @@ body::after{content:'';position:fixed;inset:0;z-index:0;pointer-events:none;opac
   -webkit-mask-image:radial-gradient(70% 60% at 50% 40%,#000,transparent);mask-image:radial-gradient(70% 60% at 50% 40%,#000,transparent)}
 .topbar{display:none}
 .wrap{position:relative;z-index:1;max-width:420px;min-height:100vh;display:flex;flex-direction:column;justify-content:center;padding:2rem 1.1rem}
+.logo-wide{position:relative;margin:0 auto 1.2rem;padding:2.2rem 2.8rem;background:radial-gradient(ellipse closest-side at center,rgba(255,255,255,.97) 0,rgba(255,255,255,.92) 62%,rgba(255,255,255,.55) 84%,rgba(255,255,255,0) 100%);filter:drop-shadow(0 0 22px rgba(0,194,255,.28))}
+.logo-wide img{display:block;width:100%;height:auto}
 .logo{width:92px;height:92px;border-radius:22px;background:#fff;padding:14px;margin:0 auto 1.1rem;display:block;box-shadow:0 0 0 6px rgba(255,255,255,.08),0 12px 40px rgba(0,194,255,.35)}
 h1{text-align:center;font-size:28px;font-weight:600;color:#fff;letter-spacing:-.01em}
 .sub{text-align:center;color:rgba(255,255,255,.65);margin:.35rem 0 1.5rem;font-size:14px}
@@ -33,7 +35,7 @@ h1{text-align:center;font-size:28px;font-weight:600;color:#fff;letter-spacing:-.
 </head><body>
 <div class="topbar"><div class="brand"><div class="brand-mark"><img src="/static/logo-mark.png" alt="R&amp;S"></div><span class="brand-name">Staff Hub</span></div></div>
 <div class="wrap">
-  <img class="logo" src="/static/logo-mark.png" alt="R&amp;S"><h1>Sign in</h1><p class="sub">R&amp;S Services (Yorkshire) Ltd</p>
+  <div class="logo-wide"><img src="/static/logo-wide.png" alt="R&amp;S Services (Yorkshire) Ltd"></div><h1>Sign in</h1><p class="sub">Staff Hub</p>
   <form class="card" id="emp" onsubmit="go(event)">
     <label for="who">Your name</label><select id="who"></select>
     <label for="pin">PIN</label><input id="pin" type="password" inputmode="numeric" autocomplete="current-password" maxlength="6" placeholder="4-6 digit PIN">
