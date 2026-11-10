@@ -1237,15 +1237,77 @@ def _bc_import_plan(type_map=None):
         row['typeName'] = _bc_type_name(a)
         row.update(name=emp['name'] if emp else None, start=iso(start), end=iso(end), half=half, days=days,
                    note=(a.get('reason') or '')[:200])
-        if row['id'] in have: row.update(action='skip', why='already in the leave system')
+        if not emp: row.update(action='skip', why='no employee has this BigChange ID')
+        elif row['id'] in have: row.update(action='skip', why='already in the leave system')
         elif _bc_status(a) != 'approved': row.update(action='skip', why=f"status is {_bc_status(a) or 'unknown'}")
-        elif not emp: row.update(action='skip', why='no employee has this BigChange ID')
         elif typ == 'skip': row.update(action='skip', why='type is not on the import list')
         elif days == 0: row.update(action='skip', why='no working days')
         elif overlaps_own(emp['id'], start, end): row.update(action='skip', why='overlaps leave already booked')
         row['_emp'] = emp['id'] if emp else None
         rows.append(row)
     return rows
+
+
+# ── Match staff to BigChange resources by name ────────────────────────────
+def _norm_name(n):
+    n = ' '.join(str(n or '').replace(',', ' ').lower().split())
+    return n
+
+def _bc_resources():
+    out, page = [], 1
+    while page <= 10:
+        data = bc_hooks['get']('/resources', {'pageSize': 500, 'pageNumber': page})
+        got = data if isinstance(data, list) else (data.get('items') or [])
+        out.extend(got)
+        if len(got) < 500: break
+        page += 1
+    return out
+
+def _bc_res_name(r):
+    n = r.get('name') or r.get('resourceName') or r.get('fullName')
+    if not n:
+        n = f"{r.get('firstName') or ''} {r.get('lastName') or r.get('surname') or ''}".strip()
+    return n
+
+@leave_bp.route('/api/leave/admin/bc-match')
+def admin_bc_match():
+    """Suggest BigChange resource IDs for staff who have none, by matching names. Writes nothing."""
+    if not is_admin(): return _auth_error()
+    if not bc_hooks.get('get'): return jsonify({'error': 'BigChange is not connected'}), 400
+    try: resources = _bc_resources()
+    except Exception as ex: return jsonify({'error': f'BigChange said: {ex}'}), 502
+    by = {}
+    for r in resources:
+        key = _norm_name(_bc_res_name(r))
+        if key and r.get('id') is not None:
+            by.setdefault(key, []).append({'id': str(r['id']), 'name': _bc_res_name(r)})
+    proposals, missing, ambiguous, have = [], [], [], 0
+    for e in query('SELECT id, name, bc_resource_id FROM leave_employees WHERE active = 1 ORDER BY name'):
+        if str(e.get('bc_resource_id') or '').strip():
+            have += 1; continue
+        words = _norm_name(e['name']).split()
+        keys = {' '.join(words), ' '.join(reversed(words))}
+        found = {c['id']: c for k in keys for c in by.get(k, [])}
+        if len(found) == 1:
+            c = list(found.values())[0]
+            proposals.append({'employeeId': e['id'], 'name': e['name'], 'resourceId': c['id'], 'bcName': c['name']})
+        elif found:
+            ambiguous.append(e['name'])
+        else:
+            missing.append(e['name'])
+    return jsonify({'proposals': proposals, 'notFound': missing, 'ambiguous': ambiguous,
+                    'alreadySet': have, 'bcResources': len(resources)})
+
+@leave_bp.route('/api/leave/admin/bc-match', methods=['POST'])
+def admin_bc_match_apply():
+    if not is_admin(): return _auth_error()
+    n = 0
+    for a in (request.get_json(silent=True) or {}).get('assign') or []:
+        rid = str(a.get('resourceId') or '').strip()
+        if rid.isdigit() and a.get('employeeId') is not None:
+            execute('UPDATE leave_employees SET bc_resource_id = ? WHERE id = ?', (rid, a['employeeId']))
+            n += 1
+    return jsonify({'success': True, 'updated': n})
 
 @leave_bp.route('/api/leave/admin/bc-import')
 def admin_bc_import_preview():
