@@ -1158,6 +1158,23 @@ def admin_update_employee(eid):
     execute(f"UPDATE leave_employees SET {', '.join(sets)} WHERE id = ?", (*params, eid))
     return jsonify({'success': True})
 
+@leave_bp.route('/api/leave/admin/employees/<int:eid>/requests')
+def admin_employee_requests(eid):
+    """Every request for one person in the current leave year, with the days each one counts for."""
+    if not is_admin(): return _auth_error()
+    lo, hi = year_bounds(date.today())
+    rows = query('''SELECT id, type, status, start_date, end_date, half_day, days, bc_absence_id, note FROM leave_requests
+                    WHERE employee_id = ? AND end_date >= ? AND start_date <= ? ORDER BY start_date''', (eid, iso(lo), iso(hi)))
+    bhs = bank_holiday_set()
+    out = []
+    for r in rows:
+        counted = 1.0 if r['type'] == 'bankholiday' else working_days(parse_date(r['start_date']), parse_date(r['end_date']),
+                                                                      r['half_day'], bhs, lo, hi)
+        out.append({'id': r['id'], 'type': r['type'], 'status': r['status'], 'start': r['start_date'], 'end': r['end_date'],
+                    'half': r['half_day'], 'counted': counted, 'fromBigChange': bool(r.get('bc_absence_id')),
+                    'note': (r.get('note') or '')[:60]})
+    return jsonify({'requests': out, 'yearStart': iso(lo), 'yearEnd': iso(hi)})
+
 @leave_bp.route('/api/leave/admin/employees/<int:eid>', methods=['DELETE'])
 def admin_delete_employee(eid):
     """Permanently remove one person and their leave history. People they
@@ -1282,6 +1299,10 @@ def _bc_import_plan(type_map=None):
         if start == end and (a.get('daysRequested') or 1) <= 0.5:
             half = 'am' if e_dt.hour <= 12 else 'pm'
         days = working_days(start, end, half, bhs)
+        if not half and days == 1 and 0 < (a.get('daysRequested') or 1) <= 0.5:
+            half = 'am' if e_dt.hour <= 12 else 'pm'           # half day whose end falls on a weekend/bank holiday
+            days = 0.5
+            end = start                                          # half days are stored as a single day
         row['typeName'] = _bc_type_name(a)
         row.update(name=emp['name'] if emp else None, start=iso(start), end=iso(end), half=half, days=days,
                    note=(a.get('reason') or '')[:200])
