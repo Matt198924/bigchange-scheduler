@@ -16,6 +16,8 @@ from incident import incident_bp  # accident / incident reports (/incident)
 app.register_blueprint(incident_bp)
 from handbook import handbook_bp  # company handbook (/handbook)
 app.register_blueprint(handbook_bp)
+from hub import hub_bp  # staff sign-in + per-tool access (/login)
+app.register_blueprint(hub_bp)
 
 CLIENT_ID     = os.environ.get('BIGCHANGE_CLIENT_ID', '')
 CLIENT_SECRET = os.environ.get('BIGCHANGE_CLIENT_SECRET', '')
