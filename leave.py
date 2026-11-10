@@ -1322,6 +1322,10 @@ def admin_bc_match():
         words = _norm_name(e['name']).split()
         keys = {' '.join(words), ' '.join(reversed(words))}
         found = {c['id']: c for k in keys for c in by.get(k, [])}
+        if not found and len(words) >= 2:       # fallback: same surname and same first initial, e.g. Matt / Matthew
+            ini = (words[0][:1], words[-1])
+            found = {c['id']: c for k, cs in by.items() for c in cs
+                     if len(k.split()) >= 2 and (k.split()[0][:1], k.split()[-1]) == ini}
         if len(found) == 1:
             c = list(found.values())[0]
             proposals.append({'employeeId': e['id'], 'name': e['name'], 'resourceId': c['id'], 'bcName': c['name'], 'old': old})
@@ -1330,7 +1334,10 @@ def admin_bc_match():
         else:
             missing.append(e['name'] + (f' (saved ID {old} is not a BigChange resource)' if old else ''))
     return jsonify({'proposals': proposals, 'notFound': missing, 'ambiguous': ambiguous,
-                    'alreadySet': have, 'bcResources': len(resources)})
+                    'alreadySet': have, 'bcResources': len(resources),
+                    'fields': sorted({k for r in resources[:20] for k in r}),
+                    'sample': [{k: (v if not isinstance(v, (dict, list)) else '…') for k, v in r.items()} for r in resources[:3]],
+                    'bcNames': [_bc_res_name(r) or '(no name)' for r in resources]})
 
 @leave_bp.route('/api/leave/admin/bc-match', methods=['POST'])
 def admin_bc_match_apply():
