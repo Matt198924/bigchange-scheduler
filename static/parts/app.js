@@ -18,7 +18,7 @@ function escapeHtml(v){return String(v).replace(/[&<>'"]/g,c=>({'&':'&amp;','<':
 let coords={};
 fetch('lockers.json').then(r=>r.json()).then(j=>{coords=j}).catch(()=>{});
 function render(){const q=norm(els.search.value);if(!q){els.results.innerHTML='';els.empty.classList.remove('hidden');els.summary.textContent=`Type to search ${parts.length} parts`;return}els.empty.classList.add('hidden');const terms=q.split(/\s+/).filter(Boolean);const hits=parts.filter(p=>{const hay=norm(`${p.part} ${p.location}`);return terms.every(t=>hay.includes(t))});els.summary.textContent=`${hits.length} result${hits.length===1?'':'s'}`;els.results.innerHTML=hits.length?hits.map((p,i)=>`<article class="result"><div class="part">${escapeHtml(p.part)}</div><div class="meta"><span class="click-show">Click to show</span><button class="loc" data-index="${i}">${escapeHtml(p.location)}</button></div></article>`).join(''):`<div class="empty"><div class="empty-icon">🔎</div><h2>No matches</h2><p>Try a part number, description, or locker such as C4 B1.</p></div>`;hits.forEach((p,i)=>els.results.querySelector(`[data-index="${i}"]`)?.addEventListener('click',()=>showMap(p)))}
-let mapZoom=true,mapLoc='';
+let mapZoom=false,mapLoc='';
 function drawMap(location){
   mapLoc=location;
   const box=coords[location], wrap=document.getElementById('mapWrap');
@@ -31,7 +31,6 @@ function drawMap(location){
   }
   wrap.className='map-wrap'+(box&&mapZoom?' zoomed':'');
   wrap.innerHTML=`<div class="map-inner" style="${style}"><img id="lockerMap" src="locker-layout.png" alt="Van locker layout">${hl}</div>`;
-  const b=document.getElementById('zoomBtn'); if(b){b.classList.toggle('hidden',!box); b.textContent=mapZoom?'Show whole van':'Zoom in';}
 }
 
 function showMap(p){
@@ -46,7 +45,6 @@ els.search.addEventListener('input',render);
 els.refresh.addEventListener('click',loadStock);
 els.clear.addEventListener('click',()=>{els.search.value='';els.search.focus();render()});
 els.close.addEventListener('click',closeMap);
-document.getElementById('zoomBtn').addEventListener('click',()=>{mapZoom=!mapZoom;drawMap(mapLoc)});
 els.modal.addEventListener('click',e=>{if(e.target===els.modal)closeMap()});
 document.addEventListener('keydown',e=>{if(e.key==='Escape')closeMap()});
 
