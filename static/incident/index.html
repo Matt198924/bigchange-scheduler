@@ -1,0 +1,93 @@
+<!DOCTYPE html>
+<html lang="en"><head>
+<meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<meta name="theme-color" content="#0B2A4A"><title>Accident / Incident Report – R&amp;S Services</title>
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="/static/incident/common.css">
+<style>
+.photo-grid{display:flex;flex-wrap:wrap;gap:.5rem;margin-top:.6rem}.photo-grid div{position:relative;width:84px;height:84px;border-radius:8px;overflow:hidden;border:1px solid var(--line)}
+.photo-grid img{width:100%;height:100%;object-fit:cover}.photo-grid button{position:absolute;top:2px;right:2px;border:0;border-radius:50%;width:22px;height:22px;background:rgba(0,0,0,.65);color:#fff;font-size:14px;line-height:1}
+.notice{background:var(--cyan-bg);border-radius:10px;padding:.7rem .8rem;font-size:13px;color:var(--ink-2);margin-bottom:1rem}
+.hp{position:absolute;left:-5000px;width:1px;height:1px;overflow:hidden}
+.refbox{font:600 22px 'IBM Plex Mono',monospace;margin:.4rem 0}
+.yn{display:flex;gap:.5rem}.yn label{flex:1;margin:0;display:flex;align-items:center;justify-content:center;gap:.4rem;border:2px solid var(--line);border-radius:10px;padding:.7rem;font-size:15px;cursor:pointer}
+.yn input{width:auto}.yn label.on{border-color:var(--cyan);background:var(--cyan-bg)}
+</style></head><body>
+<div class="topbar"><div class="brand"><div class="brand-mark"><img src="/static/logo-mark.png" alt="R&amp;S"></div><span class="brand-name">Accident / Incident Report</span></div><a class="btn-home" href="/">⌂ Home</a></div>
+<div class="wrap" id="formWrap">
+  <div class="notice"><b>In an emergency call 999 first.</b> Fill this in as soon as you can after the incident, even if nobody was hurt. Near misses matter too. Injury details are kept private and only seen by the office.</div>
+  <form id="f" onsubmit="return send(event)" autocomplete="off">
+    <div class="hp"><label>Website</label><input name="website" tabindex="-1" autocomplete="off"></div>
+    <div class="card"><h2>1. About you</h2>
+      <label>Your name <span class="req">*</span></label><input id="reporter" required maxlength="120" autocomplete="name">
+      <div class="row"><div><label>Job role</label><input id="reporterRole" maxlength="120"></div><div><label>Phone number</label><input id="reporterPhone" type="tel" maxlength="40"></div></div></div>
+    <div class="card"><h2>2. What happened</h2>
+      <label>Type of incident <span class="req">*</span></label><select id="type" required><option value="">Choose...</option></select>
+      <div class="row"><div><label>Date and time it happened <span class="req">*</span></label><input id="occurredAt" type="datetime-local" required></div>
+      <div><label>Where was it? <span class="req">*</span></label><input id="site" required maxlength="300" placeholder="Customer / site / address"></div></div>
+      <label>Describe what happened <span class="req">*</span></label><textarea id="description" required maxlength="5000" placeholder="What were you doing, what went wrong, what was the result?"></textarea>
+      <label>What did you do straight away?</label><textarea id="immediateAction" style="min-height:80px" maxlength="2000"></textarea>
+      <label>Equipment, tools or vehicle involved</label><input id="equipment" maxlength="300" placeholder="e.g. fryer, ladder, van reg"></div>
+    <div class="card"><h2>3. Who was affected</h2>
+      <div class="row"><div><label>Name of person involved</label><input id="person" maxlength="200" placeholder="Leave blank if nobody"></div>
+      <div><label>They are</label><select id="personRole"><option value="">Choose...</option><option>R&amp;S employee</option><option>Contractor</option><option>Customer</option><option>Member of the public</option><option>Other</option></select></div></div>
+      <label>Was anyone injured?</label>
+      <div class="yn" id="injYN"><label><input type="radio" name="inj" value="no" checked> No</label><label><input type="radio" name="inj" value="yes"> Yes</label></div>
+      <div id="injury" class="hidden">
+        <div class="row"><div><label>Part of the body hurt</label><input id="injuryBodyPart" maxlength="200"></div><div><label>What type of injury</label><input id="injuryNature" maxlength="200" placeholder="cut, burn, sprain..."></div></div>
+        <label>First aid given (what, and by whom)</label><input id="firstAid" maxlength="300">
+        <div class="row"><div><label>Medical treatment</label><select id="treatment"><option value="">Choose...</option><option>None needed</option><option>Seen by a doctor / GP</option><option>Went to hospital</option><option>Ambulance called</option></select></div>
+        <div><label>Off work or on light duties?</label><select id="offWork"><option value="">Choose...</option><option>No</option><option>Yes - off work</option><option>Yes - light duties</option><option>Not sure yet</option></select></div></div>
+      </div>
+      <label>Witnesses (names and phone numbers)</label><textarea id="witnesses" style="min-height:70px" maxlength="2000"></textarea>
+      <label>Who did you tell (supervisor / manager)?</label><input id="informedWho" maxlength="200"></div>
+    <div class="card"><h2>4. Photos (optional)</h2>
+      <input id="photoIn" type="file" accept="image/*" multiple><p class="hint">Up to 6 photos of the scene, damage or equipment. Please do not photograph injured people's faces.</p>
+      <div class="photo-grid" id="photos"></div></div>
+    <div class="card"><label style="margin-top:0">Anything else the office should know?</label><textarea id="otherNotes" style="min-height:70px" maxlength="2000"></textarea></div>
+    <div id="msg"></div>
+    <button class="btn primary" id="go" style="width:100%;padding:1rem" type="submit">Submit report</button>
+  </form>
+</div>
+<div class="wrap hidden" id="done"><div class="card"><h2>Report sent</h2><div class="ok">Thank you. The office has been told. Your reference is:<div class="refbox" id="ref"></div>Quote this if anyone asks about the report.</div>
+<a class="btn primary" style="display:inline-block;text-decoration:none" href="/">Back to the hub</a> <button class="btn ghost" onclick="location.reload()">Report another</button></div></div>
+<script>
+const $ = id => document.getElementById(id);
+let photos = [];
+fetch('/api/incident/config').then(r => r.json()).then(j => { $('type').innerHTML += Object.entries(j.types).map(([k, v]) => `<option value="${k}">${v}</option>`).join(''); });
+(function () { const d = new Date(); d.setMinutes(d.getMinutes() - d.getTimezoneOffset()); $('occurredAt').value = d.toISOString().slice(0, 16); $('occurredAt').max = $('occurredAt').value; })();
+document.querySelectorAll('#injYN input').forEach(r => r.addEventListener('change', () => {
+  const yes = document.querySelector('#injYN input:checked').value === 'yes';
+  $('injury').classList.toggle('hidden', !yes);
+  document.querySelectorAll('#injYN label').forEach(l => l.classList.toggle('on', l.querySelector('input').checked));
+}));
+document.querySelector('#injYN label').classList.add('on');
+function shrink(file) {            // resize on the phone so uploads stay small
+  return new Promise((res, rej) => {
+    const img = new Image(), url = URL.createObjectURL(file);
+    img.onload = () => { const s = Math.min(1, 1280 / Math.max(img.width, img.height)), c = document.createElement('canvas');
+      c.width = Math.round(img.width * s); c.height = Math.round(img.height * s); c.getContext('2d').drawImage(img, 0, 0, c.width, c.height);
+      URL.revokeObjectURL(url); res(c.toDataURL('image/jpeg', 0.72)); };
+    img.onerror = () => rej(new Error('Could not read that photo')); img.src = url; });
+}
+$('photoIn').addEventListener('change', async e => {
+  for (const f of e.target.files) { if (photos.length >= 6) break; try { photos.push({name: f.name, data: await shrink(f)}); } catch (x) { $('msg').innerHTML = `<div class="err">${x.message}</div>`; } }
+  e.target.value = ''; drawPhotos();
+});
+function drawPhotos() { $('photos').innerHTML = photos.map((p, i) => `<div><img src="${p.data}"><button type="button" onclick="photos.splice(${i},1);drawPhotos()">×</button></div>`).join(''); }
+async function send(ev) {
+  ev.preventDefault(); $('msg').innerHTML = ''; $('go').disabled = true; $('go').textContent = 'Sending...';
+  const inj = document.querySelector('#injYN input:checked').value === 'yes';
+  const body = {website: document.querySelector('[name=website]').value, injured: inj, photos};
+  ['reporter','reporterRole','reporterPhone','type','occurredAt','site','description','immediateAction','equipment','person','personRole','witnesses','informedWho','otherNotes']
+    .forEach(k => body[k] = $(k).value);
+  if (inj) ['injuryBodyPart','injuryNature','firstAid','treatment','offWork'].forEach(k => body[k] = $(k).value);
+  try {
+    const r = await fetch('/api/incident/report', {method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify(body)});
+    const j = await r.json().catch(() => ({}));
+    if (!r.ok) throw new Error(j.error || 'Server problem (HTTP ' + r.status + ') - please try again');
+    $('ref').textContent = j.ref; $('formWrap').classList.add('hidden'); $('done').classList.remove('hidden'); window.scrollTo(0, 0);
+  } catch (e) { $('msg').innerHTML = `<div class="err">${e.message}</div>`; $('go').disabled = false; $('go').textContent = 'Submit report'; }
+  return false;
+}
+</script></body></html>

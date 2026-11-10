@@ -1,0 +1,84 @@
+<!DOCTYPE html>
+<html lang="en"><head>
+<meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="theme-color" content="#0B2A4A"><title>Incident reports – R&amp;S Services (office)</title>
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="/static/incident/common.css">
+<style>
+.wrap{max-width:1000px}
+.item{display:grid;grid-template-columns:110px 1fr auto;gap:.6rem;align-items:center;padding:.7rem 0;border-top:1px solid var(--line);cursor:pointer}.item:first-child{border-top:0}.item:hover{background:var(--cyan-bg)}
+.ref{font:500 12px 'IBM Plex Mono',monospace;color:var(--ink-2)}.pill{display:inline-block;font-size:11px;font-weight:700;border-radius:20px;padding:2px 9px;background:var(--line);color:var(--slate)}
+.pill.new{background:var(--amber-bg);color:#8A5A00}.pill.review{background:var(--cyan-bg);color:var(--ink-2)}.pill.closed{background:var(--green-bg);color:var(--green)}.pill.inj{background:var(--red-bg);color:var(--red)}
+.kv{display:grid;grid-template-columns:170px 1fr;gap:.35rem .8rem;font-size:14px}.kv b{color:var(--slate);font-weight:600}.kv div{white-space:pre-wrap}
+@media(max-width:600px){.item{grid-template-columns:1fr}.kv{grid-template-columns:1fr}}
+.photos{display:flex;flex-wrap:wrap;gap:.6rem;margin-top:.5rem}.photos img{max-width:100%;width:300px;border-radius:8px;border:1px solid var(--line)}
+.bar{display:flex;gap:.5rem;flex-wrap:wrap;align-items:center;margin-bottom:.8rem}.bar select{width:auto}
+@media print{.topbar,.noprint,.bar{display:none!important}body{background:#fff}.card{box-shadow:none;border:1px solid #999}}
+</style></head><body>
+<div class="topbar"><div class="brand"><div class="brand-mark"><img src="/static/logo-mark.png" alt="R&amp;S"></div><span class="brand-name">Incident reports (office)</span></div><a class="btn-home" href="/">⌂ Home</a></div>
+<div class="wrap">
+<div id="login" class="card" style="max-width:420px;margin:2rem auto"><h2>Office login</h2><label>Office password</label><input id="pw" type="password" onkeydown="if(event.key==='Enter')login()"><div id="lmsg"></div><button class="btn primary" style="margin-top:.8rem" onclick="login()">Sign in</button></div>
+<div id="app" class="hidden"></div></div>
+<script>
+const $ = id => document.getElementById(id);
+let TOKEN = sessionStorage.getItem('incToken'), LIST = [], TYPES = {}, FILTER = 'open';
+const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+async function api(path, method = 'GET', body) {
+  const r = await fetch(path, {method, headers: {'Content-Type': 'application/json', Authorization: 'Bearer ' + TOKEN}, body: body ? JSON.stringify(body) : undefined});
+  const j = await r.json().catch(() => ({}));
+  if (r.status === 401) { sessionStorage.removeItem('incToken'); TOKEN = null; showLogin(); throw new Error('Session expired - sign in again'); }
+  if (!r.ok) throw new Error(j.error || 'Server problem (HTTP ' + r.status + ')');
+  return j;
+}
+function showLogin() { $('login').classList.remove('hidden'); $('app').classList.add('hidden'); }
+async function login() {
+  try { const r = await fetch('/api/leave/admin/login', {method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({password: $('pw').value})});
+    const j = await r.json().catch(() => ({})); if (!r.ok) throw new Error(j.error || 'Wrong password');
+    TOKEN = j.token; sessionStorage.setItem('incToken', TOKEN); start(); }
+  catch (e) { $('lmsg').innerHTML = `<div class="err">${esc(e.message)}</div>`; }
+}
+async function start() {
+  $('login').classList.add('hidden'); $('app').classList.remove('hidden');
+  try { const j = await api('/api/incident/admin/list'); LIST = j.reports; TYPES = j.types; drawList(); }
+  catch (e) { $('app').innerHTML = `<div class="err">${esc(e.message)}</div>`; }
+}
+const stLabel = {new: 'New', review: 'In review', closed: 'Closed'};
+function drawList() {
+  const shown = LIST.filter(r => FILTER === 'all' ? true : FILTER === 'open' ? r.status !== 'closed' : r.status === FILTER);
+  $('app').innerHTML = `<div class="bar"><select onchange="FILTER=this.value;drawList()">${[['open','Open (new + in review)'],['new','New'],['review','In review'],['closed','Closed'],['all','All']].map(([v,t]) => `<option value="${v}" ${v === FILTER ? 'selected' : ''}>${t}</option>`).join('')}</select>
+    <span class="muted">${shown.length} of ${LIST.length} reports</span><span style="flex:1"></span><button class="btn ghost sm" onclick="csv()">Download CSV</button></div>
+    <div class="card">${shown.length ? shown.map(r => `<div class="item" onclick="openOne(${r.id})"><div class="ref">${esc(r.ref)}<br>${esc(r.occurredAt.slice(0, 10))}</div>
+      <div><b>${esc(r.typeLabel)}</b> ${r.injured ? '<span class="pill inj">INJURY</span>' : ''}${r.riddor === 'reportable' ? ' <span class="pill inj">RIDDOR</span>' : ''}<br><span class="muted">${esc(r.site)} · reported by ${esc(r.reporter)}${r.person ? ' · ' + esc(r.person) : ''}</span></div>
+      <div><span class="pill ${r.status}">${stLabel[r.status]}</span></div></div>`).join('') : '<p class="muted">No reports here.</p>'}</div>`;
+}
+async function openOne(id) {
+  $('app').innerHTML = '<p class="muted">Loading...</p>';
+  try {
+    const r = await api('/api/incident/admin/' + id), d = r.data;
+    const kv = (k, v) => v ? `<b>${k}</b><div>${esc(v)}</div>` : '';
+    $('app').innerHTML = `<div class="bar noprint"><button class="btn ghost sm" onclick="drawList()">← All reports</button><span style="flex:1"></span><button class="btn ghost sm" onclick="window.print()">Print</button></div>
+    <div class="card"><h2>${esc(r.ref)} · ${esc(r.typeLabel)} ${r.injured ? '<span class="pill inj">INJURY</span>' : ''}</h2><div class="kv">
+      ${kv('Happened', r.occurredAt.replace('T', ' '))}${kv('Where', r.site)}${kv('Reported by', r.reporter + (d.reporterRole ? ' (' + d.reporterRole + ')' : '') + (d.reporterPhone ? ' · ' + d.reporterPhone : ''))}${kv('Submitted', r.createdAt)}
+      ${kv('What happened', d.description)}${kv('Immediate action', d.immediateAction)}${kv('Equipment / vehicle', d.equipment)}
+      ${kv('Person involved', r.person + (d.personRole ? ' (' + d.personRole + ')' : ''))}
+      ${r.injured ? kv('Injury', [d.injuryBodyPart, d.injuryNature].filter(Boolean).join(' – ')) + kv('First aid', d.firstAid) + kv('Medical treatment', d.treatment) + kv('Off work / light duties', d.offWork) : ''}
+      ${kv('Witnesses', d.witnesses)}${kv('Manager told', d.informedWho)}${kv('Other notes', d.otherNotes)}</div>
+      <div class="photos" id="ph"></div></div>
+    <div class="card noprint"><h2>Office use</h2><div class="row"><div><label>Status</label><select id="st">${Object.entries(stLabel).map(([k, v]) => `<option value="${k}" ${k === r.status ? 'selected' : ''}>${v}</option>`).join('')}</select></div>
+      <div><label>RIDDOR</label><select id="rd"><option value="">Not assessed yet</option><option value="not_reportable" ${r.riddor === 'not_reportable' ? 'selected' : ''}>Not reportable</option><option value="reportable" ${r.riddor === 'reportable' ? 'selected' : ''}>Reportable (reported to HSE)</option></select></div></div>
+      <label>Notes, actions taken and follow-up</label><textarea id="on">${esc(r.officeNotes)}</textarea><div id="smsg"></div>
+      <button class="btn primary" style="margin-top:.8rem" onclick="save(${r.id})">Save</button></div>`;
+    for (const p of r.photos) { try { const j = await api(`/api/incident/admin/${r.id}/photo/${p.id}`); $('ph').insertAdjacentHTML('beforeend', `<img src="${j.data}" alt="${esc(p.name)}">`); } catch (e) {} }
+  } catch (e) { $('app').innerHTML = `<div class="err">${esc(e.message)}</div><button class="btn ghost sm" onclick="start()">Back</button>`; }
+}
+async function save(id) {
+  try { await api('/api/incident/admin/' + id, 'PUT', {status: $('st').value, riddor: $('rd').value, officeNotes: $('on').value}); $('smsg').innerHTML = '<div class="ok">Saved.</div>'; }
+  catch (e) { $('smsg').innerHTML = `<div class="err">${esc(e.message)}</div>`; }
+}
+function csv() {
+  const q = v => '"' + String(v ?? '').replace(/"/g, '""') + '"';
+  const rows = [['Ref','Occurred','Type','Site','Reported by','Person involved','Injury','Status','RIDDOR']].concat(LIST.map(r => [r.ref, r.occurredAt, r.typeLabel, r.site, r.reporter, r.person, r.injured ? 'yes' : 'no', stLabel[r.status], r.riddor]));
+  const a = document.createElement('a'); a.href = URL.createObjectURL(new Blob([rows.map(r => r.map(q).join(',')).join('\n')], {type: 'text/csv'})); a.download = 'incident-reports.csv'; a.click();
+}
+if (TOKEN) start();
+</script></body></html>

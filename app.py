@@ -12,6 +12,8 @@ from leave import leave_bp  # annual leave booking (/leave)
 app.register_blueprint(leave_bp)
 from parts import parts_bp  # van parts finder (/parts)
 app.register_blueprint(parts_bp)
+from incident import incident_bp  # accident / incident reports (/incident)
+app.register_blueprint(incident_bp)
 
 CLIENT_ID     = os.environ.get('BIGCHANGE_CLIENT_ID', '')
 CLIENT_SECRET = os.environ.get('BIGCHANGE_CLIENT_SECRET', '')
