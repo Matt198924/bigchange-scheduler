@@ -431,7 +431,7 @@ async function tabStaff() {
       <button class="sm" onclick="bcMatchPreview()">Find BigChange IDs</button><div id="bcm-out" style="margin-top:.6rem"></div>
       <h2 style="margin-top:1.2rem">Import existing BigChange absences</h2>
       <p class="muted">Pulls every approved absence from 1 January 2026 onwards (including next year) from BigChange into the leave system (matched by BigChange ID, so add IDs first). Already-imported and overlapping ones are skipped.</p>
-      <button class="sm" onclick="bcImportPreview()">Preview import</button><div id="bci-out" style="margin-top:.6rem"></div></details>
+      <button class="sm" onclick="bcImportPreview()">Preview import</button> <button class="sm" onclick="bcImportReset()">Clear earlier imports</button><div id="bci-out" style="margin-top:.6rem"></div></details>
     <details class="card"><summary>Email notifications ${es.enabled ? '<span class="pill approved">on</span>' : '<span class="pill pending">off</span>'}</summary>
       ${es.enabled ? `<p class="muted">Sending from ${esc(es.from)}. Staff get approved/rejected/cancelled emails; managers get new-request emails${es.office ? '; people with no manager go to ' + esc(es.office) : ' (set LEAVE_OFFICE_EMAIL so requests with no manager reach you)'}.</p>
       <button class="sm" style="margin-top:.6rem" onclick="testEmail()">Send test email</button>` : `<p class="muted">Off. Set RESEND_API_KEY and LEAVE_EMAIL_FROM on Render to switch on (see README).</p>`}</details>`;
@@ -476,6 +476,11 @@ function bcImportTypes() { const t = {}; document.querySelectorAll('[data-bctype
 async function bcImportRefresh() {
   // re-run the preview with the chosen types so the counts stay honest
   await bcImportPreview(bcImportTypes());
+}
+async function bcImportReset() {
+  if (!confirm('Remove everything previously imported from BigChange? Leave booked in this app is not touched. You can then import again.')) return;
+  try { const j = await api('/admin/bc-import/reset', 'POST', {}); $('bci-out').innerHTML = `<div class="info">Removed ${j.removed} imported absences. Now click Preview import.</div>`; loadEmployees(); }
+  catch (e) { $('bci-out').innerHTML = `<div class="err">${esc(e.message)}</div>`; }
 }
 async function bcImportGo() {
   if (!confirm('Import these absences into the leave system? They will count against allowances.')) return;

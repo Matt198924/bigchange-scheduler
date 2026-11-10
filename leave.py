@@ -824,8 +824,8 @@ def bc_calendar_overlay(first, last, include_unmatched=False, info=None):
             rid = _bcid(a.get('resourceId'))
             name = _bc_resource_names().get(rid) or f'BigChange #{rid}'
         try:
-            d = max(_uk_date(a['startAt']).date(), first)
-            e = min(max(_uk_date(a['startAt']).date(), _uk_date(a['endAt'], True).date()), last)
+            sp, ep, _ = _bc_span(a, bhs)
+            d, e = max(sp, first), min(ep, last)
         except Exception:
             continue
         target = approved if status == 'approved' else requested
@@ -1246,6 +1246,34 @@ def admin_bc_absences():
 
 
 # ── Import existing absences from BigChange ───────────────────────────────
+def _bc_span(a, bhs=None):
+    """(start_date, end_date, end_datetime) of a BigChange absence, end inclusive.
+    BigChange stamps are UK wall-clock times that may be labelled UTC ('Z'), so a midnight end in summer would
+    otherwise slip onto the next day. Both readings are tried and the one matching daysRequested wins."""
+    bhs = bank_holiday_set() if bhs is None else bhs
+    def naive(ts, minus=False):
+        t = re.sub(r'(Z|[+-]\d\d:?\d\d)$', '', str(ts).strip())
+        dt = datetime.fromisoformat(t)
+        return dt - timedelta(seconds=1) if minus else dt
+    cands = []
+    try: cands.append((_uk_date(a['startAt']).replace(tzinfo=None), _uk_date(a['endAt'], True).replace(tzinfo=None)))
+    except Exception: pass
+    try: cands.append((naive(a['startAt']), naive(a['endAt'], True)))
+    except Exception: pass
+    if not cands: raise ValueError('unreadable dates')
+    want = a.get('daysRequested')
+    def days(sd, ed):
+        st, en = sd.date(), max(sd.date(), ed.date())
+        d = working_days(st, en, '', bhs)
+        if want is not None and d >= 1 and float(want) <= 0.5 and (st == en or d == 1): return 0.5
+        return d
+    pick = cands[-1]                                   # default: wall-clock reading
+    if want is not None:
+        for c in cands:
+            if abs(days(*c) - float(want)) < 0.01: pick = c; break
+    sd, ed = pick
+    return sd.date(), max(sd.date(), ed.date()), ed
+
 def _uk_date(ts, minus_second=False):
     dt = datetime.fromisoformat(str(ts).replace('Z', '+00:00'))
     if dt.tzinfo is None: dt = dt.replace(tzinfo=timezone.utc)
@@ -1291,8 +1319,7 @@ def _bc_import_plan(type_map=None):
                'status': _bc_status(a), 'type': typ, 'action': 'import', 'why': ''}
         emp = emps.get(_bcid(row['resourceId']))
         try:
-            s_dt, e_dt = _uk_date(a['startAt']), _uk_date(a['endAt'], True)
-            start, end = s_dt.date(), max(s_dt.date(), e_dt.date())
+            start, end, e_dt = _bc_span(a, bhs)
         except Exception:
             row.update(action='skip', why='unreadable dates'); rows.append(row); continue
         half = ''
@@ -1412,6 +1439,14 @@ def admin_bc_import_preview():
         t['count'] += 1
     return jsonify({'types': types, 'unmatched': unmatched,
                     'rows': [{k: v for k, v in r.items() if k != '_emp'} for r in rows]})
+
+@leave_bp.route('/api/leave/admin/bc-import/reset', methods=['POST'])
+def admin_bc_import_reset():
+    """Delete everything that was imported from BigChange (never anything booked in this app) so it can be re-imported."""
+    if not is_admin(): return _auth_error()
+    n = len(query("SELECT id FROM leave_requests WHERE admin_note = 'Imported from BigChange'"))
+    execute("DELETE FROM leave_requests WHERE admin_note = 'Imported from BigChange'")
+    return jsonify({'success': True, 'removed': n})
 
 @leave_bp.route('/api/leave/admin/bc-import', methods=['POST'])
 def admin_bc_import():
