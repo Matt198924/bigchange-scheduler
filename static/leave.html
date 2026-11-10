@@ -430,6 +430,7 @@ async function bcImportPreview(chosen) {
     $('bci-out').innerHTML = '<div class="muted" style="margin-bottom:.3rem">What should each BigChange absence type count as?</div>'
       + Object.entries(j.types).map(([id, t]) => `<div class="item"><span>Type <b>${esc(id)}</b> <span class="muted">· ${t.count} absence${t.count === 1 ? '' : 's'}${t.example ? ' · e.g. ' + esc(t.example) : ''}</span></span><select data-bctype="${esc(id)}" onchange="bcImportRefresh()">${opts(t.type)}</select></div>`).join('')
       + `<p style="margin:.6rem 0 .2rem"><b>${ready.length}</b> ready to import</p>`
+      + (j.unmatched ? `<p class="muted">${j.unmatched} other absence${j.unmatched === 1 ? '' : 's'} in BigChange belong to people with no BigChange ID here and will be ignored.</p>` : '')
       + ready.slice(0, 60).map(r => `<div class="muted">${esc(r.name)} · ${fmtD(r.start)}${r.end !== r.start ? ' → ' + fmtD(r.end) : ''} · ${r.days} day${r.days === 1 ? '' : 's'} · ${r.type}</div>`).join('')
       + (ready.length > 60 ? `<div class="muted">…and ${ready.length - 60} more</div>` : '')
       + (skipped.length ? `<details style="margin:.5rem 0"><summary class="muted">${skipped.length} will be skipped</summary>` + skipped.map(r => `<div class="muted">${esc(r.name || 'resource ' + r.resourceId)} · ${esc(r.start || '')} · ${esc(r.why)}</div>`).join('') + '</details>' : '')

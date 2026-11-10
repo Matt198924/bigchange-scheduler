@@ -1255,11 +1255,14 @@ def admin_bc_import_preview():
         tm = json.loads(request.args.get('types') or '{}')
         rows = _bc_import_plan({str(k): v for k, v in tm.items() if v in LEAVE_TYPES + ['skip']})
     except Exception as ex: return jsonify({'error': f'BigChange said: {ex}'}), 502
+    unmatched = sum(1 for r in rows if r['why'] == 'no employee has this BigChange ID')
+    rows = [r for r in rows if r['why'] != 'no employee has this BigChange ID']   # not our staff: don't list them
     types = {}
     for r in rows:
         t = types.setdefault(r['typeId'], {'count': 0, 'type': r['type'], 'example': r.get('typeName') or r.get('note', '')})
         t['count'] += 1
-    return jsonify({'types': types, 'rows': [{k: v for k, v in r.items() if k != '_emp'} for r in rows]})
+    return jsonify({'types': types, 'unmatched': unmatched,
+                    'rows': [{k: v for k, v in r.items() if k != '_emp'} for r in rows]})
 
 @leave_bp.route('/api/leave/admin/bc-import', methods=['POST'])
 def admin_bc_import():
