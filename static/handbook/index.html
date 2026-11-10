@@ -5,35 +5,61 @@
 <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500&display=swap" rel="stylesheet">
 <link rel="stylesheet" href="/static/incident/common.css">
 <style>
-.wrap{max-width:820px}
-.sec{background:var(--surface);border:1px solid var(--line);border-radius:12px;margin-bottom:.6rem;box-shadow:var(--shadow);overflow:hidden}
-.sec summary{list-style:none;cursor:pointer;padding:.9rem 1rem;font-weight:600;font-size:16px;display:flex;justify-content:space-between;gap:.5rem;align-items:center}
-.sec summary::-webkit-details-marker{display:none}.sec summary::after{content:'+';font-size:22px;color:var(--cyan);font-weight:400}.sec[open] summary::after{content:'–'}
-.sec[open] summary{border-bottom:1px solid var(--line);background:var(--cyan-bg)}
-.body{padding:.4rem 1rem 1rem;line-height:1.6}.body p{margin-top:.7rem}.body h3{font-size:15px;margin-top:1.1rem;color:var(--ink-2)}.body ul,.body ol{margin:.6rem 0 0 1.3rem}.body li{margin-top:.3rem}.body a{color:var(--ink-2)}
+.wrap{max-width:860px}
+.bar{position:sticky;top:0;z-index:5;background:var(--bg,#F3F6FA);padding:.6rem 0 .5rem}
+.chips{display:flex;gap:.4rem;overflow-x:auto;padding:.5rem 0 .2rem;-webkit-overflow-scrolling:touch}
+.chip{flex:none;border:1px solid var(--line);background:var(--surface);border-radius:999px;padding:.35rem .75rem;font:500 13px 'IBM Plex Sans',sans-serif;cursor:pointer;color:var(--ink-2)}
+.res{background:var(--surface);border:1px solid var(--line);border-radius:12px;box-shadow:var(--shadow);margin:.4rem 0 1rem;overflow:hidden}
+.hit{display:block;width:100%;text-align:left;border:0;border-bottom:1px solid var(--line);background:none;padding:.7rem 1rem;cursor:pointer;font:inherit}
+.hit:last-child{border-bottom:0}.hit b{font:600 12px 'IBM Plex Mono',monospace;color:var(--slate)}
+.hit span{display:block;margin-top:.2rem;line-height:1.45;font-size:14px}
 mark{background:#FFF1A8;padding:0 1px;border-radius:2px}
-.ver{font:500 12px 'IBM Plex Mono',monospace;color:var(--slate);margin:.2rem 0 .9rem}
-.empty{text-align:center;padding:3rem 1rem;color:var(--slate)}
-@media print{.topbar,.noprint{display:none!important}.sec{box-shadow:none}.sec .body{display:block}}
+.pg{background:#fff;border:1px solid var(--line);border-radius:6px;margin:0 0 .8rem;box-shadow:var(--shadow);scroll-margin-top:110px;min-height:300px}
+.pg img{display:block;width:100%;height:auto;border-radius:6px}.pg.flash{outline:3px solid #00C2FF}
+.pn{font:500 12px 'IBM Plex Mono',monospace;color:var(--slate);margin:.2rem 0 .3rem}
+.meta{display:flex;justify-content:space-between;gap:.5rem;font:500 12px 'IBM Plex Mono',monospace;color:var(--slate);margin:.2rem 0 .3rem}
+.meta a{color:var(--ink-2)}
 </style></head><body>
 <div class="topbar"><div class="brand"><div class="brand-mark"><img src="/static/logo-mark.png" alt="R&amp;S"></div><span class="brand-name">Company Handbook</span></div><a class="btn-home" href="/">⌂ Home</a></div>
 <div class="wrap">
-  <div class="ver" id="ver"></div>
-  <input id="q" type="search" placeholder="Search the handbook..." autocomplete="off" class="noprint" style="margin-bottom:1rem">
-  <div id="list"><p class="muted">Loading...</p></div>
+  <div class="bar">
+    <input id="q" type="search" placeholder="Search the handbook (e.g. sick pay, holiday, vehicle)..." autocomplete="off">
+    <div class="chips" id="chips"></div>
+  </div>
+  <div id="res"></div>
+  <div class="meta"><span id="ver"></span><a href="/static/handbook/handbook.pdf" download="RS-Employee-Handbook.pdf">Download PDF</a></div>
+  <div id="pages"></div>
 </div>
-<script src="/static/handbook/render.js"></script>
 <script>
-let SECS = [];
 const $ = id => document.getElementById(id);
-function mark(html, terms) { return terms.length ? html.replace(new RegExp('(' + terms.map(t => t.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')).join('|') + ')(?![^<]*>)', 'gi'), '<mark>$1</mark>') : html; }
-function draw() {
-  const terms = $('q').value.toLowerCase().split(/\s+/).filter(t => t.length > 1);
-  const shown = SECS.filter(s => terms.every(t => (s.title + ' ' + s.body).toLowerCase().includes(t)));
-  $('list').innerHTML = shown.length ? shown.map(s => `<details class="sec" ${terms.length || SECS.length === 1 ? 'open' : ''}><summary>${mark(hbEsc(s.title), terms)}</summary><div class="body">${mark(hbRender(s.body), terms)}</div></details>`).join('')
-    : `<div class="empty">${SECS.length ? 'Nothing matches that search.' : 'The handbook has not been added yet.'}</div>`;
+const esc = s => s.replace(/[&<>"]/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
+const TOC = [['Introduction',2],['Your employment',3],['Remuneration',5],['Holidays',6],['Absence & lateness',7],['Behaviour at work',11],['Email & internet',15],['Equal opportunities',18],['Harassment & bullying',20],['Whistleblowing',23],['Disciplinary',25],['Capability',30],['Grievance',32],['Driving vehicles',34],['Termination',37],['Rights to deduct',38]];
+let PAGES = [];
+function go(n) {
+  const el = $('pg' + n); if (!el) return;
+  el.scrollIntoView({behavior: 'smooth', block: 'start'});
+  el.classList.add('flash'); setTimeout(() => el.classList.remove('flash'), 1800);
 }
-fetch('/api/handbook').then(r => r.json()).then(j => { SECS = j.sections; $('ver').textContent = j.version; draw(); })
-  .catch(() => { $('list').innerHTML = '<div class="err">Could not load the handbook - try again.</div>'; });
-$('q').addEventListener('input', draw);
+function search() {
+  const terms = $('q').value.toLowerCase().split(/\s+/).filter(t => t.length > 1), out = [];
+  if (!terms.length) { $('res').innerHTML = ''; return; }
+  const re = new RegExp('(' + terms.map(t => t.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')).join('|') + ')', 'gi');
+  PAGES.forEach((t, i) => {
+    const low = t.toLowerCase();
+    if (!terms.every(w => low.includes(w))) return;
+    const at = Math.max(0, low.indexOf(terms[0]) - 70);
+    const snip = (at ? '…' : '') + t.slice(at, at + 220) + '…';
+    out.push(`<button class="hit" data-p="${i + 1}"><b>PAGE ${i + 1}</b><span>${esc(snip).replace(re, '<mark>$1</mark>')}</span></button>`);
+  });
+  $('res').innerHTML = `<div class="res">${out.length ? out.slice(0, 15).join('') : '<div class="hit">Nothing matches that search.</div>'}</div>`;
+}
+$('res').addEventListener('click', e => { const b = e.target.closest('.hit[data-p]'); if (b) go(+b.dataset.p); });
+$('chips').innerHTML = TOC.map(([t, p]) => `<button class="chip" data-p="${p}">${esc(t)}</button>`).join('');
+$('chips').addEventListener('click', e => { const b = e.target.closest('.chip'); if (b) go(+b.dataset.p); });
+$('q').addEventListener('input', search);
+fetch('/static/handbook/pages.json').then(r => r.json()).then(j => {
+  PAGES = j.pages; $('ver').textContent = 'Employee Handbook ' + j.issue;
+  $('pages').innerHTML = PAGES.map((_, i) => { const n = String(i + 1).padStart(2, '0');
+    return `<div class="pg" id="pg${i + 1}"><img loading="lazy" src="/static/handbook/pages/p-${n}.jpg" alt="Handbook page ${i + 1}"></div>`; }).join('');
+}).catch(() => { $('pages').innerHTML = '<div class="err">Could not load the handbook - try again.</div>'; });
 </script></body></html>
