@@ -839,14 +839,14 @@ def calendar():
     last = (date(y + (m == 12), m % 12 + 1, 1)) - timedelta(days=1)
     approved = off_on(first, last)
     pending = off_on(first, last, statuses=('pending',)) if is_admin() else {}
-    bc_ok, bc_req, bc_unmatched, bc_err = bc_calendar_overlay(first, last, include_unmatched=is_admin())
+    bc_ok, bc_req, bc_unmatched, bc_err = bc_calendar_overlay(first, last, include_unmatched=False)
     for src, dst in ((bc_ok, approved), (bc_req if is_admin() else {}, pending)):
         for d, names in src.items():
             lst = dst.setdefault(d, [])
             lst.extend(n for n in names if n not in lst)
     return jsonify({'month': first.strftime('%Y-%m'), 'approved': approved, 'pending': pending,
                     'bcShown': bool(bc_hooks.get('get')) and not bc_err, 'bcError': bc_err,
-                    'bcUnmatched': bc_unmatched if is_admin() else 0, 'bcUnmatchedShown': bool(is_admin()),
+                    'bcUnmatched': bc_unmatched if is_admin() else 0, 'bcUnmatchedShown': False,
                     'bankHolidays': [d for d in sorted(bank_holiday_set()) if iso(first) <= d <= iso(last)]})
 
 # ── Admin endpoints ───────────────────────────────────────────────────────
