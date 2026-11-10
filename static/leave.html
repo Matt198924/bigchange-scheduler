@@ -221,7 +221,10 @@ async function renderCal(el, month) {
     const names = (j.approved[ds] || []).map(n => `<div class="n">${esc(n)}</div>`).join('') + (j.pending[ds] || []).map(n => `<div class="n p">${esc(n)}?</div>`).join('');
     h += `<div class="d ${dow > 4 ? 'we' : ''} ${j.bankHolidays.includes(ds) ? 'bh' : ''} ${ds === new Date().toISOString().slice(0, 10) ? 'today' : ''}"><i>${d}</i>${names}</div>`;
   }
-  $(el).innerHTML = h + '</div>' + (ROLE === 'admin' ? '<p class="muted" style="margin-top:.4rem">Amber with ? = pending</p>' : '');
+  const note = [ROLE === 'admin' ? 'Amber with ? = pending.' : '', j.bcShown ? 'Includes absences booked in BigChange.' : '',
+    j.bcError ? 'BigChange absences could not be loaded just now.' : '',
+    j.bcUnmatched ? `${j.bcUnmatched} BigChange absence${j.bcUnmatched === 1 ? ' is' : 's are'} not shown because that person has no BigChange ID here.` : ''].filter(Boolean).join(' ');
+  $(el).innerHTML = h + '</div>' + (note ? `<p class="muted" style="margin-top:.4rem">${esc(note)}</p>` : '');
 }
 function shiftCal(el, n) { const [y, m] = calMonth.split('-').map(Number); renderCal(el, new Date(y, m - 1 + n, 1).toISOString().slice(0, 7).replace(/^(\d{4}-\d{2}).*/, '$1')); }
 
