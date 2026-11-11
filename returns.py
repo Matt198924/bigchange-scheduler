@@ -47,9 +47,14 @@ def _ref(rid, created):
     return f"RET-{str(created)[:4]}-{int(rid):04d}"
 
 
+DEFAULT_TYPE_ID = os.environ.get('BIGCHANGE_RETURN_TYPE_ID', '').strip() or '81698'     # 'Parts to be returned'
+
+
 def _cfg():
-    try: return json.loads(leave.get_setting('returns_bc') or '{}')
-    except ValueError: return {}
+    try: c = json.loads(leave.get_setting('returns_bc') or '{}')
+    except ValueError: c = {}
+    c['typeId'] = c.get('typeId') or DEFAULT_TYPE_ID
+    return c
 
 
 def raise_job(rid):
