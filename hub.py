@@ -19,7 +19,7 @@ hub_bp = Blueprint('hub', __name__)
 STATIC = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'static')
 COOKIE = 'rs_hub'
 MAX_AGE = 60 * 60 * 24 * 30
-APPS = [('scheduler', 'Scheduler'), ('leave', 'Annual leave'), ('parts', 'Van parts finder'),
+APPS = [('scheduler', 'Scheduler'), ('leave', 'Annual leave'), ('parts', 'Parts'),
         ('incident', 'Accident / incident report'), ('callout', 'Call out rota'), ('handbook', 'Company handbook'), ('policies', 'Company policies')]
 APP_KEYS = [k for k, _ in APPS]
 RULE_APPS = {'callout'}      # default: managers plus the people who report to Chris Scott
