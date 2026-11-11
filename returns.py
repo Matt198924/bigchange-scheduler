@@ -417,11 +417,19 @@ def recent_jobs():
     res = leave._bcid((row[0] if row else {}).get('bc_resource_id'))
     if not str(res).isdigit(): return jsonify({'jobs': [], 'reason': 'no-resource'})
     since = (datetime.now(timezone.utc) - timedelta(hours=48)).strftime('%Y-%m-%dT%H:%M:%SZ')
+    base = {'resourceId': [int(res)], 'statusModifiedAtFrom': since, 'pageSize': 200}
+    done = ('completedOk', 'completedWithIssues')
     try:
-        items = _bc_items('/jobs', {'resourceId': [int(res)], 'status': ['completedOk', 'completedWithIssues'],
-                                    'statusModifiedAtFrom': since, 'pageSize': 100, 'sortBy': 'createdAt', 'direction': 'descending'})
+        try: items = _bc_items('/jobs', {**base, 'status': list(done)})
+        except Exception:        # some accounts reject the status filter: ask without it and filter here
+            items = [j for j in _bc_items('/jobs', base) if j.get('status') in done]
     except Exception as ex:
-        return jsonify({'jobs': [], 'reason': 'error', 'error': f'Could not load your recent jobs: {ex}'[:200]})
+        body = ''
+        resp = getattr(ex, 'response', None)
+        if resp is not None:
+            try: body = ' - ' + resp.text[:260]
+            except Exception: pass
+        return jsonify({'jobs': [], 'reason': 'error', 'error': f'Could not load your recent jobs: {ex}{body}'[:420]})
     jobs = [{'id': j.get('id'), 'reference': j.get('reference') or str(j.get('id')), 'contactId': j.get('contactId'),
              'contactName': j.get('contactName') or '', 'address': (j.get('contactAddress') or '')[:90] if isinstance(j.get('contactAddress'), str) else '',
              'type': j.get('typeName') or '', 'status': STATUS_LABEL.get(j.get('status'), j.get('status') or ''),
