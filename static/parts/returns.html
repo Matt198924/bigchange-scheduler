@@ -118,7 +118,7 @@ async function send(ev) {
     const r = await fetch('/api/parts/returns', {method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify(body)});
     const j = await r.json().catch(() => ({}));
     if (!r.ok) throw new Error(j.error || 'Server problem (HTTP ' + r.status + ') - please try again');
-    $('ref').textContent = j.bcRef || j.ref; $('ref2').textContent = j.bcRef ? 'Our reference: ' + j.ref + '. This is saved under Your returns below.' : 'Our reference: ' + j.ref + '. The BigChange job is still being raised - it will show under Your returns.'; $('formWrap').classList.add('hidden'); $('done').classList.remove('hidden'); window.scrollTo(0, 0);
+    $('ref').textContent = j.bcRef || j.ref; $('ref2').textContent = j.bcRef ? 'This is saved under Your returns below.' : 'The BigChange job is still being raised - it will show under Your returns.'; $('formWrap').classList.add('hidden'); $('done').classList.remove('hidden'); window.scrollTo(0, 0);
   } catch (e) { $('msg').innerHTML = `<div class="err">${e.message}</div>`; $('go').disabled = false; $('go').textContent = 'Submit return'; }
   return false;
 }
