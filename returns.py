@@ -48,6 +48,7 @@ def _ref(rid, created):
 
 
 DEFAULT_CATEGORY_ID = os.environ.get('BIGCHANGE_RETURN_CATEGORY_ID', '').strip() or '17045'
+DEFAULT_FLAG_ID = os.environ.get('BIGCHANGE_RETURN_FLAG_ID', '').strip() or '128123'
 DEFAULT_TYPE_ID = os.environ.get('BIGCHANGE_RETURN_TYPE_ID', '').strip() or '81698'     # 'Parts to be returned'
 
 
@@ -85,6 +86,8 @@ def raise_job(rid):
         leave.execute('UPDATE part_returns SET bc_status = ? WHERE id = ?', (f'failed: {ex}'[:300], rid))
         return 'failed'
     status = 'job raised'
+    try: h['post'](f'/jobs/{jid}/flags', {'flagId': int(DEFAULT_FLAG_ID), 'comments': f"Part return {o['ref']}"})
+    except Exception as ex: status = f'job raised, but the flag was not added: {ex}'[:300]
     if h.get('upload'):
         import base64
         n = 0
