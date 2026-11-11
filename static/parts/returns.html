@@ -12,6 +12,7 @@
 .yn input{width:auto}.yn label.on{border-color:var(--cyan);background:var(--cyan-bg)}
 .sres button{display:block;width:100%;text-align:left;border:1px solid var(--line);border-top:0;background:#fff;padding:.7rem;font-size:15px}.sres button small{display:block;color:#5B6B7A}.sres{border-top:1px solid var(--line);border-radius:10px;overflow:hidden;margin-top:.3rem}
 .jobbtn{display:block;width:100%;text-align:left;border:1px solid var(--line);border-radius:12px;background:#fff;padding:.8rem;margin-bottom:.5rem;font-size:15px}.jobbtn small{display:block;color:#5B6B7A;margin-top:2px}.st{font-size:12px;font-weight:700;border-radius:999px;padding:2px 8px;margin-left:6px}.st.ok{background:#E7F6EA;color:#1F7A33}.st.bad{background:#FFF4DB;color:#8A5A00}
+.jobbtn.added{background:#E7F6EA;border-color:#1F7A33;opacity:.75}
 .refbox{font:600 22px 'IBM Plex Mono',monospace;margin:.4rem 0}
 .prow{border:1px solid var(--line);border-radius:12px;padding:.7rem;margin-bottom:.6rem}.prow .row{align-items:end}
 </style></head><body>
@@ -28,6 +29,7 @@
       <label>Site / customer <span class="req">*</span></label>
       <input id="siteQ" placeholder="Start typing the site or customer name..." autocomplete="off">
       <div id="siteRes" class="sres"></div><div id="siteSel" class="muted" style="margin:.3rem 0"></div>
+      <div id="usedBox" class="hidden" style="margin-bottom:.6rem"><label>Parts recorded on this job - tap to add</label><div id="usedList"></div></div>
       <div id="plist"></div>
       <datalist id="stockList"></datalist>
       <label>Is there an additional part?</label>
@@ -58,7 +60,13 @@ let photos = [], np = 0, site = null, siteT = null, related = '';
 const esc = t => String(t == null ? '' : t).replace(/&/g, '&amp;').replace(/</g, '&lt;');
 function showForm() { $('pickWrap').classList.add('hidden'); $('formWrap').classList.remove('hidden'); window.scrollTo(0, 0); }
 function skipPick() { related = ''; $('relJob').classList.add('hidden'); showForm(); }
-function pickJob(i) { const j = window._jobs[i]; related = j.reference;
+function addUsed(i) { const u = window._used[i]; const rows = [...document.querySelectorAll('.prow')]; let row = rows.find(r => !r.querySelector('.pn').value);
+  if (!row) row = addPart(); row.querySelector('.pn').value = u.part; row.querySelector('.pq').value = u.qty; document.getElementById('u' + i).classList.add('added'); document.getElementById('u' + i).disabled = true; }
+function loadUsed(j) { $('usedBox').classList.add('hidden'); window._used = [];
+  fetch('/api/parts/returns/job-parts?jobId=' + j.id).then(r => r.json()).then(d => { if (!(d.parts || []).length) return; window._used = d.parts;
+    $('usedList').innerHTML = d.parts.map((u, i) => `<button type="button" class="jobbtn" id="u${i}" onclick="addUsed(${i})"><b>${esc(u.part)}</b> × ${esc(u.qty)}${u.name ? '<small>' + esc(u.name) + '</small>' : ''}</button>`).join('');
+    $('usedBox').classList.remove('hidden'); }).catch(() => {}); }
+function pickJob(i) { const j = window._jobs[i]; related = j.reference; loadUsed(j);
   if (j.contactId) { site = {id: j.contactId, name: j.contactName}; $('siteQ').value = j.contactName; $('siteSel').textContent = 'Selected: ' + j.contactName; }
   $('relJob').innerHTML = `<b>For job ${esc(j.reference)}</b> · ${esc(j.contactName)} <a href="#" onclick="$('pickWrap').classList.remove('hidden');$('formWrap').classList.add('hidden');return false" style="float:right">change</a>`;
   $('relJob').classList.remove('hidden'); showForm(); }
