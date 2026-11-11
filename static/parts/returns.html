@@ -11,14 +11,20 @@
 .yn{display:flex;gap:.5rem}.yn label{flex:1;margin:0;display:flex;align-items:center;justify-content:center;gap:.4rem;border:2px solid var(--line);border-radius:10px;padding:.7rem;font-size:15px;cursor:pointer}
 .yn input{width:auto}.yn label.on{border-color:var(--cyan);background:var(--cyan-bg)}
 .sres button{display:block;width:100%;text-align:left;border:1px solid var(--line);border-top:0;background:#fff;padding:.7rem;font-size:15px}.sres button small{display:block;color:#5B6B7A}.sres{border-top:1px solid var(--line);border-radius:10px;overflow:hidden;margin-top:.3rem}
+.jobbtn{display:block;width:100%;text-align:left;border:1px solid var(--line);border-radius:12px;background:#fff;padding:.8rem;margin-bottom:.5rem;font-size:15px}.jobbtn small{display:block;color:#5B6B7A;margin-top:2px}.st{font-size:12px;font-weight:700;border-radius:999px;padding:2px 8px;margin-left:6px}.st.ok{background:#E7F6EA;color:#1F7A33}.st.bad{background:#FFF4DB;color:#8A5A00}
 .refbox{font:600 22px 'IBM Plex Mono',monospace;margin:.4rem 0}
 .prow{border:1px solid var(--line);border-radius:12px;padding:.7rem;margin-bottom:.6rem}.prow .row{align-items:end}
 </style></head><body>
 <div class="topbar"><div class="brand"><div class="brand-mark"><img src="/static/logo-mark.png" alt="R&amp;S"></div><span class="brand-name">Return parts</span></div><a class="btn-home" href="/">⌂ Home</a></div>
 <nav class="tabs"><a class="tab" href="/parts/"><i>🔎</i>Search part</a><a class="tab" href="/parts/#lockers"><i>🗄️</i>Lockers</a><a class="tab" href="/parts/#cats"><i>📖</i>Catalogues</a><a class="tab on" href="/parts/returns.html"><i>↩️</i>Returns</a></nav>
-<div class="wrap" id="formWrap">
+<div class="wrap" id="pickWrap"><div class="card"><h2>Which job is this return for?</h2>
+  <p class="hint">Jobs you completed in the last 48 hours. Pick one to fill in the site automatically.</p>
+  <div id="jobList" class="hint">Loading your recent jobs...</div>
+  <button type="button" class="btn ghost" style="width:100%;margin-top:.6rem" onclick="skipPick()">Not one of these - enter the site myself</button></div></div>
+<div class="wrap hidden" id="formWrap">
   <form id="f" onsubmit="return send(event)" autocomplete="off">
     <div class="card"><h2>Parts to return</h2>
+      <div id="relJob" class="hidden" style="background:var(--cyan-bg);border-radius:10px;padding:.6rem .8rem;margin-bottom:.4rem"></div>
       <label>Site / customer <span class="req">*</span></label>
       <input id="siteQ" placeholder="Start typing the site or customer name..." autocomplete="off">
       <div id="siteRes" class="sres"></div><div id="siteSel" class="muted" style="margin:.3rem 0"></div>
@@ -48,7 +54,20 @@
 <div class="wrap" id="mineWrap"><div class="card"><h2>Your returns</h2><div id="mine" class="hint">Loading...</div></div></div>
 <script>
 const $ = id => document.getElementById(id);
-let photos = [], np = 0, site = null, siteT = null;
+let photos = [], np = 0, site = null, siteT = null, related = '';
+const esc = t => String(t == null ? '' : t).replace(/&/g, '&amp;').replace(/</g, '&lt;');
+function showForm() { $('pickWrap').classList.add('hidden'); $('formWrap').classList.remove('hidden'); window.scrollTo(0, 0); }
+function skipPick() { related = ''; $('relJob').classList.add('hidden'); showForm(); }
+function pickJob(i) { const j = window._jobs[i]; related = j.reference;
+  if (j.contactId) { site = {id: j.contactId, name: j.contactName}; $('siteQ').value = j.contactName; $('siteSel').textContent = 'Selected: ' + j.contactName; }
+  $('relJob').innerHTML = `<b>For job ${esc(j.reference)}</b> · ${esc(j.contactName)} <a href="#" onclick="$('pickWrap').classList.remove('hidden');$('formWrap').classList.add('hidden');return false" style="float:right">change</a>`;
+  $('relJob').classList.remove('hidden'); showForm(); }
+fetch('/api/parts/returns/recent-jobs').then(r => r.json()).then(j => {
+  if (j.error) $('jobList').innerHTML = `<div class="err">${esc(j.error)}</div>`;
+  else if (!(j.jobs || []).length) { if (j.reason === 'no-resource' || !j.jobs.length) skipPick(); }
+  if ((j.jobs || []).length) { window._jobs = j.jobs;
+    $('jobList').innerHTML = j.jobs.map((x, i) => `<button type="button" class="jobbtn" onclick="pickJob(${i})"><b>${esc(x.reference)}</b> <span class="st ${x.status === 'Completed' ? 'ok' : 'bad'}">${esc(x.status)}</span><br>${esc(x.contactName)}<small>${esc(x.type)}${x.at ? ' · ' + esc(x.at.slice(0, 16).replace('T', ' ')) : ''}</small></button>`).join(''); }
+}).catch(() => skipPick());
 $('siteQ').addEventListener('input', () => { site = null; $('siteSel').textContent = ''; clearTimeout(siteT); siteT = setTimeout(async () => {
   const q = $('siteQ').value.trim(); if (!q) { $('siteRes').innerHTML = ''; return; }
   try { const r = await fetch('/api/parts/returns/contacts?q=' + encodeURIComponent(q)); const j = await r.json();
@@ -86,7 +105,7 @@ async function send(ev) {
   if (!photos.length) { $('msg').innerHTML = '<div class="err">Please add a photo of the packaged, labelled parts.</div>'; return false; }
   $('go').disabled = true; $('go').textContent = 'Sending...';
   const parts = [...document.querySelectorAll('.prow')].map(r => ({part: r.querySelector('.pn').value, qty: r.querySelector('.pq').value}));
-  const body = {contactId: site.id, contactName: site.name, parts, packagedAt: $('packagedAt').value, photos, hpController: yes('hp'), hpSerial: $('hpSerial').value, reason: $('reason').value};
+  const body = {relatedJob: related, contactId: site.id, contactName: site.name, parts, packagedAt: $('packagedAt').value, photos, hpController: yes('hp'), hpSerial: $('hpSerial').value, reason: $('reason').value};
   try {
     const r = await fetch('/api/parts/returns', {method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify(body)});
     const j = await r.json().catch(() => ({}));

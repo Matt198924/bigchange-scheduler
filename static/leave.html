@@ -629,7 +629,7 @@ async function tabReturns() {
     <label>Job type</label><select id="rt-type"><option value="">Choose...</option>${c.jobTypes.map(t => `<option value="${t.id}" ${String(cur) === String(t.id) ? 'selected' : ''}>${esc(t.name)}</option>`).join('')}</select>
     <div style="margin-top:.7rem"><button class="sm" onclick="retSaveCfg()">Save</button> <button class="sm" onclick="retWs()">Check worksheet</button> <span id="rc-msg" class="muted"></span></div><div id="ws-out"></div></div>
     <div class="card"><h2>Part returns</h2>`
-    + (j.returns.length ? j.returns.map(r => `<div class="item" style="display:block"><div><b>${esc(r.ref)}</b> · ${esc(r.site || 'no site')} · ${esc(r.reason)} <span class="muted">· by ${esc(r.by)}</span></div>
+    + (j.returns.length ? j.returns.map(r => `<div class="item" style="display:block"><div><b>${esc(r.ref)}</b> · ${esc(r.site || 'no site')}${r.relatedJob ? ' (job ' + esc(r.relatedJob) + ')' : ''} · ${esc(r.reason)} <span class="muted">· by ${esc(r.by)}</span></div>
       <div class="muted">Packaged ${esc(r.packagedAt.replace('T', ' '))} · logged ${esc(r.createdAt)}</div>
       <div style="margin:.3rem 0">${r.parts.map(p => esc(p.part) + ' × ' + esc(p.qty)).join('<br>')}</div>
       ${r.hpController ? `<div><b>Henny Penny controller</b> serial ${esc(r.hpSerial)}</div>` : ''}

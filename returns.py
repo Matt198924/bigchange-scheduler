@@ -31,7 +31,7 @@ def _ensure_tables():
             packaged_at TEXT NOT NULL, reason TEXT NOT NULL, hp_controller INTEGER NOT NULL DEFAULT 0,
             hp_serial TEXT DEFAULT '', parts TEXT NOT NULL,
             bc_job_id TEXT DEFAULT '', bc_status TEXT DEFAULT '', contact_id TEXT DEFAULT '', contact_name TEXT DEFAULT '',
-            submitted_by_id INTEGER, bc_ref TEXT DEFAULT '')''')
+            submitted_by_id INTEGER, bc_ref TEXT DEFAULT '', related_job TEXT DEFAULT '')''')
         for col in ('bc_job_id', 'bc_status', 'contact_id', 'contact_name'):          # tables created before the BigChange link existed
             try: leave.execute(f"ALTER TABLE part_returns ADD COLUMN {col} TEXT DEFAULT ''")
             except Exception: pass
@@ -162,7 +162,7 @@ def raise_job(rid):
         return 'not configured'
     o = _out(r)
     lines = '\n'.join(f"{p['part']} x {p['qty']}" for p in o['parts'])
-    desc = (f"Part return {o['ref']}\nSite: {o['site']}\nReason: {o['reason']}\nReturned by: {o['by']}\n"
+    desc = (f"Part return {o['ref']}\nSite: {o['site']}\n" + (f"Related job: {o['relatedJob']}\n" if o['relatedJob'] else '') + f"Reason: {o['reason']}\nReturned by: {o['by']}\n"
             f"Packaged: {o['packagedAt'].replace('T', ' ')}\n\nParts:\n{lines}"
             + (f"\n\nHenny Penny controller serial: {o['hpSerial']}" if o['hpController'] else ''))
     try:
@@ -224,6 +224,7 @@ def submit():
     photos = [p for p in (b.get('photos') or [])[:MAX_PHOTOS] if isinstance(p, dict)
               and _s(p.get('data'), MAX_PHOTO_CHARS + 1).startswith('data:image/') and len(_s(p.get('data'), MAX_PHOTO_CHARS + 1)) <= MAX_PHOTO_CHARS]
     cid, cname = _s(b.get('contactId'), 20), _s(b.get('contactName'), 200)
+    related = _s(b.get('relatedJob'), 80)
     errs = []
     if not cid.isdigit(): errs.append('the site / customer (pick it from the list)')
     if not parts: errs.append('a part number')
@@ -240,9 +241,9 @@ def submit():
     sess = _session()
     who = (sess or {}).get('name') or _s(b.get('name'), 120) or 'Unknown'
     uid = (sess or {}).get('id')
-    rid = leave.execute('''INSERT INTO part_returns (created_at, submitted_by, job_ref, packaged_at, reason, hp_controller, hp_serial, parts, contact_id, contact_name, submitted_by_id)
-                           VALUES (?,?,?,?,?,?,?,?,?,?,?)''', (now, who, '', packaged, reason, 1 if hp else 0, serial if hp else '',
-                                                        json.dumps(parts, ensure_ascii=False), cid, cname, uid), returning_id=True)
+    rid = leave.execute('''INSERT INTO part_returns (created_at, submitted_by, job_ref, packaged_at, reason, hp_controller, hp_serial, parts, contact_id, contact_name, submitted_by_id, related_job)
+                           VALUES (?,?,?,?,?,?,?,?,?,?,?,?)''', (now, who, '', packaged, reason, 1 if hp else 0, serial if hp else '',
+                                                        json.dumps(parts, ensure_ascii=False), cid, cname, uid, related), returning_id=True)
     for p in photos:
         leave.execute('INSERT INTO part_return_photos (return_id, name, data) VALUES (?,?,?)', (rid, _s(p.get('name'), 120), p['data']))
     leave._fail('returns')
@@ -266,7 +267,7 @@ def _out(r):
     return {'id': r['id'], 'ref': _ref(r['id'], r['created_at']), 'createdAt': r['created_at'], 'by': r['submitted_by'],
             'packagedAt': r['packaged_at'], 'reason': REASONS.get(r['reason'], r['reason']),
             'hpController': bool(r['hp_controller']), 'hpSerial': r['hp_serial'] or '', 'parts': json.loads(r['parts'] or '[]'),
-            'site': r.get('contact_name') or '', 'bcRef': r.get('bc_ref') or '', 'bcJobId': r.get('bc_job_id') or '', 'bcStatus': r.get('bc_status') or ''}
+            'site': r.get('contact_name') or '', 'relatedJob': r.get('related_job') or '', 'bcRef': r.get('bc_ref') or '', 'bcJobId': r.get('bc_job_id') or '', 'bcStatus': r.get('bc_status') or ''}
 
 
 @returns_bp.route('/api/parts/returns/admin/list')
@@ -378,3 +379,29 @@ def worksheet_check():
         out.append({'text': q.get('questionText'), 'type': q.get('type'), 'items': q.get('validItems') or [], 'filled': a is not None,
                     'example': json.dumps(a) if a else ''})
     return jsonify({'worksheetId': DEFAULT_WORKSHEET_ID, 'questions': out})
+
+
+STATUS_LABEL = {'completedOk': 'Completed', 'completedWithIssues': 'Completed with issues'}
+
+
+@returns_bp.route('/api/parts/returns/recent-jobs')
+def recent_jobs():
+    """Jobs the signed-in engineer completed (OK or with issues) in the last 48 hours, from BigChange."""
+    from datetime import timedelta, timezone
+    s = _session()
+    if not s or not s.get('id'): return jsonify({'jobs': [], 'reason': 'no-resource'})
+    row = leave.query('SELECT bc_resource_id FROM leave_employees WHERE id = ?', (s['id'],))
+    res = leave._bcid((row[0] if row else {}).get('bc_resource_id'))
+    if not str(res).isdigit(): return jsonify({'jobs': [], 'reason': 'no-resource'})
+    since = (datetime.now(timezone.utc) - timedelta(hours=48)).strftime('%Y-%m-%dT%H:%M:%SZ')
+    try:
+        items = _bc_items('/jobs', {'resourceId': [int(res)], 'status': ['completedOk', 'completedWithIssues'],
+                                    'statusModifiedAtFrom': since, 'pageSize': 100, 'sortBy': 'createdAt', 'direction': 'desc'})
+    except Exception as ex:
+        return jsonify({'jobs': [], 'reason': 'error', 'error': f'Could not load your recent jobs: {ex}'[:200]})
+    jobs = [{'id': j.get('id'), 'reference': j.get('reference') or str(j.get('id')), 'contactId': j.get('contactId'),
+             'contactName': j.get('contactName') or '', 'address': (j.get('contactAddress') or '')[:90] if isinstance(j.get('contactAddress'), str) else '',
+             'type': j.get('typeName') or '', 'status': STATUS_LABEL.get(j.get('status'), j.get('status') or ''),
+             'at': j.get('statusModifiedAt') or j.get('actualEndAt') or ''} for j in items]
+    jobs.sort(key=lambda j: j['at'], reverse=True)
+    return jsonify({'jobs': jobs})
