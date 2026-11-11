@@ -37,6 +37,7 @@
 <section class="search-card">
 <label for="search">Search part number or description</label>
 <div class="search-row"><input id="search" type="search" autocomplete="off" placeholder="e.g. 1013, bearing, bolt" autofocus><button id="clearBtn" class="clear" type="button" aria-label="Clear search">×</button></div>
+<div class="photo-row"><button id="photoBtn" class="install" type="button">📷 Search by photo</button><input id="photoFile" type="file" accept="image/*" capture="environment" hidden></div><div id="photoOut"></div>
 <div id="summary" class="summary">Loading stock…</div><div id="status" class="status" role="status" aria-live="polite"></div>
 </section>
 <section id="results" class="results" aria-live="polite"></section>
@@ -45,5 +46,5 @@
 <div id="mapModal" class="modal hidden" role="dialog" aria-modal="true" aria-labelledby="mapTitle">
 <div class="modal-panel"><div class="modal-head"><div><div class="eyebrow">LOCATION</div><h2 id="mapTitle">Locker</h2></div><button id="closeMap" class="close" type="button" aria-label="Close">×</button></div>
 <div id="mapWrap" class="map-wrap"></div><div class="map-bar"><div id="mapNote" class="map-note"></div></div></div></div>
-<script src="config.js"></script><script src="app.js"></script><script src="catalogues.js"></script>
+<script src="config.js"></script><script src="app.js"></script><script src="catalogues.js"></script><script src="photo.js"></script>
 </body></html>
