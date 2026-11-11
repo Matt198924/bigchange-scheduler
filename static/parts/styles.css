@@ -21,3 +21,4 @@
 .meta{flex-direction:row;flex-wrap:nowrap}.loc{width:auto;flex:none}
 .topbar h1{white-space:nowrap}.top-actions{flex-wrap:nowrap}.install{white-space:nowrap}
 @media(max-width:520px){.topbar{gap:8px;padding:10px 12px}.topbar h1{font-size:16px}.install{padding:8px 10px;font-size:12px}.eyebrow{font-size:9px}.brand{gap:8px}.brand-mark{width:34px;height:34px}#refreshBtn{display:none}}
+mark{background:#FFF1A8;padding:0 1px;border-radius:2px}

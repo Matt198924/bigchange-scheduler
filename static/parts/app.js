@@ -59,12 +59,15 @@ if('serviceWorker' in navigator)window.addEventListener('load',async()=>{
 // ── Lockers tab: tap a locker on the layout to see what should be in it ──
 let lkSel='';
 function showTab(which){
-  const l=which==='lockers';
+  const l=which==='lockers', c=which==='cats';
   document.getElementById('lockersMain').classList.toggle('hidden',!l);
-  document.getElementById('appMain').classList.toggle('hidden',l);
+  document.getElementById('catsMain').classList.toggle('hidden',!c);
+  document.getElementById('appMain').classList.toggle('hidden',l||c);
   document.getElementById('tabLockers').classList.toggle('on',l);
-  document.getElementById('tabSearch').classList.toggle('on',!l);
+  document.getElementById('tabCats').classList.toggle('on',c);
+  document.getElementById('tabSearch').classList.toggle('on',!l&&!c);
   if(l) drawLockers();
+  if(c&&window.initCats) window.initCats();
 }
 function drawLockers(){
   const counts={}; parts.forEach(p=>{counts[p.location]=(counts[p.location]||0)+1});
@@ -79,3 +82,4 @@ function drawLockers(){
 }
 document.getElementById('tabSearch').addEventListener('click',()=>showTab('search'));
 document.getElementById('tabLockers').addEventListener('click',()=>showTab('lockers'));
+document.getElementById('tabCats').addEventListener('click',()=>showTab('cats'));
