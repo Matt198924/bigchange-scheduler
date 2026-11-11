@@ -442,6 +442,17 @@ def recent_jobs():
 _sd_cache = {}
 
 
+def _split_model(model):
+    """'** vs ** YELLOW PUSH ON FEMALES 6.3MM 613013 (534-553)' -> ('613013 (534-553)', 'YELLOW PUSH ON FEMALES 6.3MM').
+    The part number is the code at the end of the model text: a number with an optional bracketed code."""
+    import re
+    m = re.search(r'(\S*\d\S*(?:\s*\([^)]*\))?)\s*$', model or '')
+    if not m: return (model or '').strip(), ''
+    part = m.group(1).strip()
+    desc = re.sub(r'^\W*vs\W*', '', (model[:m.start()]).strip(), flags=re.I).strip(' *-')
+    return part, desc
+
+
 def _stock_details(sid):
     if sid not in _sd_cache:
         _sd_cache[sid] = leave.bc_hooks['get'](f'/stockDetails/{int(sid)}', {}) or {}
@@ -466,7 +477,8 @@ def job_parts():
             except Exception: det = {}
         model = (det.get('model') or s.get('model') or '').strip()      # the part number is the stock 'model' field
         make = (det.get('make') or s.get('make') or '').strip()
-        part = model or det.get('modelNumber') or det.get('stockCode') or ''
+        part, desc = _split_model(model)
+        if not part: part = det.get('modelNumber') or det.get('stockCode') or ''
         if not part: continue
-        out.append({'part': part, 'name': make, 'qty': int(qty) if qty and float(qty) >= 1 else 1})
+        out.append({'part': part, 'name': desc or make, 'qty': int(qty) if qty and float(qty) >= 1 else 1})
     return jsonify({'parts': out})
