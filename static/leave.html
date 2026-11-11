@@ -626,7 +626,7 @@ async function tabReturns() {
     <p class="muted">Each finished return raises a job in BigChange, against the site the engineer picked, with the photos attached. Choose the job type to use.</p>
     ${c.error ? `<div class="err">${esc(c.error)}</div>` : ''}${cur ? '' : '<div class="info">No job type chosen yet: returns are logged and emailed, but no BigChange job is raised.</div>'}
     <label>Job type</label><select id="rt-type"><option value="">Choose...</option>${c.jobTypes.map(t => `<option value="${t.id}" ${String(cur) === String(t.id) ? 'selected' : ''}>${esc(t.name)}</option>`).join('')}</select>
-    <div style="margin-top:.7rem"><button class="sm" onclick="retSaveCfg()">Save</button> <span id="rc-msg" class="muted"></span></div></div>
+    <div style="margin-top:.7rem"><button class="sm" onclick="retSaveCfg()">Save</button> <button class="sm" onclick="retWs()">Check worksheet</button> <span id="rc-msg" class="muted"></span></div><div id="ws-out"></div></div>
     <div class="card"><h2>Part returns</h2>`
     + (j.returns.length ? j.returns.map(r => `<div class="item" style="display:block"><div><b>${esc(r.ref)}</b> · ${esc(r.site || 'no site')} · ${esc(r.reason)} <span class="muted">· by ${esc(r.by)}</span></div>
       <div class="muted">Packaged ${esc(r.packagedAt.replace('T', ' '))} · logged ${esc(r.createdAt)}</div>
@@ -635,6 +635,12 @@ async function tabReturns() {
       <div class="muted">BigChange: ${r.bcJobId ? 'job ' + esc(r.bcRef || r.bcJobId) + ' - ' : ''}${esc(r.bcStatus || 'not raised')}
         ${r.bcJobId ? '' : `<button class="sm" onclick="retRaise(${r.id})">Raise job now</button>`}</div>
       <div id="rp-${r.id}">${r.photos.map(pid => `<button class="sm" onclick="showReturnPhoto(${r.id},${pid})">View photo</button>`).join(' ')}</div></div>`).join('') : '<p class="muted">No returns yet.</p>') + '</div>';
+}
+async function retWs() {
+  $('ws-out').innerHTML = '<p class="muted">Reading the worksheet from BigChange...</p>';
+  try { const j = await api('/../parts/returns/admin/worksheet-check');
+    $('ws-out').innerHTML = `<p class="muted">Worksheet #${esc(j.worksheetId)}: what each question would be filled with (example data).</p>` + j.questions.map(q => `<div class="item" style="display:block"><b>${esc(q.text)}</b> <span class="muted">(${esc(q.type)}${q.items.length ? ': ' + esc(q.items.join(', ')) : ''})</span><div class="${q.filled ? 'muted' : 'err'}">${q.filled ? 'Filled: ' + esc(q.example) : 'Not filled automatically'}</div></div>`).join('');
+  } catch (e) { $('ws-out').innerHTML = `<div class="err">${esc(e.message)}</div>`; }
 }
 async function retSaveCfg() {
   try { await api('/../parts/returns/admin/bc-config', 'PUT', {typeId: $('rt-type').value}); $('rc-msg').textContent = 'Saved.'; setTimeout(tabReturns, 600); } catch (e) { $('rc-msg').textContent = e.message; }

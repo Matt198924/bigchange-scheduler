@@ -28,7 +28,8 @@
     <div class="card"><h2>Packaged</h2>
       <label>Date and time the parts were packaged <span class="req">*</span></label><input id="packagedAt" type="datetime-local" required>
       <label>Photo of parts packaged, labelled and ready to return <span class="req">*</span></label>
-      <input id="photoIn" type="file" accept="image/*" capture="environment" multiple><p class="hint">Take a clear photo showing the parts packaged with the label on. Up to 4 photos.</p>
+      <div style="display:flex;gap:.5rem;flex-wrap:wrap"><button type="button" class="btn primary" onclick="$('photoCam').click()">📷 Take photo</button><button type="button" class="btn ghost" onclick="$('photoIn').click()">🖼 Choose from photos</button></div>
+      <input id="photoCam" type="file" accept="image/*" capture="environment" hidden><input id="photoIn" type="file" accept="image/*" multiple hidden><p class="hint">Take or choose a clear photo showing the parts packaged with the label on. Up to 4 photos.</p>
       <div class="photo-grid" id="photos"></div></div>
     <div class="card"><h2>Details</h2>
       <label>Are you returning a Henny Penny controller?</label>
@@ -71,9 +72,9 @@ function shrink(file) {
       URL.revokeObjectURL(url); res(c.toDataURL('image/jpeg', 0.72)); };
     img.onerror = () => rej(new Error('Could not read that photo')); img.src = url; });
 }
-$('photoIn').addEventListener('change', async e => {
+['photoIn', 'photoCam'].forEach(id => $(id).addEventListener('change', async e => {
   for (const f of e.target.files) { if (photos.length >= 4) break; try { photos.push({name: f.name, data: await shrink(f)}); } catch (x) { $('msg').innerHTML = `<div class="err">${x.message}</div>`; } }
-  e.target.value = ''; drawPhotos(); });
+  e.target.value = ''; drawPhotos(); }));
 fetch('/api/parts/returns/mine').then(r => r.json()).then(j => { const e = t => String(t).replace(/</g, '&lt;');
   $('mine').innerHTML = (j.returns || []).map(r => `<div style="border-top:1px solid var(--line);padding:.6rem 0"><b>${e(r.bcRef || r.ref)}</b> <span class="hint">${e(r.createdAt.slice(0, 16))}</span><div>${e(r.site)} · ${e(r.reason)}</div><div class="hint">${r.parts.map(p => e(p.part) + ' × ' + e(p.qty)).join(', ')}${r.bcRef ? '' : ' · BigChange: ' + e(r.bcStatus || 'not raised')}</div></div>`).join('') || 'Nothing yet.'; }).catch(() => { $('mine').textContent = ''; });
 function drawPhotos() { $('photos').innerHTML = photos.map((p, i) => `<div><img src="${p.data}"><button type="button" onclick="photos.splice(${i},1);drawPhotos()">×</button></div>`).join(''); }

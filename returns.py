@@ -50,6 +50,7 @@ def _ref(rid, created):
 
 DEFAULT_CATEGORY_ID = os.environ.get('BIGCHANGE_RETURN_CATEGORY_ID', '').strip() or '17045'
 DEFAULT_FLAG_ID = os.environ.get('BIGCHANGE_RETURN_FLAG_ID', '').strip() or '128123'
+DEFAULT_WORKSHEET_ID = os.environ.get('BIGCHANGE_RETURN_WORKSHEET_ID', '').strip() or '123284'
 DEFAULT_TYPE_ID = os.environ.get('BIGCHANGE_RETURN_TYPE_ID', '').strip() or '81698'     # 'Parts to be returned'
 
 
@@ -58,6 +59,92 @@ def _cfg():
     except ValueError: c = {}
     c['typeId'] = c.get('typeId') or DEFAULT_TYPE_ID
     return c
+
+
+# ---- worksheet: fill the job's worksheet from the form answers ------------------------------------------------
+SKIP_TYPES = {'photo', 'signature', 'statement', 'file', 'barcode', 'appLaunch', 'ocr', 'cost', 'Unknown'}
+
+
+def _pick(items, want):
+    """Best matching entry of a list question for the wanted text (case-insensitive, either-way contains)."""
+    w = want.lower()
+    for i in items or []:
+        if i.lower() == w: return i
+    for i in items or []:
+        if w in i.lower() or i.lower() in w: return i
+    return None
+
+
+def _guess(q, o, n):
+    """What should this worksheet question hold? Returns (kind, value) or None. n counts questions already used per kind."""
+    t = (q.get('questionText') or '').lower()
+    ty = q.get('type')
+    if ty in SKIP_TYPES: return None
+    if 'serial' in t: return ('text', o['hpSerial']) if o['hpController'] else None
+    if 'controller' in t or 'henny' in t: return ('bool', o['hpController'])
+    if 'reason' in t: return ('choice', o['reason'])
+    if ('additional' in t or 'another' in t or 'more than one' in t) and not ('number' in t or 'code' in t):
+        return ('bool', len(o['parts']) > 1)
+    if 'quant' in t or 'qty' in t:
+        i = n['qty']; n['qty'] += 1
+        return ('int', int(o['parts'][i]['qty'])) if i < len(o['parts']) else None
+    if 'part' in t and ('number' in t or 'no' in t.split() or 'code' in t or t.strip() in ('part', 'part?')):
+        i = n['part']; n['part'] += 1
+        return ('text', o['parts'][i]['part']) if i < len(o['parts']) else None
+    if any(w in t for w in ('packag', 'date', 'when', 'time')):
+        return ('dt', o['packagedAt'])
+    if 'site' in t or 'customer' in t: return ('text', o['site'])
+    if 'returned by' in t or 'engineer' in t or 'name' in t: return ('text', o['by'])
+    return None
+
+
+def _answer(q, kind, val):
+    ty = q.get('type'); items = q.get('validItems') or []
+    if ty == 'boolean': return {'booleanValue': bool(val)} if kind == 'bool' else None
+    if ty in ('listSingle', 'listIconSingle'):
+        want = ('Yes' if val else 'No') if kind == 'bool' else str(val)
+        pick = _pick(items, want)
+        return {'selectedItem': pick} if pick else None
+    if ty == 'numberInteger': return {'integerValue': int(val)} if kind == 'int' else None
+    if ty == 'numberDecimal': return {'decimalValue': float(val)} if kind == 'int' else None
+    if ty == 'text':
+        s = ('Yes' if val else 'No') if kind == 'bool' else str(val).replace('T', ' ')
+        return {'stringValue': s[:(q.get('maxLength') or 4000)]}
+    if ty == 'date' and kind == 'dt': return {'date': str(val)[:10], 'time': str(val)[11:16]} if len(str(val)) >= 16 else {'date': str(val)[:10]}
+    if ty == 'time' and kind == 'dt' and len(str(val)) >= 16: return {'time': str(val)[11:16]}
+    return None
+
+
+def _ws_questions(h, wsid):
+    qs, page = [], 1
+    while page < 10:
+        d = h['get'](f'/worksheets/{wsid}/worksheetQuestions', {'pageNumber': page, 'pageSize': 100})
+        items = d if isinstance(d, list) else (d.get('items') or [])
+        qs += items
+        if len(items) < 100: break
+        page += 1
+    return sorted(qs, key=lambda q: q.get('order') or 0)
+
+
+def fill_worksheet(h, jid, o):
+    """Attach the returns worksheet to the job (if the job type has not already) and answer what we can. Returns a short note."""
+    wsid = int(DEFAULT_WORKSHEET_ID)
+    qs = _ws_questions(h, wsid)
+    try:
+        cur = h['get'](f'/jobs/{jid}/worksheets', {})
+        ids = [w['id'] for w in (cur if isinstance(cur, list) else (cur.get('items') or []))]
+        if wsid not in ids and h.get('put'): h['put'](f'/jobs/{jid}/worksheets', {'worksheetIds': ids + [wsid]})
+    except Exception:
+        pass
+    n, answers, left = {'qty': 0, 'part': 0}, [], []
+    for q in qs:
+        g = _guess(q, o, n)
+        a = _answer(q, *g) if g else None
+        if a is not None: answers.append({'questionId': q['id'], 'answer': a})
+        elif q.get('type') not in SKIP_TYPES and not (g is None and q.get('type') in ('statement',)):
+            left.append((q.get('questionText') or '')[:40])
+    if answers: h['put'](f'/worksheets/{wsid}/answers', {'entityType': 'job', 'entityId': int(jid), 'answers': answers})
+    return f"worksheet: {len(answers)} answered" + (f", left blank: {'; '.join(left)}" if left else '')
 
 
 def raise_job(rid):
@@ -91,6 +178,8 @@ def raise_job(rid):
         leave.execute('UPDATE part_returns SET bc_status = ? WHERE id = ?', (f'failed: {ex}'[:300], rid))
         return 'failed'
     status = 'job raised'
+    try: status += ' - ' + fill_worksheet(h, jid, o)
+    except Exception as ex: status += f' - worksheet not filled: {ex}'[:200]
     try: h['post'](f'/jobs/{jid}/flags', {'flagId': int(DEFAULT_FLAG_ID), 'comments': f"Part return {o['ref']}"})
     except Exception as ex: status = f'job raised, but the flag was not added: {ex}'[:300]
     if h.get('upload'):
@@ -272,3 +361,19 @@ def mine():
     _ensure_tables()
     rows = leave.query('SELECT * FROM part_returns WHERE submitted_by_id = ? ORDER BY id DESC LIMIT 50', (s['id'],))
     return jsonify({'returns': [{k: v for k, v in _out(r).items() if k in ('ref', 'createdAt', 'site', 'reason', 'parts', 'bcRef', 'bcStatus', 'packagedAt')} for r in rows]})
+
+
+@returns_bp.route('/api/parts/returns/admin/worksheet-check')
+def worksheet_check():
+    """Shows the worksheet questions and which form answer each one would get (using a sample return)."""
+    if not leave.is_admin(): return leave._auth_error()
+    sample = {'by': 'Sample Engineer', 'site': 'Sample Site', 'reason': 'Faulty', 'hpController': True, 'hpSerial': 'SN123',
+              'packagedAt': '2026-11-11T12:00', 'parts': [{'part': 'PART-1', 'qty': '2'}, {'part': 'PART-2', 'qty': '1'}]}
+    try: qs = _ws_questions(leave.bc_hooks['get'], int(DEFAULT_WORKSHEET_ID))
+    except Exception as ex: return jsonify({'error': f'Could not read the worksheet from BigChange: {ex}'[:300]}), 502
+    n, out = {'qty': 0, 'part': 0}, []
+    for q in qs:
+        g = _guess(q, sample, n); a = _answer(q, *g) if g else None
+        out.append({'text': q.get('questionText'), 'type': q.get('type'), 'items': q.get('validItems') or [], 'filled': a is not None,
+                    'example': json.dumps(a) if a else ''})
+    return jsonify({'worksheetId': DEFAULT_WORKSHEET_ID, 'questions': out})
