@@ -77,25 +77,30 @@ def _pick(items, want):
 
 
 def _guess(q, o, n):
-    """What should this worksheet question hold? Returns (kind, value) or None. n counts questions already used per kind."""
+    """What should this worksheet question hold? Returns (kind, value) or None. n carries counters and the 'office section' flag."""
     t = (q.get('questionText') or '').lower()
     ty = q.get('type')
-    if ty in SKIP_TYPES: return None
+    if t.strip(' *:') == 'engineer': n['office'] = True          # 'Returning Parts - Office to complete' starts here: leave it all to the office
+    if n.get('office') or ty in SKIP_TYPES: return None
+    if 'job ref' in t or 'job number' in t:
+        return ('text', o['relatedJob'] + '-111') if o.get('relatedJob') else None
+    if 'tracking' in t or 'spares' in t: return None
     if 'serial' in t: return ('text', o['hpSerial']) if o['hpController'] else None
     if 'controller' in t or 'henny' in t: return ('bool', o['hpController'])
-    if 'reason' in t: return ('choice', o['reason'])
+    if 'reason' in t or 'why' in t: return ('choice', o['reason'])
     if ('additional' in t or 'another' in t or 'more than one' in t) and not ('number' in t or 'code' in t):
         return ('bool', len(o['parts']) > 1)
     if 'quant' in t or 'qty' in t:
         i = n['qty']; n['qty'] += 1
         return ('int', int(o['parts'][i]['qty'])) if i < len(o['parts']) else None
     if 'part' in t and ('number' in t or 'no' in t.split() or 'code' in t or t.strip() in ('part', 'part?')):
-        i = n['part']; n['part'] += 1
-        return ('text', o['parts'][i]['part']) if i < len(o['parts']) else None
+        n['part'] += 1
+        # one 'Part number' box: all the parts, comma separated
+        return ('text', ', '.join(p['part'] for p in o['parts'])) if n['part'] == 1 else None
     if any(w in t for w in ('packag', 'date', 'when', 'time')):
         return ('dt', o['packagedAt'])
     if 'site' in t or 'customer' in t: return ('text', o['site'])
-    if 'returned by' in t or 'engineer' in t or 'name' in t: return ('text', o['by'])
+    if 'returned by' in t or 'name' in t: return ('text', o['by'])
     return None
 
 
@@ -142,7 +147,7 @@ def fill_worksheet(h, jid, o, photos=()):
         g = _guess(q, o, n)
         a = _answer(q, *g) if g else None
         if a is not None: answers.append({'questionId': q['id'], 'answer': a})
-        elif q.get('type') not in SKIP_TYPES and not (g is None and q.get('type') in ('statement',)):
+        elif q.get('type') not in SKIP_TYPES and not n.get('office'):
             left.append((q.get('questionText') or '')[:40])
     if answers: h['put'](f'/worksheets/{wsid}/answers', {'entityType': 'job', 'entityId': int(jid), 'answers': answers})
     note = f"worksheet: {len(answers)} answered" + (f", left blank: {'; '.join(left)}" if left else '')
@@ -402,7 +407,7 @@ def mine():
 def worksheet_check():
     """Shows the worksheet questions and which form answer each one would get (using a sample return)."""
     if not leave.is_admin(): return leave._auth_error()
-    sample = {'by': 'Sample Engineer', 'site': 'Sample Site', 'reason': 'Faulty', 'hpController': True, 'hpSerial': 'SN123',
+    sample = {'by': 'Sample Engineer', 'site': 'Sample Site', 'relatedJob': 'J12345', 'reason': 'Faulty', 'hpController': True, 'hpSerial': 'SN123',
               'packagedAt': '2026-11-11T12:00', 'parts': [{'part': 'PART-1', 'qty': '2'}, {'part': 'PART-2', 'qty': '1'}]}
     try: qs = _ws_questions(leave.bc_hooks, int(DEFAULT_WORKSHEET_ID))
     except Exception as ex: return jsonify({'error': f'Could not read the worksheet from BigChange: {ex}'[:300]}), 502
@@ -492,3 +497,15 @@ def job_parts():
         if not part: continue
         out.append({'part': part, 'name': desc or make, 'qty': int(qty) if qty and float(qty) >= 1 else 1})
     return jsonify({'parts': out})
+
+
+@returns_bp.route('/api/parts/returns/admin/flag-check')
+def flag_check():
+    """Lists BigChange's job flags and whether the flag we apply is one of them."""
+    if not leave.is_admin(): return leave._auth_error()
+    try: items = _bc_items('/flags', {'entityType': 'job', 'pageSize': 200})
+    except Exception as ex:
+        resp = getattr(ex, 'response', None)
+        return jsonify({'error': f"Could not read flags: {ex}{' - ' + resp.text[:200] if resp is not None else ''}"[:320]}), 502
+    flags = [{'id': f.get('id'), 'name': f.get('name') or f.get('flagName') or str(f.get('id'))} for f in items]
+    return jsonify({'flagId': DEFAULT_FLAG_ID, 'found': any(str(f['id']) == str(DEFAULT_FLAG_ID) for f in flags), 'flags': flags})
