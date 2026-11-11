@@ -30,8 +30,8 @@ def _ensure_tables():
             id {pk}, created_at TEXT NOT NULL, submitted_by TEXT NOT NULL, job_ref TEXT NOT NULL,
             packaged_at TEXT NOT NULL, reason TEXT NOT NULL, hp_controller INTEGER NOT NULL DEFAULT 0,
             hp_serial TEXT DEFAULT '', parts TEXT NOT NULL,
-            bc_job_id TEXT DEFAULT '', bc_status TEXT DEFAULT '')''')
-        for col in ('bc_job_id', 'bc_status'):          # tables created before the BigChange link existed
+            bc_job_id TEXT DEFAULT '', bc_status TEXT DEFAULT '', contact_id TEXT DEFAULT '', contact_name TEXT DEFAULT '')''')
+        for col in ('bc_job_id', 'bc_status', 'contact_id', 'contact_name'):          # tables created before the BigChange link existed
             try: leave.execute(f"ALTER TABLE part_returns ADD COLUMN {col} TEXT DEFAULT ''")
             except Exception: pass
         leave.execute(f'''CREATE TABLE IF NOT EXISTS part_return_photos (
@@ -60,14 +60,14 @@ def raise_job(rid):
     if not rows: return 'missing'
     r = rows[0]
     if r.get('bc_job_id'): return 'already raised'
-    type_id = (cfg.get('types') or {}).get(r['reason']) or (cfg.get('types') or {}).get('default')
-    contact = (cfg.get('contact') or {}).get('id')
+    type_id = cfg.get('typeId')
+    contact = r.get('contact_id')
     if not (h.get('post') and type_id and contact):
-        leave.execute('UPDATE part_returns SET bc_status = ? WHERE id = ?', ('not raised: job type / contact not set up yet', rid))
+        leave.execute('UPDATE part_returns SET bc_status = ? WHERE id = ?', ('not raised: job type not set up yet' if not type_id else 'not raised: no site chosen', rid))
         return 'not configured'
     o = _out(r)
     lines = '\n'.join(f"{p['part']} x {p['qty']}" for p in o['parts'])
-    desc = (f"Part return {o['ref']} - job {o['jobRef']}\nReason: {o['reason']}\nReturned by: {o['by']}\n"
+    desc = (f"Part return {o['ref']} - job {o['jobRef']}\nSite: {o['site']}\nReason: {o['reason']}\nReturned by: {o['by']}\n"
             f"Packaged: {o['packagedAt'].replace('T', ' ')}\n\nParts:\n{lines}"
             + (f"\n\nHenny Penny controller serial: {o['hpSerial']}" if o['hpController'] else ''))
     try:
@@ -114,7 +114,9 @@ def submit():
         if pn: parts.append({'part': pn, 'qty': q})
     photos = [p for p in (b.get('photos') or [])[:MAX_PHOTOS] if isinstance(p, dict)
               and _s(p.get('data'), MAX_PHOTO_CHARS + 1).startswith('data:image/') and len(_s(p.get('data'), MAX_PHOTO_CHARS + 1)) <= MAX_PHOTO_CHARS]
+    cid, cname = _s(b.get('contactId'), 20), _s(b.get('contactName'), 200)
     errs = []
+    if not cid.isdigit(): errs.append('the site / customer (pick it from the list)')
     if not job: errs.append('the job reference')
     if not parts: errs.append('a part number')
     if any(not (p['qty'].isdigit() and int(p['qty']) > 0) for p in parts): errs.append('a quantity for each part')
@@ -128,9 +130,9 @@ def submit():
     _ensure_tables()
     now = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
     who = _who() or _s(b.get('name'), 120) or 'Unknown'
-    rid = leave.execute('''INSERT INTO part_returns (created_at, submitted_by, job_ref, packaged_at, reason, hp_controller, hp_serial, parts)
-                           VALUES (?,?,?,?,?,?,?,?)''', (now, who, job, packaged, reason, 1 if hp else 0, serial if hp else '',
-                                                        json.dumps(parts, ensure_ascii=False)), returning_id=True)
+    rid = leave.execute('''INSERT INTO part_returns (created_at, submitted_by, job_ref, packaged_at, reason, hp_controller, hp_serial, parts, contact_id, contact_name)
+                           VALUES (?,?,?,?,?,?,?,?,?,?)''', (now, who, job, packaged, reason, 1 if hp else 0, serial if hp else '',
+                                                        json.dumps(parts, ensure_ascii=False), cid, cname), returning_id=True)
     for p in photos:
         leave.execute('INSERT INTO part_return_photos (return_id, name, data) VALUES (?,?,?)', (rid, _s(p.get('name'), 120), p['data']))
     leave._fail('returns')
@@ -153,7 +155,7 @@ def _out(r):
     return {'id': r['id'], 'ref': _ref(r['id'], r['created_at']), 'createdAt': r['created_at'], 'by': r['submitted_by'],
             'jobRef': r['job_ref'], 'packagedAt': r['packaged_at'], 'reason': REASONS.get(r['reason'], r['reason']),
             'hpController': bool(r['hp_controller']), 'hpSerial': r['hp_serial'] or '', 'parts': json.loads(r['parts'] or '[]'),
-            'bcJobId': r.get('bc_job_id') or '', 'bcStatus': r.get('bc_status') or ''}
+            'site': r.get('contact_name') or '', 'bcJobId': r.get('bc_job_id') or '', 'bcStatus': r.get('bc_status') or ''}
 
 
 @returns_bp.route('/api/parts/returns/admin/list')
@@ -183,6 +185,37 @@ def _bc_items(path, params):
     return data if isinstance(data, list) else (data.get('items') or [])
 
 
+_contacts = {'ts': 0, 'rows': []}
+
+
+def _all_contacts():
+    """Every BigChange contact, cached for 10 minutes (paged fetch)."""
+    import time
+    if _contacts['rows'] and time.time() - _contacts['ts'] < 600: return _contacts['rows']
+    rows, page = [], 1
+    while page <= 40:
+        items = _bc_items('/contacts', {'pageNumber': page, 'pageSize': 1000})
+        rows += [{'id': c['id'], 'name': c.get('name') or c.get('contactName') or str(c['id']),
+                  'extra': ', '.join(x for x in (c.get('reference'), (c.get('address') or '') if isinstance(c.get('address'), str) else '') if x)[:90]}
+                 for c in items if c.get('id')]
+        if len(items) < 1000: break
+        page += 1
+    _contacts.update(ts=time.time(), rows=rows)
+    return rows
+
+
+@returns_bp.route('/api/parts/returns/contacts')
+def contacts():
+    """Type-ahead for the return form: BigChange contacts whose name (or reference/address) contains every word typed."""
+    q = _s(request.args.get('q'), 80).lower().split()
+    if not q: return jsonify({'contacts': []})
+    try: rows = _all_contacts()
+    except Exception as ex: return jsonify({'error': f'Could not load sites from BigChange: {ex}'[:200]}), 502
+    hit = [c for c in rows if all(w in (c['name'] + ' ' + c['extra']).lower() for w in q)]
+    hit.sort(key=lambda c: (not c['name'].lower().startswith(q[0]), c['name'].lower()))
+    return jsonify({'contacts': hit[:25], 'total': len(rows)})
+
+
 @returns_bp.route('/api/parts/returns/admin/bc-config')
 def bc_config():
     if not leave.is_admin(): return leave._auth_error()
@@ -192,24 +225,12 @@ def bc_config():
     return jsonify(out)
 
 
-@returns_bp.route('/api/parts/returns/admin/bc-contacts')
-def bc_contacts():
-    if not leave.is_admin(): return leave._auth_error()
-    q = _s(request.args.get('q'), 80)
-    if len(q) < 2: return jsonify({'contacts': []})
-    try: items = _bc_items('/contacts', {'name': q, 'pageSize': 20})
-    except Exception as ex: return jsonify({'error': f'Could not search BigChange: {ex}'[:300]}), 502
-    return jsonify({'contacts': [{'id': c['id'], 'name': c.get('name') or c.get('contactName') or str(c['id'])} for c in items]})
-
-
 @returns_bp.route('/api/parts/returns/admin/bc-config', methods=['PUT'])
 def bc_config_save():
     if not leave.is_admin(): return leave._auth_error()
     b = request.get_json(silent=True) or {}
-    types = {k: str(v) for k, v in (b.get('types') or {}).items() if k in (*REASONS, 'default') and str(v).isdigit()}
-    c = b.get('contact') or {}
-    contact = {'id': str(c.get('id')), 'name': _s(c.get('name'), 200)} if str(c.get('id') or '').isdigit() else {}
-    leave.set_setting('returns_bc', json.dumps({'types': types, 'contact': contact}))
+    tid = str(b.get('typeId') or '')
+    leave.set_setting('returns_bc', json.dumps({'typeId': tid if tid.isdigit() else ''}))
     return jsonify({'success': True})
 
 
