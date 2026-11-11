@@ -396,7 +396,7 @@ def recent_jobs():
     since = (datetime.now(timezone.utc) - timedelta(hours=48)).strftime('%Y-%m-%dT%H:%M:%SZ')
     try:
         items = _bc_items('/jobs', {'resourceId': [int(res)], 'status': ['completedOk', 'completedWithIssues'],
-                                    'statusModifiedAtFrom': since, 'pageSize': 100, 'sortBy': 'createdAt', 'direction': 'desc'})
+                                    'statusModifiedAtFrom': since, 'pageSize': 100, 'sortBy': 'createdAt', 'direction': 'descending'})
     except Exception as ex:
         return jsonify({'jobs': [], 'reason': 'error', 'error': f'Could not load your recent jobs: {ex}'[:200]})
     jobs = [{'id': j.get('id'), 'reference': j.get('reference') or str(j.get('id')), 'contactId': j.get('contactId'),
