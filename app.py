@@ -118,6 +118,12 @@ def bc_upload(path, filename, data, mime='image/jpeg'):
     if not resp.ok:
         raise RuntimeError(f'BigChange {resp.status_code}: {resp.text[:200]}')
 
+def bc_put_quiet(path, body):
+    resp = requests.put(f'{API_BASE}{path}', headers=_bc_headers(), json=body, timeout=20)
+    print(f"[PUT] {path} {resp.status_code}: {resp.text[:200]}")
+    if not resp.ok:
+        raise RuntimeError(f'BigChange {resp.status_code}: {resp.text[:200]}')
+
 def bc_delete(path):
     resp = requests.delete(f'{API_BASE}{path}', headers=_bc_headers(), timeout=15)
     print(f"[DELETE] {path} {resp.status_code}: {resp.text[:200]}")
@@ -451,7 +457,7 @@ def assign_job(job_id):
         return jsonify({'error': str(e)}), 500
 
 import leave as _leave
-_leave.bc_hooks.update(post=bc_post, delete=bc_delete, get=bc_get, upload=bc_upload)
+_leave.bc_hooks.update(post=bc_post, delete=bc_delete, get=bc_get, upload=bc_upload, put=bc_put_quiet)
 
 if __name__ == '__main__':
     port = int(os.environ.get('PORT', 5000))
