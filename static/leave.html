@@ -619,15 +619,41 @@ async function showReqs(id) {
 }
 async function upd(id, body) { try { await api('/admin/employees/' + id, 'PUT', body); ADMIN_PAGE ? tabPins() : tabStaff(); } catch (e) { alert(e.message); } }
 function setEmail(id, cur) { const a = prompt('Email address:', cur); if (a !== null) upd(id, {email: a}); }
+let RET_CFG = {types: {}, contact: {}};
 async function tabReturns() {
-  const j = await api('/../parts/returns/admin/list');
-  $('a-body').innerHTML = `<div class="card"><h2>Part returns</h2><p class="muted">Returns logged from the Parts tool. Each one is also emailed to the returns address.</p>`
+  const [j, c] = await Promise.all([api('/../parts/returns/admin/list'), api('/../parts/returns/admin/bc-config')]);
+  RET_CFG = {types: {...(c.config.types || {})}, contact: c.config.contact || {}};
+  const opts = sel => '<option value="">Choose...</option>' + c.jobTypes.map(t => `<option value="${t.id}" ${String(sel) === String(t.id) ? 'selected' : ''}>${esc(t.name)}</option>`).join('');
+  const ready = RET_CFG.contact.id && ['faulty', 'not_required', 'incorrect'].every(k => RET_CFG.types[k] || RET_CFG.types.default);
+  $('a-body').innerHTML = `<div class="card"><h2>Part returns → BigChange</h2>
+    <p class="muted">Each finished return raises a job in BigChange (with the photos attached). Choose the job type for each reason and the contact the job is raised against.</p>
+    ${c.error ? `<div class="err">${esc(c.error)}</div>` : ''}${ready ? '' : '<div class="info">Not set up yet: returns are logged and emailed, but no BigChange job is raised until all four are chosen.</div>'}
+    ${[['faulty', 'Faulty'], ['not_required', 'No longer required'], ['incorrect', 'Incorrect part']].map(([k, l]) => `<label>${l} - job type</label><select id="rt-${k}">${opts(RET_CFG.types[k] || RET_CFG.types.default)}</select>`).join('')}
+    <label>Contact the job is raised against</label>
+    <div id="rc-cur" class="muted">${RET_CFG.contact.id ? esc(RET_CFG.contact.name) + ' (#' + esc(RET_CFG.contact.id) + ')' : 'None chosen'}</div>
+    <input id="rc-q" placeholder="Search BigChange contacts by name..." oninput="retFindContact()"><div id="rc-res"></div>
+    <div style="margin-top:.7rem"><button class="sm" onclick="retSaveCfg()">Save</button> <span id="rc-msg" class="muted"></span></div></div>
+    <div class="card"><h2>Part returns</h2>`
     + (j.returns.length ? j.returns.map(r => `<div class="item" style="display:block"><div><b>${esc(r.ref)}</b> · job ${esc(r.jobRef)} · ${esc(r.reason)} <span class="muted">· by ${esc(r.by)}</span></div>
       <div class="muted">Packaged ${esc(r.packagedAt.replace('T', ' '))} · logged ${esc(r.createdAt)}</div>
       <div style="margin:.3rem 0">${r.parts.map(p => esc(p.part) + ' × ' + esc(p.qty)).join('<br>')}</div>
       ${r.hpController ? `<div><b>Henny Penny controller</b> serial ${esc(r.hpSerial)}</div>` : ''}
+      <div class="muted">BigChange: ${r.bcJobId ? 'job #' + esc(r.bcJobId) + ' - ' : ''}${esc(r.bcStatus || 'not raised')}
+        ${r.bcJobId ? '' : `<button class="sm" onclick="retRaise(${r.id})">Raise job now</button>`}</div>
       <div id="rp-${r.id}">${r.photos.map(pid => `<button class="sm" onclick="showReturnPhoto(${r.id},${pid})">View photo</button>`).join(' ')}</div></div>`).join('') : '<p class="muted">No returns yet.</p>') + '</div>';
 }
+let retT = null;
+function retFindContact() { clearTimeout(retT); retT = setTimeout(async () => {
+  const q = $('rc-q').value.trim(); if (q.length < 2) { $('rc-res').innerHTML = ''; return; }
+  try { const j = await api('/../parts/returns/admin/bc-contacts?q=' + encodeURIComponent(q));
+    $('rc-res').innerHTML = j.contacts.map(c => `<div class="item"><span>${esc(c.name)} <span class="muted">#${c.id}</span></span><button class="sm" onclick="retPick(${c.id}, '${esc(c.name).replace(/'/g, "\\'")}')">Use</button></div>`).join('') || '<p class="muted">No matches.</p>';
+  } catch (e) { $('rc-res').innerHTML = `<div class="err">${esc(e.message)}</div>`; } }, 350); }
+function retPick(id, name) { RET_CFG.contact = {id, name}; $('rc-cur').textContent = name + ' (#' + id + ')'; $('rc-res').innerHTML = ''; $('rc-q').value = ''; }
+async function retSaveCfg() {
+  const types = {}; ['faulty', 'not_required', 'incorrect'].forEach(k => { const v = $('rt-' + k).value; if (v) types[k] = v; });
+  try { await api('/../parts/returns/admin/bc-config', 'PUT', {types, contact: RET_CFG.contact}); $('rc-msg').textContent = 'Saved.'; setTimeout(tabReturns, 600); } catch (e) { $('rc-msg').textContent = e.message; }
+}
+async function retRaise(id) { try { const j = await api(`/../parts/returns/admin/${id}/raise-job`, 'POST', {}); alert(j.status || j.result); tabReturns(); } catch (e) { alert(e.message); } }
 async function showReturnPhoto(rid, pid) {
   try { const j = await api(`/../parts/returns/admin/${rid}/photo/${pid}`); const w = window.open(); w.document.write(`<img src="${j.data}" style="max-width:100%">`); } catch (e) { alert(e.message); }
 }

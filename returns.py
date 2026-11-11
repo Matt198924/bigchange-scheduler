@@ -29,7 +29,11 @@ def _ensure_tables():
         leave.execute(f'''CREATE TABLE IF NOT EXISTS part_returns (
             id {pk}, created_at TEXT NOT NULL, submitted_by TEXT NOT NULL, job_ref TEXT NOT NULL,
             packaged_at TEXT NOT NULL, reason TEXT NOT NULL, hp_controller INTEGER NOT NULL DEFAULT 0,
-            hp_serial TEXT DEFAULT '', parts TEXT NOT NULL)''')
+            hp_serial TEXT DEFAULT '', parts TEXT NOT NULL,
+            bc_job_id TEXT DEFAULT '', bc_status TEXT DEFAULT '')''')
+        for col in ('bc_job_id', 'bc_status'):          # tables created before the BigChange link existed
+            try: leave.execute(f"ALTER TABLE part_returns ADD COLUMN {col} TEXT DEFAULT ''")
+            except Exception: pass
         leave.execute(f'''CREATE TABLE IF NOT EXISTS part_return_photos (
             id {pk}, return_id INTEGER NOT NULL, name TEXT DEFAULT '', data TEXT NOT NULL)''')
         _state['done'] = True
@@ -41,6 +45,50 @@ def _s(v, n=300):
 
 def _ref(rid, created):
     return f"RET-{str(created)[:4]}-{int(rid):04d}"
+
+
+def _cfg():
+    try: return json.loads(leave.get_setting('returns_bc') or '{}')
+    except ValueError: return {}
+
+
+def raise_job(rid):
+    """Create the BigChange job for a return and attach its photos. Never raises; the outcome is stored on the return."""
+    h = leave.bc_hooks
+    cfg = _cfg()
+    rows = leave.query('SELECT * FROM part_returns WHERE id = ?', (rid,))
+    if not rows: return 'missing'
+    r = rows[0]
+    if r.get('bc_job_id'): return 'already raised'
+    type_id = (cfg.get('types') or {}).get(r['reason']) or (cfg.get('types') or {}).get('default')
+    contact = (cfg.get('contact') or {}).get('id')
+    if not (h.get('post') and type_id and contact):
+        leave.execute('UPDATE part_returns SET bc_status = ? WHERE id = ?', ('not raised: job type / contact not set up yet', rid))
+        return 'not configured'
+    o = _out(r)
+    lines = '\n'.join(f"{p['part']} x {p['qty']}" for p in o['parts'])
+    desc = (f"Part return {o['ref']} - job {o['jobRef']}\nReason: {o['reason']}\nReturned by: {o['by']}\n"
+            f"Packaged: {o['packagedAt'].replace('T', ' ')}\n\nParts:\n{lines}"
+            + (f"\n\nHenny Penny controller serial: {o['hpSerial']}" if o['hpController'] else ''))
+    try:
+        res = h['post']('/jobs', {'typeId': int(type_id), 'contactId': int(contact), 'reference': o['ref'], 'description': desc[:4000]})
+        jid = str(res.get('id') or res.get('jobId') or '')
+        if not jid: raise RuntimeError('BigChange did not return a job id')
+    except Exception as ex:
+        leave.execute('UPDATE part_returns SET bc_status = ? WHERE id = ?', (f'failed: {ex}'[:300], rid))
+        return 'failed'
+    status = 'job raised'
+    if h.get('upload'):
+        import base64
+        n = 0
+        for p in leave.query('SELECT id, data FROM part_return_photos WHERE return_id = ? ORDER BY id', (rid,)):
+            try:
+                n += 1
+                h['upload'](f'/jobs/{jid}/attachments', f"{o['ref']}-{n}.jpg", base64.b64decode(p['data'].split(',', 1)[1]))
+            except Exception as ex:
+                status = f'job raised, but photo {n} did not upload: {ex}'[:300]
+    leave.execute('UPDATE part_returns SET bc_job_id = ?, bc_status = ? WHERE id = ?', (jid, status, rid))
+    return 'raised'
 
 
 def _who():
@@ -87,6 +135,8 @@ def submit():
         leave.execute('INSERT INTO part_return_photos (return_id, name, data) VALUES (?,?,?)', (rid, _s(p.get('name'), 120), p['data']))
     leave._fail('returns')
     ref = _ref(rid, now)
+    try: raise_job(rid)
+    except Exception: pass
     base = (os.environ.get('PUBLIC_BASE_URL') or request.host_url).rstrip('/')
     if base.startswith('http://') and 'localhost' not in base and '127.0.0.1' not in base:
         base = 'https://' + base[len('http://'):]
@@ -102,7 +152,8 @@ def submit():
 def _out(r):
     return {'id': r['id'], 'ref': _ref(r['id'], r['created_at']), 'createdAt': r['created_at'], 'by': r['submitted_by'],
             'jobRef': r['job_ref'], 'packagedAt': r['packaged_at'], 'reason': REASONS.get(r['reason'], r['reason']),
-            'hpController': bool(r['hp_controller']), 'hpSerial': r['hp_serial'] or '', 'parts': json.loads(r['parts'] or '[]')}
+            'hpController': bool(r['hp_controller']), 'hpSerial': r['hp_serial'] or '', 'parts': json.loads(r['parts'] or '[]'),
+            'bcJobId': r.get('bc_job_id') or '', 'bcStatus': r.get('bc_status') or ''}
 
 
 @returns_bp.route('/api/parts/returns/admin/list')
@@ -125,3 +176,47 @@ def admin_photo(rid, pid):
     rows = leave.query('SELECT data FROM part_return_photos WHERE id = ? AND return_id = ?', (pid, rid))
     if not rows: return jsonify({'error': 'Photo not found'}), 404
     return jsonify({'data': rows[0]['data']})
+
+
+def _bc_items(path, params):
+    data = leave.bc_hooks['get'](path, params)
+    return data if isinstance(data, list) else (data.get('items') or [])
+
+
+@returns_bp.route('/api/parts/returns/admin/bc-config')
+def bc_config():
+    if not leave.is_admin(): return leave._auth_error()
+    out = {'config': _cfg(), 'jobTypes': [], 'error': ''}
+    try: out['jobTypes'] = [{'id': t['id'], 'name': t.get('name') or t.get('typeName') or str(t['id'])} for t in _bc_items('/jobTypes', {'pageSize': 500})]
+    except Exception as ex: out['error'] = f'Could not load job types from BigChange: {ex}'[:300]
+    return jsonify(out)
+
+
+@returns_bp.route('/api/parts/returns/admin/bc-contacts')
+def bc_contacts():
+    if not leave.is_admin(): return leave._auth_error()
+    q = _s(request.args.get('q'), 80)
+    if len(q) < 2: return jsonify({'contacts': []})
+    try: items = _bc_items('/contacts', {'name': q, 'pageSize': 20})
+    except Exception as ex: return jsonify({'error': f'Could not search BigChange: {ex}'[:300]}), 502
+    return jsonify({'contacts': [{'id': c['id'], 'name': c.get('name') or c.get('contactName') or str(c['id'])} for c in items]})
+
+
+@returns_bp.route('/api/parts/returns/admin/bc-config', methods=['PUT'])
+def bc_config_save():
+    if not leave.is_admin(): return leave._auth_error()
+    b = request.get_json(silent=True) or {}
+    types = {k: str(v) for k, v in (b.get('types') or {}).items() if k in (*REASONS, 'default') and str(v).isdigit()}
+    c = b.get('contact') or {}
+    contact = {'id': str(c.get('id')), 'name': _s(c.get('name'), 200)} if str(c.get('id') or '').isdigit() else {}
+    leave.set_setting('returns_bc', json.dumps({'types': types, 'contact': contact}))
+    return jsonify({'success': True})
+
+
+@returns_bp.route('/api/parts/returns/admin/<int:rid>/raise-job', methods=['POST'])
+def admin_raise(rid):
+    if not leave.is_admin(): return leave._auth_error()
+    _ensure_tables()
+    res = raise_job(rid)
+    row = leave.query('SELECT bc_status FROM part_returns WHERE id = ?', (rid,))
+    return jsonify({'result': res, 'status': row[0]['bc_status'] if row else ''})
