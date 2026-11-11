@@ -519,6 +519,13 @@ def notify_request(rid, event, base_url, note=''):
                     + (f"Note: {r['note']}\n" if r['note'] else '')
                     + f"\nReview it here: {link}\n")])
         return
+    if event == 'staff_cancelled':
+        mgr = query('SELECT email FROM leave_employees WHERE id = ?', (r['manager_id'],)) if r['manager_id'] else []
+        to = (mgr[0]['email'] if mgr else None) or OFFICE_EMAIL
+        _dispatch([(to, f"Holiday cancelled: {r['name']}",
+                    f"{r['name']} has cancelled their approved {label}:\n\n{when}\n\nThe days have gone back onto their allowance"
+                    + (" and the absence has been removed from BigChange." if r.get('bc_absence_id') else ".") + f"\n\nLeave calendar: {link}\n")])
+        return
     subject, intro = {
         'approved':  ('Your holiday has been approved', f'Your {label} has been approved:'),
         'booked':    ('Holiday booked for you', f'The office has booked {label} for you:'),
@@ -733,9 +740,11 @@ def cancel_own(rid):
         return jsonify({'error': 'Already closed'}), 400
     if r['status'] == 'approved' and parse_date(r['start_date']) <= date.today():
         return jsonify({'error': 'Leave has started - call the office'}), 400
+    was_approved = r['status'] == 'approved'
     execute("UPDATE leave_requests SET status = 'cancelled', decided_at = ? WHERE id = ?",
             (datetime.utcnow().strftime('%Y-%m-%dT%H:%M:%S'), rid))
     bc_sync_remove(rid)
+    if was_approved: notify_request(rid, 'staff_cancelled', request.host_url)   # let the manager know
     return jsonify({'success': True})
 
 

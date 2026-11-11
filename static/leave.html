@@ -318,7 +318,7 @@ async function submitRequest() {
   } catch (err) { $('r-preview').innerHTML = `<div class="err">${esc(err.message)}</div>`; }
   $('r-go').disabled = false;
 }
-async function cancelReq(id) { if (confirm('Cancel this request?')) { await api(`/requests/${id}/cancel`, 'POST'); loadStaff(); } }
+async function cancelReq(id) { if (confirm('Cancel this holiday? The days go back on your allowance and your manager is told.')) { await api(`/requests/${id}/cancel`, 'POST'); loadStaff(); } }
 
 // ── admin ──
 const ADMIN_PAGE = location.pathname.startsWith('/staff-admin');   // office-only page: people, PINs, hub access
