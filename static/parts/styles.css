@@ -30,3 +30,5 @@ mark{background:#FFF1A8;padding:0 1px;border-radius:2px}
 .img-modal{position:fixed;inset:0;background:rgba(7,30,54,.78);display:flex;align-items:center;justify-content:center;z-index:50;padding:16px}.img-modal.hidden{display:none}
 .img-card{background:#fff;border-radius:14px;padding:14px;max-width:420px;width:100%;text-align:center}.img-card img{width:100%;max-height:60vh;object-fit:contain;image-rendering:auto}
 .img-cap{font-weight:600;margin-top:8px}.img-note{font-size:12px;color:#5B6B7B;margin-top:4px}
+
+.photo-row{margin-top:10px}#photoBtn{background:#0B2A4A;color:#fff;padding:11px 16px}
