@@ -417,7 +417,8 @@ def recent_jobs():
     res = leave._bcid((row[0] if row else {}).get('bc_resource_id'))
     if not str(res).isdigit(): return jsonify({'jobs': [], 'reason': 'no-resource'})
     since = (datetime.now(timezone.utc) - timedelta(hours=48)).strftime('%Y-%m-%dT%H:%M:%SZ')
-    base = {'resourceId': [int(res)], 'statusModifiedAtFrom': since, 'pageSize': 200}
+    until = (datetime.now(timezone.utc) + timedelta(hours=1)).strftime('%Y-%m-%dT%H:%M:%SZ')   # BigChange wants both ends of the range
+    base = {'resourceId': [int(res)], 'statusModifiedAtFrom': since, 'statusModifiedAtTo': until, 'pageSize': 200}
     done = ('completedOk', 'completedWithIssues')
     try:
         try: items = _bc_items('/jobs', {**base, 'status': list(done)})
