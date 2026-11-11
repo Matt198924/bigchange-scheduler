@@ -437,3 +437,35 @@ def recent_jobs():
              'at': j.get('statusModifiedAt') or j.get('actualEndAt') or ''} for j in items]
     jobs.sort(key=lambda j: j['at'], reverse=True)
     return jsonify({'jobs': jobs})
+
+
+_sd_cache = {}
+
+
+def _stock_details(sid):
+    if sid not in _sd_cache:
+        _sd_cache[sid] = leave.bc_hooks['get'](f'/stockDetails/{int(sid)}', {}) or {}
+    return _sd_cache[sid]
+
+
+@returns_bp.route('/api/parts/returns/job-parts')
+def job_parts():
+    """Parts (stock) recorded against a BigChange job, so the engineer can tick what is being returned."""
+    jid = _s(request.args.get('jobId'), 20)
+    if not jid.isdigit(): return jsonify({'parts': []})
+    try: rows = _bc_items(f'/jobs/{int(jid)}/stock', {'pageSize': 100})
+    except Exception as ex:
+        resp = getattr(ex, 'response', None)
+        return jsonify({'parts': [], 'error': f"Could not load the job's parts: {ex}{' - ' + resp.text[:200] if resp is not None else ''}"[:320]})
+    out = []
+    for s in rows:
+        qty = s.get('quantityActual') if s.get('quantityActual') else s.get('quantityPlanned')
+        det = {}
+        if s.get('stockDetailsId'):
+            try: det = _stock_details(s['stockDetailsId'])
+            except Exception: det = {}
+        name = ' '.join(x for x in (det.get('make') or s.get('make'), det.get('model') or s.get('model')) if x).strip()
+        code = det.get('stockCode') or det.get('modelNumber') or ''
+        if not (name or code): continue
+        out.append({'part': code or name, 'name': name if code else '', 'qty': int(qty) if qty and float(qty) >= 1 else 1})
+    return jsonify({'parts': out})
