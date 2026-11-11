@@ -464,8 +464,9 @@ def job_parts():
         if s.get('stockDetailsId'):
             try: det = _stock_details(s['stockDetailsId'])
             except Exception: det = {}
-        name = ' '.join(x for x in (det.get('make') or s.get('make'), det.get('model') or s.get('model')) if x).strip()
-        code = det.get('stockCode') or det.get('modelNumber') or ''
-        if not (name or code): continue
-        out.append({'part': code or name, 'name': name if code else '', 'qty': int(qty) if qty and float(qty) >= 1 else 1})
+        model = (det.get('model') or s.get('model') or '').strip()      # the part number is the stock 'model' field
+        make = (det.get('make') or s.get('make') or '').strip()
+        part = model or det.get('modelNumber') or det.get('stockCode') or ''
+        if not part: continue
+        out.append({'part': part, 'name': make, 'qty': int(qty) if qty and float(qty) >= 1 else 1})
     return jsonify({'parts': out})
