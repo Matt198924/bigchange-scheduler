@@ -15,9 +15,17 @@ async function loadStock(){
 }
 loadStock();
 function escapeHtml(v){return String(v).replace(/[&<>'"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;',"'":'&#39;','"':'&quot;'}[c]))}
-let coords={};
+let coords={}, IMGS={};
+fetch('images.json').then(r=>r.json()).then(j=>{IMGS=j;render()}).catch(()=>{});
+function imgKey(t){return String(t).replace('** vs **','').trim().replace(/^\([^)]*\)/,'').toLowerCase().replace(/[^a-z0-9]+/g,' ').trim()}
+function imgFor(part){return IMGS[imgKey(part)]||null}
+function showImg(src,name,chk){
+  let m=document.getElementById('imgModal'); if(!m){m=document.createElement('div');m.id='imgModal';m.className='img-modal';m.addEventListener('click',()=>m.classList.add('hidden'));document.body.appendChild(m)}
+  m.innerHTML=`<div class="img-card"><img src="${src}" alt=""><div class="img-cap">${name}</div><div class="img-note">${chk==='1'?'Match not fully confirmed - check against the part number. ':''}Photo for identification only.</div></div>`;m.classList.remove('hidden');
+}
+document.addEventListener('click',e=>{const t=e.target.closest('.th');if(t)showImg(t.dataset.img,t.dataset.name,t.dataset.chk)});
 fetch('lockers.json').then(r=>r.json()).then(j=>{coords=j}).catch(()=>{});
-function render(){const q=norm(els.search.value);if(!q){els.results.innerHTML='';els.empty.classList.remove('hidden');els.summary.textContent=`Type to search ${parts.length} parts`;return}els.empty.classList.add('hidden');const terms=q.split(/\s+/).filter(Boolean);const hits=parts.filter(p=>{const hay=norm(`${p.part} ${p.location}`);return terms.every(t=>hay.includes(t))});els.summary.textContent=`${hits.length} result${hits.length===1?'':'s'}`;els.results.innerHTML=hits.length?hits.map((p,i)=>`<article class="result"><div class="part">${escapeHtml(p.part)}</div><div class="meta"><span class="click-show">Click to show</span><button class="loc" data-index="${i}">${escapeHtml(p.location)}</button></div></article>`).join(''):`<div class="empty"><div class="empty-icon">🔎</div><h2>No matches</h2><p>Try a part number, description, or locker such as C4 B1.</p></div>`;hits.forEach((p,i)=>els.results.querySelector(`[data-index="${i}"]`)?.addEventListener('click',()=>showMap(p)))}
+function render(){const q=norm(els.search.value);if(!q){els.results.innerHTML='';els.empty.classList.remove('hidden');els.summary.textContent=`Type to search ${parts.length} parts`;return}els.empty.classList.add('hidden');const terms=q.split(/\s+/).filter(Boolean);const hits=parts.filter(p=>{const hay=norm(`${p.part} ${p.location}`);return terms.every(t=>hay.includes(t))});els.summary.textContent=`${hits.length} result${hits.length===1?'':'s'}`;els.results.innerHTML=hits.length?hits.map((p,i)=>{const im=imgFor(p.part);return `<article class="result${im?' hi':''}">${im?`<button class="th" data-img="${im[0]}" data-name="${escapeHtml(p.part)}" data-chk="${im[1]}" aria-label="Enlarge photo"><img loading="lazy" src="${im[0]}" alt="">${im[1]?'<i>check</i>':''}</button>`:''}<div class="rb"><div class="part">${escapeHtml(p.part)}</div><div class="meta"><span class="click-show">Click to show</span><button class="loc" data-index="${i}">${escapeHtml(p.location)}</button></div></div></article>`}).join(''):`<div class="empty"><div class="empty-icon">🔎</div><h2>No matches</h2><p>Try a part number, description, or locker such as C4 B1.</p></div>`;hits.forEach((p,i)=>els.results.querySelector(`[data-index="${i}"]`)?.addEventListener('click',()=>showMap(p)))}
 let mapZoom=false,mapLoc='';
 function drawMap(location){
   mapLoc=location;
