@@ -20,7 +20,6 @@
       <label>Site / customer <span class="req">*</span></label>
       <input id="siteQ" placeholder="Start typing the site or customer name..." autocomplete="off">
       <div id="siteRes" class="sres"></div><div id="siteSel" class="muted" style="margin:.3rem 0"></div>
-      <label>Job reference <span class="req">*</span></label><input id="jobRef" required maxlength="80">
       <div id="plist"></div>
       <datalist id="stockList"></datalist>
       <label>Is there an additional part?</label>
@@ -41,8 +40,9 @@
     <button class="btn primary" id="go" style="width:100%;padding:1rem" type="submit">Submit return</button>
   </form>
 </div>
-<div class="wrap hidden" id="done"><div class="card"><h2>Return logged</h2><div class="ok">Thank you. The office has been told. Your reference is:<div class="refbox" id="ref"></div></div>
+<div class="wrap hidden" id="done"><div class="card"><h2>Return logged</h2><div class="ok">Thank you. The office has been told.<div class="hint" style="margin-top:.6rem">BigChange job reference</div><div class="refbox" id="ref"></div><div class="hint" id="ref2"></div></div>
 <a class="btn primary" style="display:inline-block;text-decoration:none" href="/parts/">Back to Parts</a> <button class="btn ghost" onclick="location.reload()">Return more</button></div></div>
+<div class="wrap" id="mineWrap"><div class="card"><h2>Your returns</h2><div id="mine" class="hint">Loading...</div></div></div>
 <script>
 const $ = id => document.getElementById(id);
 let photos = [], np = 0, site = null, siteT = null;
@@ -74,6 +74,8 @@ function shrink(file) {
 $('photoIn').addEventListener('change', async e => {
   for (const f of e.target.files) { if (photos.length >= 4) break; try { photos.push({name: f.name, data: await shrink(f)}); } catch (x) { $('msg').innerHTML = `<div class="err">${x.message}</div>`; } }
   e.target.value = ''; drawPhotos(); });
+fetch('/api/parts/returns/mine').then(r => r.json()).then(j => { const e = t => String(t).replace(/</g, '&lt;');
+  $('mine').innerHTML = (j.returns || []).map(r => `<div style="border-top:1px solid var(--line);padding:.6rem 0"><b>${e(r.bcRef || r.ref)}</b> <span class="hint">${e(r.createdAt.slice(0, 16))}</span><div>${e(r.site)} · ${e(r.reason)}</div><div class="hint">${r.parts.map(p => e(p.part) + ' × ' + e(p.qty)).join(', ')}${r.bcRef ? '' : ' · BigChange: ' + e(r.bcStatus || 'not raised')}</div></div>`).join('') || 'Nothing yet.'; }).catch(() => { $('mine').textContent = ''; });
 function drawPhotos() { $('photos').innerHTML = photos.map((p, i) => `<div><img src="${p.data}"><button type="button" onclick="photos.splice(${i},1);drawPhotos()">×</button></div>`).join(''); }
 async function send(ev) {
   ev.preventDefault(); $('msg').innerHTML = '';
@@ -81,12 +83,12 @@ async function send(ev) {
   if (!photos.length) { $('msg').innerHTML = '<div class="err">Please add a photo of the packaged, labelled parts.</div>'; return false; }
   $('go').disabled = true; $('go').textContent = 'Sending...';
   const parts = [...document.querySelectorAll('.prow')].map(r => ({part: r.querySelector('.pn').value, qty: r.querySelector('.pq').value}));
-  const body = {contactId: site.id, contactName: site.name, jobRef: $('jobRef').value, parts, packagedAt: $('packagedAt').value, photos, hpController: yes('hp'), hpSerial: $('hpSerial').value, reason: $('reason').value};
+  const body = {contactId: site.id, contactName: site.name, parts, packagedAt: $('packagedAt').value, photos, hpController: yes('hp'), hpSerial: $('hpSerial').value, reason: $('reason').value};
   try {
     const r = await fetch('/api/parts/returns', {method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify(body)});
     const j = await r.json().catch(() => ({}));
     if (!r.ok) throw new Error(j.error || 'Server problem (HTTP ' + r.status + ') - please try again');
-    $('ref').textContent = j.ref; $('formWrap').classList.add('hidden'); $('done').classList.remove('hidden'); window.scrollTo(0, 0);
+    $('ref').textContent = j.bcRef || j.ref; $('ref2').textContent = j.bcRef ? 'Our reference: ' + j.ref + '. This is saved under Your returns below.' : 'Our reference: ' + j.ref + '. The BigChange job is still being raised - it will show under Your returns.'; $('formWrap').classList.add('hidden'); $('done').classList.remove('hidden'); window.scrollTo(0, 0);
   } catch (e) { $('msg').innerHTML = `<div class="err">${e.message}</div>`; $('go').disabled = false; $('go').textContent = 'Submit return'; }
   return false;
 }

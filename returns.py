@@ -30,7 +30,8 @@ def _ensure_tables():
             id {pk}, created_at TEXT NOT NULL, submitted_by TEXT NOT NULL, job_ref TEXT NOT NULL,
             packaged_at TEXT NOT NULL, reason TEXT NOT NULL, hp_controller INTEGER NOT NULL DEFAULT 0,
             hp_serial TEXT DEFAULT '', parts TEXT NOT NULL,
-            bc_job_id TEXT DEFAULT '', bc_status TEXT DEFAULT '', contact_id TEXT DEFAULT '', contact_name TEXT DEFAULT '')''')
+            bc_job_id TEXT DEFAULT '', bc_status TEXT DEFAULT '', contact_id TEXT DEFAULT '', contact_name TEXT DEFAULT '',
+            submitted_by_id INTEGER, bc_ref TEXT DEFAULT '')''')
         for col in ('bc_job_id', 'bc_status', 'contact_id', 'contact_name'):          # tables created before the BigChange link existed
             try: leave.execute(f"ALTER TABLE part_returns ADD COLUMN {col} TEXT DEFAULT ''")
             except Exception: pass
@@ -74,14 +75,18 @@ def raise_job(rid):
         return 'not configured'
     o = _out(r)
     lines = '\n'.join(f"{p['part']} x {p['qty']}" for p in o['parts'])
-    desc = (f"Part return {o['ref']} - job {o['jobRef']}\nSite: {o['site']}\nReason: {o['reason']}\nReturned by: {o['by']}\n"
+    desc = (f"Part return {o['ref']}\nSite: {o['site']}\nReason: {o['reason']}\nReturned by: {o['by']}\n"
             f"Packaged: {o['packagedAt'].replace('T', ' ')}\n\nParts:\n{lines}"
             + (f"\n\nHenny Penny controller serial: {o['hpSerial']}" if o['hpController'] else ''))
     try:
-        res = h['post']('/jobs', {'typeId': int(type_id), 'contactId': int(contact), 'reference': o['ref'], 'description': desc[:4000],
+        res = h['post']('/jobs', {'typeId': int(type_id), 'contactId': int(contact), 'description': desc[:4000],
                                  'categoryId': int(DEFAULT_CATEGORY_ID)})
         jid = str(res.get('id') or res.get('jobId') or '')
         if not jid: raise RuntimeError('BigChange did not return a job id')
+        bcref = str(res.get('reference') or '')
+        if not bcref and h.get('get'):
+            try: bcref = str((h['get'](f'/jobs/{jid}') or {}).get('reference') or '')
+            except Exception: bcref = ''
     except Exception as ex:
         leave.execute('UPDATE part_returns SET bc_status = ? WHERE id = ?', (f'failed: {ex}'[:300], rid))
         return 'failed'
@@ -97,13 +102,17 @@ def raise_job(rid):
                 h['upload'](f'/jobs/{jid}/attachments', f"{o['ref']}-{n}.jpg", base64.b64decode(p['data'].split(',', 1)[1]))
             except Exception as ex:
                 status = f'job raised, but photo {n} did not upload: {ex}'[:300]
-    leave.execute('UPDATE part_returns SET bc_job_id = ?, bc_status = ? WHERE id = ?', (jid, status, rid))
+    leave.execute('UPDATE part_returns SET bc_job_id = ?, bc_ref = ?, bc_status = ? WHERE id = ?', (jid, bcref or jid, status, rid))
     return 'raised'
 
 
-def _who():
+def _session():
     import hub
-    s = hub._session()
+    return hub._session()
+
+
+def _who():
+    s = _session()
     return s['name'] if s else ''
 
 
@@ -114,7 +123,7 @@ def submit():
     if leave._throttled('returns'):
         return jsonify({'error': 'Too many submissions from this connection - try again in 10 minutes'}), 429
     b = request.get_json(silent=True) or {}
-    job, packaged, reason = _s(b.get('jobRef'), 80), _s(b.get('packagedAt'), 30), _s(b.get('reason'), 20)
+    packaged, reason = _s(b.get('packagedAt'), 30), _s(b.get('reason'), 20)
     hp = b.get('hpController') in (True, 'yes', 'true', 1, '1')
     serial = _s(b.get('hpSerial'), 120)
     parts = []
@@ -127,7 +136,6 @@ def submit():
     cid, cname = _s(b.get('contactId'), 20), _s(b.get('contactName'), 200)
     errs = []
     if not cid.isdigit(): errs.append('the site / customer (pick it from the list)')
-    if not job: errs.append('the job reference')
     if not parts: errs.append('a part number')
     if any(not (p['qty'].isdigit() and int(p['qty']) > 0) for p in parts): errs.append('a quantity for each part')
     if not packaged: errs.append('when the parts were packaged')
@@ -139,33 +147,36 @@ def submit():
     except ValueError: return jsonify({'error': 'That date and time is not valid'}), 400
     _ensure_tables()
     now = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
-    who = _who() or _s(b.get('name'), 120) or 'Unknown'
-    rid = leave.execute('''INSERT INTO part_returns (created_at, submitted_by, job_ref, packaged_at, reason, hp_controller, hp_serial, parts, contact_id, contact_name)
-                           VALUES (?,?,?,?,?,?,?,?,?,?)''', (now, who, job, packaged, reason, 1 if hp else 0, serial if hp else '',
-                                                        json.dumps(parts, ensure_ascii=False), cid, cname), returning_id=True)
+    sess = _session()
+    who = (sess or {}).get('name') or _s(b.get('name'), 120) or 'Unknown'
+    uid = (sess or {}).get('id')
+    rid = leave.execute('''INSERT INTO part_returns (created_at, submitted_by, job_ref, packaged_at, reason, hp_controller, hp_serial, parts, contact_id, contact_name, submitted_by_id)
+                           VALUES (?,?,?,?,?,?,?,?,?,?,?)''', (now, who, '', packaged, reason, 1 if hp else 0, serial if hp else '',
+                                                        json.dumps(parts, ensure_ascii=False), cid, cname, uid), returning_id=True)
     for p in photos:
         leave.execute('INSERT INTO part_return_photos (return_id, name, data) VALUES (?,?,?)', (rid, _s(p.get('name'), 120), p['data']))
     leave._fail('returns')
     ref = _ref(rid, now)
     try: raise_job(rid)
     except Exception: pass
+    bcref = (leave.query('SELECT bc_ref FROM part_returns WHERE id = ?', (rid,)) or [{}])[0].get('bc_ref') or ''
     base = (os.environ.get('PUBLIC_BASE_URL') or request.host_url).rstrip('/')
     if base.startswith('http://') and 'localhost' not in base and '127.0.0.1' not in base:
         base = 'https://' + base[len('http://'):]
     lines = '\n'.join(f"  - {p['part']} x {p['qty']}" for p in parts)
-    leave._dispatch([(RETURNS_EMAIL, f"Part return {ref}: job {job}",
-                      f"A part return has been logged.\n\nReference: {ref}\nJob: {job}\nReturned by: {who}\nReason: {REASONS[reason]}\n"
+    leave._dispatch([(RETURNS_EMAIL, f"Part return {ref}: {cname}",
+                      f"A part return has been logged.\n\nReference: {ref}\nBigChange job: {bcref or 'not raised - see Staff admin'}\nReturned by: {who}\nReason: {REASONS[reason]}\n"
                       f"Packaged: {packaged.replace('T', ' ')}\nParts:\n{lines}\n"
                       + (f"Henny Penny controller serial: {serial}\n" if hp else '')
                       + f"\nPhoto and full details: {base}/staff-admin (Part returns tab)\n")])
-    return jsonify({'success': True, 'ref': ref})
+    return jsonify({'success': True, 'ref': ref, 'bcRef': bcref})
 
 
 def _out(r):
     return {'id': r['id'], 'ref': _ref(r['id'], r['created_at']), 'createdAt': r['created_at'], 'by': r['submitted_by'],
-            'jobRef': r['job_ref'], 'packagedAt': r['packaged_at'], 'reason': REASONS.get(r['reason'], r['reason']),
+            'packagedAt': r['packaged_at'], 'reason': REASONS.get(r['reason'], r['reason']),
             'hpController': bool(r['hp_controller']), 'hpSerial': r['hp_serial'] or '', 'parts': json.loads(r['parts'] or '[]'),
-            'site': r.get('contact_name') or '', 'bcJobId': r.get('bc_job_id') or '', 'bcStatus': r.get('bc_status') or ''}
+            'site': r.get('contact_name') or '', 'bcRef': r.get('bc_ref') or '', 'bcJobId': r.get('bc_job_id') or '', 'bcStatus': r.get('bc_status') or ''}
 
 
 @returns_bp.route('/api/parts/returns/admin/list')
@@ -251,3 +262,13 @@ def admin_raise(rid):
     res = raise_job(rid)
     row = leave.query('SELECT bc_status FROM part_returns WHERE id = ?', (rid,))
     return jsonify({'result': res, 'status': row[0]['bc_status'] if row else ''})
+
+
+@returns_bp.route('/api/parts/returns/mine')
+def mine():
+    """The signed-in person's own returns, with the BigChange job reference, for their records."""
+    s = _session()
+    if not s or not s.get('id'): return jsonify({'returns': []})
+    _ensure_tables()
+    rows = leave.query('SELECT * FROM part_returns WHERE submitted_by_id = ? ORDER BY id DESC LIMIT 50', (s['id'],))
+    return jsonify({'returns': [{k: v for k, v in _out(r).items() if k in ('ref', 'createdAt', 'site', 'reason', 'parts', 'bcRef', 'bcStatus', 'packagedAt')} for r in rows]})

@@ -628,11 +628,11 @@ async function tabReturns() {
     <label>Job type</label><select id="rt-type"><option value="">Choose...</option>${c.jobTypes.map(t => `<option value="${t.id}" ${String(cur) === String(t.id) ? 'selected' : ''}>${esc(t.name)}</option>`).join('')}</select>
     <div style="margin-top:.7rem"><button class="sm" onclick="retSaveCfg()">Save</button> <span id="rc-msg" class="muted"></span></div></div>
     <div class="card"><h2>Part returns</h2>`
-    + (j.returns.length ? j.returns.map(r => `<div class="item" style="display:block"><div><b>${esc(r.ref)}</b> · ${esc(r.site || 'no site')} · job ${esc(r.jobRef)} · ${esc(r.reason)} <span class="muted">· by ${esc(r.by)}</span></div>
+    + (j.returns.length ? j.returns.map(r => `<div class="item" style="display:block"><div><b>${esc(r.ref)}</b> · ${esc(r.site || 'no site')} · ${esc(r.reason)} <span class="muted">· by ${esc(r.by)}</span></div>
       <div class="muted">Packaged ${esc(r.packagedAt.replace('T', ' '))} · logged ${esc(r.createdAt)}</div>
       <div style="margin:.3rem 0">${r.parts.map(p => esc(p.part) + ' × ' + esc(p.qty)).join('<br>')}</div>
       ${r.hpController ? `<div><b>Henny Penny controller</b> serial ${esc(r.hpSerial)}</div>` : ''}
-      <div class="muted">BigChange: ${r.bcJobId ? 'job #' + esc(r.bcJobId) + ' - ' : ''}${esc(r.bcStatus || 'not raised')}
+      <div class="muted">BigChange: ${r.bcJobId ? 'job ' + esc(r.bcRef || r.bcJobId) + ' - ' : ''}${esc(r.bcStatus || 'not raised')}
         ${r.bcJobId ? '' : `<button class="sm" onclick="retRaise(${r.id})">Raise job now</button>`}</div>
       <div id="rp-${r.id}">${r.photos.map(pid => `<button class="sm" onclick="showReturnPhoto(${r.id},${pid})">View photo</button>`).join(' ')}</div></div>`).join('') : '<p class="muted">No returns yet.</p>') + '</div>';
 }
