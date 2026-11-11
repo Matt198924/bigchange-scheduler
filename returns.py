@@ -177,11 +177,11 @@ def raise_job(rid):
     except Exception as ex:
         leave.execute('UPDATE part_returns SET bc_status = ? WHERE id = ?', (f'failed: {ex}'[:300], rid))
         return 'failed'
-    status = 'job raised'
-    try: status += ' - ' + fill_worksheet(h, jid, o)
-    except Exception as ex: status += f' - worksheet not filled: {ex}'[:200]
+    notes = []
+    try: notes.append(fill_worksheet(h, jid, o))
+    except Exception as ex: notes.append(f'worksheet not filled: {ex}'[:200])
     try: h['post'](f'/jobs/{jid}/flags', {'flagId': int(DEFAULT_FLAG_ID), 'comments': f"Part return {o['ref']}"})
-    except Exception as ex: status = f'job raised, but the flag was not added: {ex}'[:300]
+    except Exception as ex: notes.append(f'flag not added: {ex}'[:200])
     if h.get('upload'):
         import base64
         n = 0
@@ -190,7 +190,8 @@ def raise_job(rid):
                 n += 1
                 h['upload'](f'/jobs/{jid}/attachments', f"{o['ref']}-{n}.jpg", base64.b64decode(p['data'].split(',', 1)[1]))
             except Exception as ex:
-                status = f'job raised, but photo {n} did not upload: {ex}'[:300]
+                notes.append(f'photo {n} not uploaded: {ex}'[:200])
+    status = 'job raised' + (' - ' + ' | '.join(notes) if notes else '')[:600]
     leave.execute('UPDATE part_returns SET bc_job_id = ?, bc_ref = ?, bc_status = ? WHERE id = ?', (jid, bcref or jid, status, rid))
     return 'raised'
 
@@ -369,7 +370,7 @@ def worksheet_check():
     if not leave.is_admin(): return leave._auth_error()
     sample = {'by': 'Sample Engineer', 'site': 'Sample Site', 'reason': 'Faulty', 'hpController': True, 'hpSerial': 'SN123',
               'packagedAt': '2026-11-11T12:00', 'parts': [{'part': 'PART-1', 'qty': '2'}, {'part': 'PART-2', 'qty': '1'}]}
-    try: qs = _ws_questions(leave.bc_hooks['get'], int(DEFAULT_WORKSHEET_ID))
+    try: qs = _ws_questions(leave.bc_hooks, int(DEFAULT_WORKSHEET_ID))
     except Exception as ex: return jsonify({'error': f'Could not read the worksheet from BigChange: {ex}'[:300]}), 502
     n, out = {'qty': 0, 'part': 0}, []
     for q in qs:
