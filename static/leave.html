@@ -452,9 +452,9 @@ async function tabAccess() {
 async function loadHubAccess() {
   try { HA = await api('/../hub/admin/access'); } catch (e) { $('ha-card').innerHTML = `<h2>Hub access</h2><div class="err">${esc(e.message)}</div>`; return; }
   $('ha-card').innerHTML = `<h2>Hub access</h2><p class="muted">Staff sign in at the hub with their name and PIN. For each tool choose whether every signed-in person can use it, or only the people you tick. The office password always has full access.</p>`
-    + HA.apps.map(a => `<details style="margin-top:.6rem" ${a.mode === 'some' ? 'open' : ''}><summary><b>${esc(a.label)}</b> <span class="pill ${a.mode === 'some' ? 'pending' : 'approved'}" id="ha-pill-${a.key}">${a.mode === 'some' ? a.ids.length + ' people' : 'everyone'}</span></summary>
+    + HA.apps.map(a => `<details style="margin-top:.6rem" ${a.mode === 'some' ? 'open' : ''}><summary><b>${esc(a.label)}</b> <span class="pill ${a.mode === 'some' ? 'pending' : 'approved'}" id="ha-pill-${a.key}">${a.mode === 'some' ? a.ids.length + ' people' : a.mode === 'rule' ? 'managers + Chris Scott team' : 'everyone'}</span></summary>
       <div style="margin:.5rem 0"><label style="display:inline-flex;gap:6px;align-items:center"><input type="radio" name="ha-${a.key}" value="all" ${a.mode === 'all' ? 'checked' : ''} onchange="haSet('${a.key}')" style="width:auto"> Everyone signed in</label>
-      <label style="display:inline-flex;gap:6px;align-items:center;margin-left:1rem"><input type="radio" name="ha-${a.key}" value="some" ${a.mode === 'some' ? 'checked' : ''} onchange="haSet('${a.key}')" style="width:auto"> Only selected people</label></div>
+      <label style="display:inline-flex;gap:6px;align-items:center;margin-left:1rem"><input type="radio" name="ha-${a.key}" value="some" ${a.mode === 'some' ? 'checked' : ''} onchange="haSet('${a.key}')" style="width:auto"> Only selected people</label>${a.key === 'callout' ? `<label style="display:inline-flex;gap:6px;align-items:center;margin-left:1rem"><input type="radio" name="ha-${a.key}" value="rule" ${a.mode === 'rule' ? 'checked' : ''} onchange="haSet('${a.key}')" style="width:auto"> Managers and Chris Scott's team</label>` : ''}</div>
       <div id="ha-list-${a.key}" style="columns:2 180px;${a.mode === 'some' ? '' : 'display:none'}">${HA.employees.map(e => `<label style="display:flex;gap:6px;align-items:center;margin:.15rem 0;font-weight:400"><input type="checkbox" style="width:auto" data-app="${a.key}" value="${e.id}" ${a.ids.includes(e.id) ? 'checked' : ''} onchange="haSet('${a.key}')"> ${esc(e.name)}</label>`).join('')}</div></details>`).join('')
     + '<div id="ha-msg"></div>';
 }
@@ -465,7 +465,7 @@ async function haSet(key) {
   HA.apps.forEach(a => { const m = document.querySelector(`input[name="ha-${a.key}"]:checked`).value;
     access[a.key] = {mode: m, ids: [...document.querySelectorAll(`input[data-app="${a.key}"]:checked`)].map(c => +c.value)}; });
   try { await api('/../hub/admin/access', 'POST', {access});
-    HA.apps.forEach(a => { $('ha-pill-' + a.key).textContent = access[a.key].mode === 'some' ? access[a.key].ids.length + ' people' : 'everyone'; });
+    HA.apps.forEach(a => { $('ha-pill-' + a.key).textContent = access[a.key].mode === 'some' ? access[a.key].ids.length + ' people' : access[a.key].mode === 'rule' ? 'managers + Chris Scott team' : 'everyone'; });
     $('ha-msg').innerHTML = '<div class="info">Saved.</div>'; }
   catch (e) { $('ha-msg').innerHTML = `<div class="err">${esc(e.message)}</div>`; }
 }

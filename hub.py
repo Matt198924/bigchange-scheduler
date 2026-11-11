@@ -20,16 +20,18 @@ STATIC = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'static')
 COOKIE = 'rs_hub'
 MAX_AGE = 60 * 60 * 24 * 30
 APPS = [('scheduler', 'Scheduler'), ('leave', 'Annual leave'), ('parts', 'Van parts finder'),
-        ('incident', 'Accident / incident report'), ('handbook', 'Company handbook'), ('policies', 'Company policies')]
+        ('incident', 'Accident / incident report'), ('callout', 'Call out rota'), ('handbook', 'Company handbook'), ('policies', 'Company policies')]
 APP_KEYS = [k for k, _ in APPS]
+RULE_APPS = {'callout'}      # default: managers plus the people who report to Chris Scott
+RULE_MANAGER_NAME = ('chris', 'scott')
 
 # (match, app). 'exact' paths must match whole; others match as a prefix.
-EXACT = {'/staff-admin': 'office', '/staff-admin/': 'office', '/scheduler': 'scheduler', '/leave': 'leave', '/leave/': 'leave', '/incident/': 'incident', '/incident': 'incident',
+EXACT = {'/callout': 'callout', '/callout/': 'callout', '/staff-admin': 'office', '/staff-admin/': 'office', '/scheduler': 'scheduler', '/leave': 'leave', '/leave/': 'leave', '/incident/': 'incident', '/incident': 'incident',
          '/handbook/': 'handbook', '/handbook': 'handbook', '/api/handbook': 'handbook', '/api/parts/stock': 'parts',
          '/api/incident/report': 'incident', '/static/handbook/pages.json': 'handbook', '/static/handbook/handbook.pdf': 'handbook'}
 PREFIX = [('/api/jobs', 'scheduler'), ('/api/schedule', 'scheduler'), ('/api/categories', 'scheduler'),
           ('/parts', 'parts'), ('/static/parts/', 'parts'), ('/policies', 'policies'), ('/static/policies/', 'policies'),
-          ('/static/handbook/pages/', 'handbook')]
+          ('/static/handbook/pages/', 'handbook'), ('/static/callout/', 'callout')]
 OPEN_PREFIX = ('/static/parts/icons/', '/static/parts/manifest')          # needed before sign-in or by the browser
 
 
@@ -50,13 +52,17 @@ def _session():
     if not isinstance(t, dict) or not t.get('hub'): return None
     if t.get('role') == 'admin': return {'role': 'admin', 'id': None, 'name': 'Office'}
     rows = leave.query('SELECT * FROM leave_employees WHERE id = ? AND active = 1', (t.get('id'),))
-    return {'role': 'employee', 'id': rows[0]['id'], 'name': rows[0]['name']} if rows else None
+    return {'role': 'employee', 'id': rows[0]['id'], 'name': rows[0]['name'], 'is_manager': bool(rows[0].get('is_manager')), 'manager_id': rows[0].get('manager_id')} if rows else None
 
 
 def _access():
     try: a = json.loads(leave.get_setting('hub_access') or '{}')
     except ValueError: a = {}
-    return {k: {'mode': 'some' if (a.get(k) or {}).get('mode') == 'some' else 'all',
+    def mode(k):
+        m = (a.get(k) or {}).get('mode')
+        if k in RULE_APPS and m in (None, 'rule'): return 'rule'
+        return 'some' if m == 'some' else 'all'
+    return {k: {'mode': mode(k),
                 'ids': [int(i) for i in (a.get(k) or {}).get('ids', []) if str(i).isdigit()]} for k in APP_KEYS}
 
 
@@ -64,7 +70,16 @@ def _allowed(sess, acc=None):
     if not sess: return []
     if sess['role'] == 'admin': return list(APP_KEYS) + ['office']
     acc = acc or _access()
-    return [k for k in APP_KEYS if acc[k]['mode'] == 'all' or sess['id'] in acc[k]['ids']]
+    return [k for k in APP_KEYS if acc[k]['mode'] == 'all' or sess['id'] in acc[k]['ids'] or (acc[k]['mode'] == 'rule' and _in_rule(sess))]
+
+
+def _in_rule(sess):
+    """Managers, and anyone whose manager is Chris Scott."""
+    if sess.get('is_manager'): return True
+    if not sess.get('manager_id'): return False
+    m = leave.query('SELECT name FROM leave_employees WHERE id = ?', (sess['manager_id'],))
+    n = (m[0]['name'] if m else '').lower()
+    return all(w in n for w in RULE_MANAGER_NAME)
 
 
 @hub_bp.before_app_request
@@ -96,6 +111,11 @@ def _cookie(resp, payload):
 @hub_bp.route('/staff-admin')
 @hub_bp.route('/staff-admin/')
 def staff_admin_page(): return send_from_directory(STATIC, 'leave.html')
+
+
+@hub_bp.route('/callout')
+@hub_bp.route('/callout/')
+def callout_page(): return send_from_directory(os.path.join(STATIC, 'callout'), 'index.html')
 
 
 @hub_bp.route('/login')
@@ -145,7 +165,10 @@ def hub_access():
     if not leave.is_admin(): return leave._auth_error()
     if request.method == 'POST':
         b = (request.get_json(silent=True) or {}).get('access') or {}
-        clean = {k: {'mode': 'some' if (b.get(k) or {}).get('mode') == 'some' else 'all',
+        def md(k):
+            m = (b.get(k) or {}).get('mode')
+            return m if (m in ('some', 'all') or (m == 'rule' and k in RULE_APPS)) else 'all'
+        clean = {k: {'mode': md(k),
                      'ids': sorted({int(i) for i in (b.get(k) or {}).get('ids', []) if str(i).isdigit()})} for k in APP_KEYS}
         leave.set_setting('hub_access', json.dumps(clean))
     acc = _access()
