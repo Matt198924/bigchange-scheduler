@@ -1,0 +1,95 @@
+<!DOCTYPE html>
+<html lang="en"><head>
+<meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<meta name="theme-color" content="#0B2A4A"><title>Return parts – R&amp;S Services</title>
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="/static/incident/common.css">
+<style>
+.photo-grid{display:flex;flex-wrap:wrap;gap:.5rem;margin-top:.6rem}.photo-grid div{position:relative;width:84px;height:84px;border-radius:8px;overflow:hidden;border:1px solid var(--line)}
+.photo-grid img{width:100%;height:100%;object-fit:cover}.photo-grid button{position:absolute;top:2px;right:2px;border:0;border-radius:50%;width:22px;height:22px;background:rgba(0,0,0,.65);color:#fff;font-size:14px;line-height:1}
+.yn{display:flex;gap:.5rem}.yn label{flex:1;margin:0;display:flex;align-items:center;justify-content:center;gap:.4rem;border:2px solid var(--line);border-radius:10px;padding:.7rem;font-size:15px;cursor:pointer}
+.yn input{width:auto}.yn label.on{border-color:var(--cyan);background:var(--cyan-bg)}
+.sres button{display:block;width:100%;text-align:left;border:1px solid var(--line);border-top:0;background:#fff;padding:.7rem;font-size:15px}.sres button small{display:block;color:#5B6B7A}.sres{border-top:1px solid var(--line);border-radius:10px;overflow:hidden;margin-top:.3rem}
+.refbox{font:600 22px 'IBM Plex Mono',monospace;margin:.4rem 0}
+.prow{border:1px solid var(--line);border-radius:12px;padding:.7rem;margin-bottom:.6rem}.prow .row{align-items:end}
+</style></head><body>
+<div class="topbar"><div class="brand"><div class="brand-mark"><img src="/static/logo-mark.png" alt="R&amp;S"></div><span class="brand-name">Return parts</span></div><a class="btn-home" href="/parts/">‹ Parts</a></div>
+<div class="wrap" id="formWrap">
+  <form id="f" onsubmit="return send(event)" autocomplete="off">
+    <div class="card"><h2>Parts to return</h2>
+      <label>Site / customer <span class="req">*</span></label>
+      <input id="siteQ" placeholder="Start typing the site or customer name..." autocomplete="off">
+      <div id="siteRes" class="sres"></div><div id="siteSel" class="muted" style="margin:.3rem 0"></div>
+      <div id="plist"></div>
+      <datalist id="stockList"></datalist>
+      <label>Is there an additional part?</label>
+      <div class="yn" id="moreYN"><label class="on"><input type="radio" name="more" value="no" checked> No</label><label><input type="radio" name="more" value="yes"> Yes</label></div>
+    </div>
+    <div class="card"><h2>Packaged</h2>
+      <label>Date and time the parts were packaged <span class="req">*</span></label><input id="packagedAt" type="datetime-local" required>
+      <label>Photo of parts packaged, labelled and ready to return <span class="req">*</span></label>
+      <input id="photoIn" type="file" accept="image/*" capture="environment" multiple><p class="hint">Take a clear photo showing the parts packaged with the label on. Up to 4 photos.</p>
+      <div class="photo-grid" id="photos"></div></div>
+    <div class="card"><h2>Details</h2>
+      <label>Are you returning a Henny Penny controller?</label>
+      <div class="yn" id="hpYN"><label class="on"><input type="radio" name="hp" value="no" checked> No</label><label><input type="radio" name="hp" value="yes"> Yes</label></div>
+      <div id="hpBox" class="hidden"><label>Controller serial number <span class="req">*</span></label><input id="hpSerial" maxlength="120"></div>
+      <label>Reason for returning <span class="req">*</span></label>
+      <select id="reason" required><option value="">Choose...</option><option value="faulty">Faulty</option><option value="not_required">No longer required</option><option value="incorrect">Incorrect part</option></select></div>
+    <div id="msg"></div>
+    <button class="btn primary" id="go" style="width:100%;padding:1rem" type="submit">Submit return</button>
+  </form>
+</div>
+<div class="wrap hidden" id="done"><div class="card"><h2>Return logged</h2><div class="ok">Thank you. The office has been told.<div class="hint" style="margin-top:.6rem">BigChange job reference</div><div class="refbox" id="ref"></div><div class="hint" id="ref2"></div></div>
+<a class="btn primary" style="display:inline-block;text-decoration:none" href="/parts/">Back to Parts</a> <button class="btn ghost" onclick="location.reload()">Return more</button></div></div>
+<div class="wrap" id="mineWrap"><div class="card"><h2>Your returns</h2><div id="mine" class="hint">Loading...</div></div></div>
+<script>
+const $ = id => document.getElementById(id);
+let photos = [], np = 0, site = null, siteT = null;
+$('siteQ').addEventListener('input', () => { site = null; $('siteSel').textContent = ''; clearTimeout(siteT); siteT = setTimeout(async () => {
+  const q = $('siteQ').value.trim(); if (!q) { $('siteRes').innerHTML = ''; return; }
+  try { const r = await fetch('/api/parts/returns/contacts?q=' + encodeURIComponent(q)); const j = await r.json();
+    if (!r.ok) throw new Error(j.error || 'Search failed');
+    window._sites = j.contacts; $('siteRes').innerHTML = j.contacts.map((c, i) => `<button type="button" onclick="pickSite(${i})">${c.name.replace(/</g, '&lt;')}${c.extra ? '<small>' + c.extra.replace(/</g, '&lt;') + '</small>' : ''}</button>`).join('') || '<div class="hint" style="padding:.5rem">No matching site found.</div>';
+  } catch (e) { $('siteRes').innerHTML = `<div class="err">${e.message}</div>`; } }, 300); });
+function pickSite(i) { site = window._sites[i]; $('siteQ').value = site.name; $('siteRes').innerHTML = ''; $('siteSel').textContent = 'Selected: ' + site.name; }
+const yes = n => document.querySelector(`input[name=${n}]:checked`).value === 'yes';
+function addPart() { np++; const d = document.createElement('div'); d.className = 'prow';
+  d.innerHTML = `<div class="row"><div><label>Part number${np > 1 ? ' ' + np : ''} <span class="req">*</span></label><input class="pn" list="stockList" required maxlength="200"></div><div><label>Quantity <span class="req">*</span></label><input class="pq" type="number" min="1" step="1" inputmode="numeric" required value="1"></div></div>`;
+  $('plist').appendChild(d); return d; }
+addPart();
+function yn(id, cb) { document.querySelectorAll(`#${id} input`).forEach(r => r.addEventListener('change', () => {
+  document.querySelectorAll(`#${id} label`).forEach(l => l.classList.toggle('on', l.querySelector('input').checked)); cb(); })); }
+yn('moreYN', () => { if (yes('more')) { addPart().querySelector('.pn').focus(); document.querySelector('#moreYN input[value=no]').click(); } });
+yn('hpYN', () => { $('hpBox').classList.toggle('hidden', !yes('hp')); $('hpSerial').required = yes('hp'); });
+(function () { const d = new Date(); d.setMinutes(d.getMinutes() - d.getTimezoneOffset()); $('packagedAt').value = d.toISOString().slice(0, 16); })();
+fetch('/api/parts/stock').then(r => r.json()).then(j => { $('stockList').innerHTML = [...new Set((j.parts || []).map(p => p.part))].slice(0, 4000).map(p => `<option value="${p.replace(/"/g, '&quot;')}">`).join(''); }).catch(() => {});
+function shrink(file) {
+  return new Promise((res, rej) => { const url = URL.createObjectURL(file), img = new Image();
+    img.onload = () => { const s = Math.min(1, 1280 / Math.max(img.width, img.height)), c = document.createElement('canvas');
+      c.width = Math.round(img.width * s); c.height = Math.round(img.height * s); c.getContext('2d').drawImage(img, 0, 0, c.width, c.height);
+      URL.revokeObjectURL(url); res(c.toDataURL('image/jpeg', 0.72)); };
+    img.onerror = () => rej(new Error('Could not read that photo')); img.src = url; });
+}
+$('photoIn').addEventListener('change', async e => {
+  for (const f of e.target.files) { if (photos.length >= 4) break; try { photos.push({name: f.name, data: await shrink(f)}); } catch (x) { $('msg').innerHTML = `<div class="err">${x.message}</div>`; } }
+  e.target.value = ''; drawPhotos(); });
+fetch('/api/parts/returns/mine').then(r => r.json()).then(j => { const e = t => String(t).replace(/</g, '&lt;');
+  $('mine').innerHTML = (j.returns || []).map(r => `<div style="border-top:1px solid var(--line);padding:.6rem 0"><b>${e(r.bcRef || r.ref)}</b> <span class="hint">${e(r.createdAt.slice(0, 16))}</span><div>${e(r.site)} · ${e(r.reason)}</div><div class="hint">${r.parts.map(p => e(p.part) + ' × ' + e(p.qty)).join(', ')}${r.bcRef ? '' : ' · BigChange: ' + e(r.bcStatus || 'not raised')}</div></div>`).join('') || 'Nothing yet.'; }).catch(() => { $('mine').textContent = ''; });
+function drawPhotos() { $('photos').innerHTML = photos.map((p, i) => `<div><img src="${p.data}"><button type="button" onclick="photos.splice(${i},1);drawPhotos()">×</button></div>`).join(''); }
+async function send(ev) {
+  ev.preventDefault(); $('msg').innerHTML = '';
+  if (!site) { $('msg').innerHTML = '<div class="err">Please pick the site / customer from the list.</div>'; return false; }
+  if (!photos.length) { $('msg').innerHTML = '<div class="err">Please add a photo of the packaged, labelled parts.</div>'; return false; }
+  $('go').disabled = true; $('go').textContent = 'Sending...';
+  const parts = [...document.querySelectorAll('.prow')].map(r => ({part: r.querySelector('.pn').value, qty: r.querySelector('.pq').value}));
+  const body = {contactId: site.id, contactName: site.name, parts, packagedAt: $('packagedAt').value, photos, hpController: yes('hp'), hpSerial: $('hpSerial').value, reason: $('reason').value};
+  try {
+    const r = await fetch('/api/parts/returns', {method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify(body)});
+    const j = await r.json().catch(() => ({}));
+    if (!r.ok) throw new Error(j.error || 'Server problem (HTTP ' + r.status + ') - please try again');
+    $('ref').textContent = j.bcRef || j.ref; $('ref2').textContent = j.bcRef ? 'Our reference: ' + j.ref + '. This is saved under Your returns below.' : 'Our reference: ' + j.ref + '. The BigChange job is still being raised - it will show under Your returns.'; $('formWrap').classList.add('hidden'); $('done').classList.remove('hidden'); window.scrollTo(0, 0);
+  } catch (e) { $('msg').innerHTML = `<div class="err">${e.message}</div>`; $('go').disabled = false; $('go').textContent = 'Submit return'; }
+  return false;
+}
+</script></body></html>

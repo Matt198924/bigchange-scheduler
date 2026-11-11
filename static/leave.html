@@ -322,9 +322,9 @@ async function cancelReq(id) { if (confirm('Cancel this holiday? The days go bac
 
 // ── admin ──
 const ADMIN_PAGE = location.pathname.startsWith('/staff-admin');   // office-only page: people, PINs, hub access
-const TABS = ADMIN_PAGE ? {pins:'Sign-in & PINs', access:'Hub access'} : {pending:'Pending', calendar:'Calendar', book:'Book leave', all:'All requests', staff:'Staff', bh:'Bank holidays'};
+const TABS = ADMIN_PAGE ? {pins:'Sign-in & PINs', access:'Hub access', returns:'Part returns'} : {pending:'Pending', calendar:'Calendar', book:'Book leave', all:'All requests', staff:'Staff', bh:'Bank holidays'};
 let tab = 'pending';
-function showTab(t) { tab = t; if ($('a-body')) $('a-body').innerHTML = '<div class="card"><p class="muted">Loading…</p></div>'; $('a-tabs').innerHTML = Object.entries(TABS).map(([k, v]) => `<button class="${k === t ? 'on' : ''}" onclick="showTab('${k}')">${v}</button>`).join(''); Promise.resolve(({pending: tabPending, calendar: tabCal, book: tabBook, all: tabAll, staff: tabStaff, pins: tabPins, access: tabAccess, bh: tabBH})[t]()).catch(e => { $('a-body').innerHTML = `<div class="card"><div class="err">Could not load this tab: ${esc(e.message)}</div></div>`; }); }
+function showTab(t) { tab = t; if ($('a-body')) $('a-body').innerHTML = '<div class="card"><p class="muted">Loading…</p></div>'; $('a-tabs').innerHTML = Object.entries(TABS).map(([k, v]) => `<button class="${k === t ? 'on' : ''}" onclick="showTab('${k}')">${v}</button>`).join(''); Promise.resolve(({pending: tabPending, calendar: tabCal, book: tabBook, all: tabAll, staff: tabStaff, pins: tabPins, access: tabAccess, returns: tabReturns, bh: tabBH})[t]()).catch(e => { $('a-body').innerHTML = `<div class="card"><div class="err">Could not load this tab: ${esc(e.message)}</div></div>`; }); }
 
 function reqRow(r, actions) {
   return `<div class="item"><div class="who">${avatar(r.employeeName)}<div><b>${esc(r.employeeName)}</b> · ${range(r)}
@@ -619,6 +619,30 @@ async function showReqs(id) {
 }
 async function upd(id, body) { try { await api('/admin/employees/' + id, 'PUT', body); ADMIN_PAGE ? tabPins() : tabStaff(); } catch (e) { alert(e.message); } }
 function setEmail(id, cur) { const a = prompt('Email address:', cur); if (a !== null) upd(id, {email: a}); }
+async function tabReturns() {
+  const [j, c] = await Promise.all([api('/../parts/returns/admin/list'), api('/../parts/returns/admin/bc-config')]);
+  const cur = c.config.typeId || '';
+  $('a-body').innerHTML = `<div class="card"><h2>Part returns → BigChange</h2>
+    <p class="muted">Each finished return raises a job in BigChange, against the site the engineer picked, with the photos attached. Choose the job type to use.</p>
+    ${c.error ? `<div class="err">${esc(c.error)}</div>` : ''}${cur ? '' : '<div class="info">No job type chosen yet: returns are logged and emailed, but no BigChange job is raised.</div>'}
+    <label>Job type</label><select id="rt-type"><option value="">Choose...</option>${c.jobTypes.map(t => `<option value="${t.id}" ${String(cur) === String(t.id) ? 'selected' : ''}>${esc(t.name)}</option>`).join('')}</select>
+    <div style="margin-top:.7rem"><button class="sm" onclick="retSaveCfg()">Save</button> <span id="rc-msg" class="muted"></span></div></div>
+    <div class="card"><h2>Part returns</h2>`
+    + (j.returns.length ? j.returns.map(r => `<div class="item" style="display:block"><div><b>${esc(r.ref)}</b> · ${esc(r.site || 'no site')} · ${esc(r.reason)} <span class="muted">· by ${esc(r.by)}</span></div>
+      <div class="muted">Packaged ${esc(r.packagedAt.replace('T', ' '))} · logged ${esc(r.createdAt)}</div>
+      <div style="margin:.3rem 0">${r.parts.map(p => esc(p.part) + ' × ' + esc(p.qty)).join('<br>')}</div>
+      ${r.hpController ? `<div><b>Henny Penny controller</b> serial ${esc(r.hpSerial)}</div>` : ''}
+      <div class="muted">BigChange: ${r.bcJobId ? 'job ' + esc(r.bcRef || r.bcJobId) + ' - ' : ''}${esc(r.bcStatus || 'not raised')}
+        ${r.bcJobId ? '' : `<button class="sm" onclick="retRaise(${r.id})">Raise job now</button>`}</div>
+      <div id="rp-${r.id}">${r.photos.map(pid => `<button class="sm" onclick="showReturnPhoto(${r.id},${pid})">View photo</button>`).join(' ')}</div></div>`).join('') : '<p class="muted">No returns yet.</p>') + '</div>';
+}
+async function retSaveCfg() {
+  try { await api('/../parts/returns/admin/bc-config', 'PUT', {typeId: $('rt-type').value}); $('rc-msg').textContent = 'Saved.'; setTimeout(tabReturns, 600); } catch (e) { $('rc-msg').textContent = e.message; }
+}
+async function retRaise(id) { try { const j = await api(`/../parts/returns/admin/${id}/raise-job`, 'POST', {}); alert(j.status || j.result); tabReturns(); } catch (e) { alert(e.message); } }
+async function showReturnPhoto(rid, pid) {
+  try { const j = await api(`/../parts/returns/admin/${rid}/photo/${pid}`); const w = window.open(); w.document.write(`<img src="${j.data}" style="max-width:100%">`); } catch (e) { alert(e.message); }
+}
 async function tabPins() {
   const j = await api('/admin/employees');
   $('a-body').innerHTML = `<div class="card"><h2>Sign-in &amp; PINs</h2>

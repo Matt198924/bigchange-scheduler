@@ -12,6 +12,8 @@ from leave import leave_bp  # annual leave booking (/leave)
 app.register_blueprint(leave_bp)
 from parts import parts_bp  # van parts finder (/parts)
 app.register_blueprint(parts_bp)
+from returns import returns_bp  # part returns (/parts/returns.html)
+app.register_blueprint(returns_bp)
 from incident import incident_bp  # accident / incident reports (/incident)
 app.register_blueprint(incident_bp)
 from handbook import handbook_bp  # company handbook (/handbook)
@@ -108,6 +110,13 @@ def bc_post(path, body):
         raise RuntimeError(f'BigChange {resp.status_code}: {resp.text[:200]}')
     try: return resp.json()
     except Exception: return {}
+
+def bc_upload(path, filename, data, mime='image/jpeg'):
+    resp = requests.post(f'{API_BASE}{path}', headers={'Authorization': f'Bearer {get_token()}', 'customer-id': CUSTOMER_ID},
+                         files={'file': (filename, data, mime)}, data={'isResourceVisible': 'true'}, timeout=30)
+    print(f"[UPLOAD] {path} {resp.status_code}: {resp.text[:200]}")
+    if not resp.ok:
+        raise RuntimeError(f'BigChange {resp.status_code}: {resp.text[:200]}')
 
 def bc_delete(path):
     resp = requests.delete(f'{API_BASE}{path}', headers=_bc_headers(), timeout=15)
@@ -442,7 +451,7 @@ def assign_job(job_id):
         return jsonify({'error': str(e)}), 500
 
 import leave as _leave
-_leave.bc_hooks.update(post=bc_post, delete=bc_delete, get=bc_get)
+_leave.bc_hooks.update(post=bc_post, delete=bc_delete, get=bc_get, upload=bc_upload)
 
 if __name__ == '__main__':
     port = int(os.environ.get('PORT', 5000))

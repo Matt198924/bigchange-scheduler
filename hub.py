@@ -30,7 +30,7 @@ EXACT = {'/callout': 'callout', '/callout/': 'callout', '/staff-admin': 'office'
          '/handbook/': 'handbook', '/handbook': 'handbook', '/api/handbook': 'handbook', '/api/parts/stock': 'parts',
          '/api/incident/report': 'incident', '/static/handbook/pages.json': 'handbook', '/static/handbook/handbook.pdf': 'handbook'}
 PREFIX = [('/api/jobs', 'scheduler'), ('/api/schedule', 'scheduler'), ('/api/categories', 'scheduler'),
-          ('/parts', 'parts'), ('/static/parts/', 'parts'), ('/policies', 'policies'), ('/static/policies/', 'policies'),
+          ('/parts', 'parts'), ('/api/parts/', 'parts'), ('/static/parts/', 'parts'), ('/policies', 'policies'), ('/static/policies/', 'policies'),
           ('/static/handbook/pages/', 'handbook'), ('/static/callout/', 'callout')]
 OPEN_PREFIX = ('/static/parts/icons/', '/static/parts/manifest')          # needed before sign-in or by the browser
 
