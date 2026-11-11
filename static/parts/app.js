@@ -91,3 +91,5 @@ function drawLockers(){
 document.getElementById('tabSearch').addEventListener('click',()=>showTab('search'));
 document.getElementById('tabLockers').addEventListener('click',()=>showTab('lockers'));
 document.getElementById('tabCats').addEventListener('click',()=>showTab('cats'));
+document.getElementById('tabReturns').addEventListener('click',()=>{location.href='returns.html'});
+if(location.hash==='#lockers')showTab('lockers');else if(location.hash==='#cats')showTab('cats');
