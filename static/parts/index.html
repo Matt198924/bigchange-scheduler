@@ -20,11 +20,18 @@
   <div class="brand"><div class="brand-mark"><img src="/static/logo-mark.png" alt="R&amp;S"></div><div><div class="eyebrow">VAN STOCK</div><h1>Parts Finder</h1></div></div>
   <div class="top-actions"><button id="refreshBtn" class="install" type="button">Reload stock</button><button id="installBtn" class="install hidden" type="button">Install app</button><a class="install home" href="/">⌂ Home</a></div>
 </header>
-<nav class="tabs"><button id="tabSearch" class="tab on" type="button">Search</button><button id="tabLockers" class="tab" type="button">Lockers</button></nav>
+<nav class="tabs"><button id="tabSearch" class="tab on" type="button">Search</button><button id="tabLockers" class="tab" type="button">Lockers</button><button id="tabCats" class="tab" type="button">Catalogues</button></nav>
 <main id="lockersMain" class="hidden">
 <section class="search-card"><div class="summary" style="margin:0 0 8px">Tap a locker to see what should be in it.</div>
 <div id="lkMap" class="map-wrap"></div></section>
 <section id="lkList" class="results"></section>
+</main>
+<main id="catsMain" class="hidden">
+<section class="search-card"><label for="catQ">Search the catalogues</label>
+<div class="search-row"><input id="catQ" type="search" autocomplete="off" placeholder="e.g. pilot nozzle, thermostat, FESU0391"></div>
+<div id="catSum" class="summary">Supplier catalogues: tap one to browse, or search across all of them.</div></section>
+<section id="catList" class="results"></section>
+<section id="catView" class="hidden"><button id="catBack" class="install" type="button" style="margin:.4rem 0">‹ Back</button><div id="catPages"></div></section>
 </main>
 <main id="appMain">
 <section class="search-card">
@@ -38,5 +45,5 @@
 <div id="mapModal" class="modal hidden" role="dialog" aria-modal="true" aria-labelledby="mapTitle">
 <div class="modal-panel"><div class="modal-head"><div><div class="eyebrow">LOCATION</div><h2 id="mapTitle">Locker</h2></div><button id="closeMap" class="close" type="button" aria-label="Close">×</button></div>
 <div id="mapWrap" class="map-wrap"></div><div class="map-bar"><div id="mapNote" class="map-note"></div></div></div></div>
-<script src="config.js"></script><script src="app.js"></script>
+<script src="config.js"></script><script src="app.js"></script><script src="catalogues.js"></script>
 </body></html>
