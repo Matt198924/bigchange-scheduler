@@ -55,6 +55,11 @@ DEFAULT_WORKSHEET_ID = os.environ.get('BIGCHANGE_RETURN_WORKSHEET_ID', '').strip
 DEFAULT_TYPE_ID = os.environ.get('BIGCHANGE_RETURN_TYPE_ID', '').strip() or '81698'     # 'Parts to be returned'
 
 
+def _flag_owner():
+    """BigChange wants an owner (a user email) on every flag: Staff admin setting, else BIGCHANGE_FLAG_OWNER, else the office address."""
+    return (_cfg().get('flagOwner') or os.environ.get('BIGCHANGE_FLAG_OWNER', '') or leave.OFFICE_EMAIL or '').strip()
+
+
 def _cfg():
     try: c = json.loads(leave.get_setting('returns_bc') or '{}')
     except ValueError: c = {}
@@ -168,10 +173,7 @@ def _ws_photos(h, wsid, jid, q, o, photos):
             if aid: return aid
         return None
     aid = find()
-    if not aid:      # no answer yet: create an empty one (note only), then look again
-        h['put'](f"/jobs/{int(jid)}/worksheetQuestions/{q['id']}/worksheetAnswer", {'note': f"Part return {o['ref']}"})
-        aid = find()
-    if not aid: raise RuntimeError('could not find the worksheet photo answer in BigChange')
+    if not aid: raise RuntimeError('BigChange cannot create a photo answer through the API - photo is on the job attachments only')
     for name, data in photos: h['upload'](f'/worksheetAnswer/{aid}/attachments', name, data)
     return f'{len(photos)} photo(s) on the worksheet'
 
@@ -191,7 +193,7 @@ def raise_job(rid):
         return 'not configured'
     o = _out(r)
     lines = '\n'.join(f"{p['part']} x {p['qty']}" for p in o['parts'])
-    desc = (f"Part return {o['ref']}\nSite: {o['site']}\n" + (f"Related job: {o['relatedJob']}\n" if o['relatedJob'] else '') + f"Reason: {o['reason']}\nReturned by: {o['by']}\n"
+    desc = (f"Part return\nSite: {o['site']}\n" + (f"Related job: {o['relatedJob']}\n" if o['relatedJob'] else '') + f"Reason: {o['reason']}\nReturned by: {o['by']}\n"
             f"Packaged: {o['packagedAt'].replace('T', ' ')}\n\nParts:\n{lines}"
             + (f"\n\nHenny Penny controller serial: {o['hpSerial']}" if o['hpController'] else ''))
     try:
@@ -209,12 +211,12 @@ def raise_job(rid):
     import base64
     photos = []
     for n, p in enumerate(leave.query('SELECT data FROM part_return_photos WHERE return_id = ? ORDER BY id', (rid,)), 1):
-        try: photos.append((f"{o['ref']}-{n}.jpg", base64.b64decode(p['data'].split(',', 1)[1])))
+        try: photos.append((f"{bcref or o['internalRef']}-{n}.jpg", base64.b64decode(p['data'].split(',', 1)[1])))
         except Exception: pass
     notes = []
     try: notes.append(fill_worksheet(h, jid, o, photos if h.get('upload') else ()))
     except Exception as ex: notes.append(f'worksheet not filled: {ex}'[:200])
-    try: h['post'](f'/jobs/{jid}/flags', {'flagId': int(DEFAULT_FLAG_ID), 'comments': f"Part return {o['ref']}"})
+    try: h['post'](f'/jobs/{jid}/flags', {'flagId': int(DEFAULT_FLAG_ID), 'owner': _flag_owner(), 'comments': f"Part return {bcref or o['internalRef']}"})
     except Exception as ex: notes.append(f'flag not added: {ex}'[:200])
     if h.get('upload'):
         for n, (name, data) in enumerate(photos, 1):
@@ -289,12 +291,13 @@ def _submit():
     try: raise_job(rid)
     except Exception: pass
     bcref = (leave.query('SELECT bc_ref FROM part_returns WHERE id = ?', (rid,)) or [{}])[0].get('bc_ref') or ''
+    ref = bcref or ref          # one reference: the BigChange job reference
     base = (os.environ.get('PUBLIC_BASE_URL') or request.host_url).rstrip('/')
     if base.startswith('http://') and 'localhost' not in base and '127.0.0.1' not in base:
         base = 'https://' + base[len('http://'):]
     lines = '\n'.join(f"  - {p['part']} x {p['qty']}" for p in parts)
     leave._dispatch([(RETURNS_EMAIL, f"Part return {ref}: {cname}",
-                      f"A part return has been logged.\n\nReference: {ref}\nBigChange job: {bcref or 'not raised - see Staff admin'}\nReturned by: {who}\nReason: {REASONS[reason]}\n"
+                      f"A part return has been logged.\n\nReference: {ref}{'' if bcref else ' (BigChange job not raised yet - see Staff admin)'}\nReturned by: {who}\nReason: {REASONS[reason]}\n"
                       f"Packaged: {packaged.replace('T', ' ')}\nParts:\n{lines}\n"
                       + (f"Henny Penny controller serial: {serial}\n" if hp else '')
                       + f"\nPhoto and full details: {base}/staff-admin (Part returns tab)\n")])
@@ -302,7 +305,7 @@ def _submit():
 
 
 def _out(r):
-    return {'id': r['id'], 'ref': _ref(r['id'], r['created_at']), 'createdAt': r['created_at'], 'by': r['submitted_by'],
+    return {'id': r['id'], 'ref': r.get('bc_ref') or _ref(r['id'], r['created_at']), 'internalRef': _ref(r['id'], r['created_at']), 'createdAt': r['created_at'], 'by': r['submitted_by'],
             'packagedAt': r['packaged_at'], 'reason': REASONS.get(r['reason'], r['reason']),
             'hpController': bool(r['hp_controller']), 'hpSerial': r['hp_serial'] or '', 'parts': json.loads(r['parts'] or '[]'),
             'site': r.get('contact_name') or '', 'relatedJob': r.get('related_job') or '', 'bcRef': r.get('bc_ref') or '', 'bcJobId': r.get('bc_job_id') or '', 'bcStatus': r.get('bc_status') or ''}
@@ -369,7 +372,7 @@ def contacts():
 @returns_bp.route('/api/parts/returns/admin/bc-config')
 def bc_config():
     if not leave.is_admin(): return leave._auth_error()
-    out = {'config': _cfg(), 'jobTypes': [], 'error': ''}
+    out = {'config': _cfg(), 'flagOwnerEffective': _flag_owner(), 'jobTypes': [], 'error': ''}
     try: out['jobTypes'] = [{'id': t['id'], 'name': t.get('name') or t.get('typeName') or str(t['id'])} for t in _bc_items('/jobTypes', {'pageSize': 500})]
     except Exception as ex: out['error'] = f'Could not load job types from BigChange: {ex}'[:300]
     return jsonify(out)
@@ -380,7 +383,7 @@ def bc_config_save():
     if not leave.is_admin(): return leave._auth_error()
     b = request.get_json(silent=True) or {}
     tid = str(b.get('typeId') or '')
-    leave.set_setting('returns_bc', json.dumps({'typeId': tid if tid.isdigit() else ''}))
+    leave.set_setting('returns_bc', json.dumps({'typeId': tid if tid.isdigit() else '', 'flagOwner': _s(b.get('flagOwner'), 200)}))
     return jsonify({'success': True})
 
 

@@ -627,6 +627,7 @@ async function tabReturns() {
     <p class="muted">Each finished return raises a job in BigChange, against the site the engineer picked, with the photos attached. Choose the job type to use.</p>
     ${c.error ? `<div class="err">${esc(c.error)}</div>` : ''}${cur ? '' : '<div class="info">No job type chosen yet: returns are logged and emailed, but no BigChange job is raised.</div>'}
     <label>Job type</label><select id="rt-type"><option value="">Choose...</option>${c.jobTypes.map(t => `<option value="${t.id}" ${String(cur) === String(t.id) ? 'selected' : ''}>${esc(t.name)}</option>`).join('')}</select>
+    <label>Flag owner (a BigChange user's email - BigChange requires one)</label><input id="rt-owner" value="${esc(c.config.flagOwner || '')}" placeholder="${esc(c.flagOwnerEffective || 'name@company.co.uk')}">
     <div style="margin-top:.7rem"><button class="sm" onclick="retSaveCfg()">Save</button> <button class="sm" onclick="retWs()">Check worksheet</button> <button class="sm" onclick="retFlag()">Check flag</button> <span id="rc-msg" class="muted"></span></div><div id="ws-out"></div></div>
     <div class="card"><h2>Part returns</h2>`
     + (j.returns.length ? j.returns.map(r => `<div class="item" style="display:block"><div><b>${esc(r.ref)}</b> · ${esc(r.site || 'no site')}${r.relatedJob ? ' (job ' + esc(r.relatedJob) + ')' : ''} · ${esc(r.reason)} <span class="muted">· by ${esc(r.by)}</span></div>
@@ -650,7 +651,7 @@ async function retFlag() {
   } catch (e) { $('ws-out').innerHTML = `<div class="err">${esc(e.message)}</div>`; }
 }
 async function retSaveCfg() {
-  try { await api('/../parts/returns/admin/bc-config', 'PUT', {typeId: $('rt-type').value}); $('rc-msg').textContent = 'Saved.'; setTimeout(tabReturns, 600); } catch (e) { $('rc-msg').textContent = e.message; }
+  try { await api('/../parts/returns/admin/bc-config', 'PUT', {typeId: $('rt-type').value, flagOwner: $('rt-owner').value}); $('rc-msg').textContent = 'Saved.'; setTimeout(tabReturns, 600); } catch (e) { $('rc-msg').textContent = e.message; }
 }
 async function retRaise(id) { try { const j = await api(`/../parts/returns/admin/${id}/raise-job`, 'POST', {}); alert(j.status || j.result); tabReturns(); } catch (e) { alert(e.message); } }
 async function showReturnPhoto(rid, pid) {
