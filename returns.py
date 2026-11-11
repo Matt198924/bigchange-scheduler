@@ -497,3 +497,15 @@ def job_parts():
         if not part: continue
         out.append({'part': part, 'name': desc or make, 'qty': int(qty) if qty and float(qty) >= 1 else 1})
     return jsonify({'parts': out})
+
+
+@returns_bp.route('/api/parts/returns/admin/flag-check')
+def flag_check():
+    """Lists BigChange's job flags and whether the flag we apply is one of them."""
+    if not leave.is_admin(): return leave._auth_error()
+    try: items = _bc_items('/flags', {'entityType': 'job', 'pageSize': 200})
+    except Exception as ex:
+        resp = getattr(ex, 'response', None)
+        return jsonify({'error': f"Could not read flags: {ex}{' - ' + resp.text[:200] if resp is not None else ''}"[:320]}), 502
+    flags = [{'id': f.get('id'), 'name': f.get('name') or f.get('flagName') or str(f.get('id'))} for f in items]
+    return jsonify({'flagId': DEFAULT_FLAG_ID, 'found': any(str(f['id']) == str(DEFAULT_FLAG_ID) for f in flags), 'flags': flags})
