@@ -126,7 +126,7 @@ def _ws_questions(h, wsid):
     return sorted(qs, key=lambda q: q.get('order') or 0)
 
 
-def fill_worksheet(h, jid, o):
+def fill_worksheet(h, jid, o, photos=()):
     """Attach the returns worksheet to the job (if the job type has not already) and answer what we can. Returns a short note."""
     wsid = int(DEFAULT_WORKSHEET_ID)
     qs = _ws_questions(h, wsid)
@@ -144,7 +144,30 @@ def fill_worksheet(h, jid, o):
         elif q.get('type') not in SKIP_TYPES and not (g is None and q.get('type') in ('statement',)):
             left.append((q.get('questionText') or '')[:40])
     if answers: h['put'](f'/worksheets/{wsid}/answers', {'entityType': 'job', 'entityId': int(jid), 'answers': answers})
-    return f"worksheet: {len(answers)} answered" + (f", left blank: {'; '.join(left)}" if left else '')
+    note = f"worksheet: {len(answers)} answered" + (f", left blank: {'; '.join(left)}" if left else '')
+    pq = [q for q in qs if q.get('type') in ('photo', 'file')]
+    pq.sort(key=lambda q: 0 if 'packag' in (q.get('questionText') or '').lower() else 1)
+    if photos and pq:
+        try: note += f" | {_ws_photos(h, wsid, jid, pq[0], o, photos)}"
+        except Exception as ex: note += f" | worksheet photo not added: {ex}"[:220]
+    return note
+
+
+def _ws_photos(h, wsid, jid, q, o, photos):
+    """Attach the photos to the worksheet's photo question on this job."""
+    def find():
+        d = h['get']('/worksheetAnswers', {'questionId': q['id'], 'entityType': 'job', 'entityId': int(jid), 'worksheetId': wsid, 'pageSize': 10})
+        for a in (d if isinstance(d, list) else (d.get('items') or [])):
+            aid = a.get('id') or a.get('worksheetAnswerId') or a.get('answerId')
+            if aid: return aid
+        return None
+    aid = find()
+    if not aid:      # no answer yet: create an empty one (note only), then look again
+        h['put'](f"/jobs/{int(jid)}/worksheetQuestions/{q['id']}/worksheetAnswer", {'note': f"Part return {o['ref']}"})
+        aid = find()
+    if not aid: raise RuntimeError('could not find the worksheet photo answer in BigChange')
+    for name, data in photos: h['upload'](f'/worksheetAnswer/{aid}/attachments', name, data)
+    return f'{len(photos)} photo(s) on the worksheet'
 
 
 def raise_job(rid):
@@ -177,20 +200,20 @@ def raise_job(rid):
     except Exception as ex:
         leave.execute('UPDATE part_returns SET bc_status = ? WHERE id = ?', (f'failed: {ex}'[:300], rid))
         return 'failed'
+    import base64
+    photos = []
+    for n, p in enumerate(leave.query('SELECT data FROM part_return_photos WHERE return_id = ? ORDER BY id', (rid,)), 1):
+        try: photos.append((f"{o['ref']}-{n}.jpg", base64.b64decode(p['data'].split(',', 1)[1])))
+        except Exception: pass
     notes = []
-    try: notes.append(fill_worksheet(h, jid, o))
+    try: notes.append(fill_worksheet(h, jid, o, photos if h.get('upload') else ()))
     except Exception as ex: notes.append(f'worksheet not filled: {ex}'[:200])
     try: h['post'](f'/jobs/{jid}/flags', {'flagId': int(DEFAULT_FLAG_ID), 'comments': f"Part return {o['ref']}"})
     except Exception as ex: notes.append(f'flag not added: {ex}'[:200])
     if h.get('upload'):
-        import base64
-        n = 0
-        for p in leave.query('SELECT id, data FROM part_return_photos WHERE return_id = ? ORDER BY id', (rid,)):
-            try:
-                n += 1
-                h['upload'](f'/jobs/{jid}/attachments', f"{o['ref']}-{n}.jpg", base64.b64decode(p['data'].split(',', 1)[1]))
-            except Exception as ex:
-                notes.append(f'photo {n} not uploaded: {ex}'[:200])
+        for n, (name, data) in enumerate(photos, 1):
+            try: h['upload'](f'/jobs/{jid}/attachments', name, data)
+            except Exception as ex: notes.append(f'photo {n} not attached to the job: {ex}'[:200])
     status = 'job raised' + (' - ' + ' | '.join(notes) if notes else '')[:600]
     leave.execute('UPDATE part_returns SET bc_job_id = ?, bc_ref = ?, bc_status = ? WHERE id = ?', (jid, bcref or jid, status, rid))
     return 'raised'
