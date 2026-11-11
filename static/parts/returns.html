@@ -5,7 +5,7 @@
 <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500&display=swap" rel="stylesheet">
 <link rel="stylesheet" href="/static/incident/common.css">
 <style>
-.tabs{display:flex;gap:6px;max-width:760px;margin:12px auto 0;padding:0 16px}.tab{flex:1;text-align:center;text-decoration:none;border-radius:12px;padding:11px 4px;font-weight:800;font-size:14px;background:#E2E6E7;color:#123A63}.tab.on{background:#0B2A4A;color:#fff;box-shadow:inset 0 -3px 0 var(--cyan)}
+.tabs{display:grid!important;grid-template-columns:1fr 1fr;gap:10px;max-width:760px;margin:14px auto 0;padding:0 16px}.tab{display:flex!important;flex-direction:column;align-items:center;justify-content:center;gap:4px;text-decoration:none;min-height:84px;padding:12px 6px!important;font-size:17px!important;font-weight:800;border-radius:14px!important;background:#fff!important;color:#0B2A4A!important;border:1px solid #E2E6E7!important;box-shadow:0 1px 2px rgba(11,42,74,.05),0 4px 14px rgba(11,42,74,.08);position:relative;overflow:hidden}.tab::before{content:'';position:absolute;left:0;top:0;right:0;height:3px;background:#22C7F0}.tab i{font-style:normal;font-size:26px;line-height:1}.tab.on{background:#0B2A4A!important;color:#fff!important;border-color:#0B2A4A!important}.tab i{display:block}
 .photo-grid{display:flex;flex-wrap:wrap;gap:.5rem;margin-top:.6rem}.photo-grid div{position:relative;width:84px;height:84px;border-radius:8px;overflow:hidden;border:1px solid var(--line)}
 .photo-grid img{width:100%;height:100%;object-fit:cover}.photo-grid button{position:absolute;top:2px;right:2px;border:0;border-radius:50%;width:22px;height:22px;background:rgba(0,0,0,.65);color:#fff;font-size:14px;line-height:1}
 .yn{display:flex;gap:.5rem}.yn label{flex:1;margin:0;display:flex;align-items:center;justify-content:center;gap:.4rem;border:2px solid var(--line);border-radius:10px;padding:.7rem;font-size:15px;cursor:pointer}
@@ -15,7 +15,7 @@
 .prow{border:1px solid var(--line);border-radius:12px;padding:.7rem;margin-bottom:.6rem}.prow .row{align-items:end}
 </style></head><body>
 <div class="topbar"><div class="brand"><div class="brand-mark"><img src="/static/logo-mark.png" alt="R&amp;S"></div><span class="brand-name">Return parts</span></div><a class="btn-home" href="/">⌂ Home</a></div>
-<nav class="tabs"><a class="tab" href="/parts/">Search part</a><a class="tab" href="/parts/#lockers">Lockers</a><a class="tab" href="/parts/#cats">Catalogues</a><a class="tab on" href="/parts/returns.html">Returns</a></nav>
+<nav class="tabs"><a class="tab" href="/parts/"><i>🔎</i>Search part</a><a class="tab" href="/parts/#lockers"><i>🗄️</i>Lockers</a><a class="tab" href="/parts/#cats"><i>📖</i>Catalogues</a><a class="tab on" href="/parts/returns.html"><i>↩️</i>Returns</a></nav>
 <div class="wrap" id="formWrap">
   <form id="f" onsubmit="return send(event)" autocomplete="off">
     <div class="card"><h2>Parts to return</h2>
