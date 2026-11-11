@@ -153,7 +153,7 @@ def fill_worksheet(h, jid, o, photos=()):
         a = _answer(q, *g) if g else None
         if a is not None: answers.append({'questionId': q['id'], 'answer': a})
         elif q.get('type') not in SKIP_TYPES and not n.get('office'):
-            left.append((q.get('questionText') or '')[:40])
+            left.append(f"{(q.get('questionText') or '')[:40]} [{q.get('type')}]")
     if answers: h['put'](f'/worksheets/{wsid}/answers', {'entityType': 'job', 'entityId': int(jid), 'answers': answers})
     note = f"worksheet: {len(answers)} answered" + (f", left blank: {'; '.join(left)}" if left else '')
     pq = [q for q in qs if q.get('type') in ('photo', 'file')]
