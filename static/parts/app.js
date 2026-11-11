@@ -86,7 +86,7 @@ function drawLockers(){
   const list=document.getElementById('lkList');
   if(!lkSel){list.innerHTML='';return}
   const inside=parts.filter(p=>p.location===lkSel);
-  list.innerHTML=`<div class="lk-title">${escapeHtml(lkSel)} · ${inside.length} part${inside.length===1?'':'s'}</div>`+(inside.length?inside.map(p=>`<article class="result"><div class="part">${escapeHtml(p.part)}</div><div class="meta"><span class="click-show">Qty ${escapeHtml(p.qty)}</span></div></article>`).join(''):'<div class="empty"><p>Nothing is listed for this locker.</p></div>');
+  list.innerHTML=`<div class="lk-title">${escapeHtml(lkSel)} · ${inside.length} part${inside.length===1?'':'s'}</div>`+(inside.length?inside.map(p=>{const im=imgFor(p.part);return `<article class="result${im?' hi':''}">${im?`<button class="th" data-img="${im[0]}" data-name="${escapeHtml(p.part)}" data-chk="${im[1]}" aria-label="Enlarge photo"><img loading="lazy" src="${im[0]}" alt="">${im[1]?'<i>check</i>':''}</button>`:''}<div class="rb"><div class="part">${escapeHtml(p.part)}</div><div class="meta"><span class="click-show">Qty ${escapeHtml(p.qty)}</span></div></div></article>`}).join(''):'<div class="empty"><p>Nothing is listed for this locker.</p></div>');
 }
 document.getElementById('tabSearch').addEventListener('click',()=>showTab('search'));
 document.getElementById('tabLockers').addEventListener('click',()=>showTab('lockers'));
