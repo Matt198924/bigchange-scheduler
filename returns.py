@@ -32,8 +32,9 @@ def _ensure_tables():
             hp_serial TEXT DEFAULT '', parts TEXT NOT NULL,
             bc_job_id TEXT DEFAULT '', bc_status TEXT DEFAULT '', contact_id TEXT DEFAULT '', contact_name TEXT DEFAULT '',
             submitted_by_id INTEGER, bc_ref TEXT DEFAULT '', related_job TEXT DEFAULT '')''')
-        for col in ('bc_job_id', 'bc_status', 'contact_id', 'contact_name'):          # tables created before the BigChange link existed
-            try: leave.execute(f"ALTER TABLE part_returns ADD COLUMN {col} TEXT DEFAULT ''")
+        for col, typ in (('bc_job_id', 'TEXT'), ('bc_status', 'TEXT'), ('contact_id', 'TEXT'), ('contact_name', 'TEXT'),
+                         ('submitted_by_id', 'INTEGER'), ('bc_ref', 'TEXT'), ('related_job', 'TEXT')):   # tables created by earlier versions
+            try: leave.execute(f"ALTER TABLE part_returns ADD COLUMN {'IF NOT EXISTS ' if leave.IS_PG else ''}{col} {typ}")
             except Exception: pass
         leave.execute(f'''CREATE TABLE IF NOT EXISTS part_return_photos (
             id {pk}, return_id INTEGER NOT NULL, name TEXT DEFAULT '', data TEXT NOT NULL)''')
@@ -231,6 +232,15 @@ def _who():
 
 @returns_bp.route('/api/parts/returns', methods=['POST'])
 def submit():
+    try:
+        return _submit()
+    except Exception as ex:      # show the cause on the form (and in the Render log) instead of a bare 500
+        import traceback
+        traceback.print_exc()
+        return jsonify({'error': f'Server error: {type(ex).__name__}: {ex}'[:300]}), 500
+
+
+def _submit():
     if request.content_length and request.content_length > 10_000_000:
         return jsonify({'error': 'Photo is too large - try again'}), 413
     if leave._throttled('returns'):
