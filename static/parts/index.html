@@ -20,7 +20,7 @@
   <div class="brand"><div class="brand-mark"><img src="/static/logo-mark.png" alt="R&amp;S"></div><div><div class="eyebrow">VAN STOCK</div><h1>Parts</h1></div></div>
   <div class="top-actions"><button id="refreshBtn" class="install" type="button">Reload stock</button><button id="installBtn" class="install hidden" type="button">Install app</button><a class="install home" href="/">⌂ Home</a></div>
 </header>
-<nav class="tabs"><button id="tabSearch" class="tab on" type="button">Search</button><button id="tabLockers" class="tab" type="button">Lockers</button><button id="tabCats" class="tab" type="button">Catalogues</button></nav>
+<nav class="tabs"><button id="tabSearch" class="tab on" type="button">Search part</button><button id="tabLockers" class="tab" type="button">Lockers</button><button id="tabCats" class="tab" type="button">Catalogues</button><button id="tabReturns" class="tab" type="button">Returns</button></nav>
 <main id="lockersMain" class="hidden">
 <section class="search-card"><div class="summary" style="margin:0 0 8px">Tap a locker to see what should be in it.</div>
 <div id="lkMap" class="map-wrap"></div></section>
@@ -37,7 +37,7 @@
 <section class="search-card">
 <label for="search">Search part number or description</label>
 <div class="search-row"><input id="search" type="search" autocomplete="off" placeholder="e.g. 1013, bearing, bolt" autofocus><button id="clearBtn" class="clear" type="button" aria-label="Clear search">×</button></div>
-<div class="photo-row"><button id="photoBtn" class="install" type="button">📷 Search by photo</button><input id="photoFile" type="file" accept="image/*" capture="environment" hidden></div><div id="photoOut"></div><div class="photo-row" style="margin-top:8px"><a class="install" href="returns.html" style="display:inline-block;text-decoration:none;background:#F59E0B;color:#fff;padding:11px 16px">↩ Return unwanted parts</a></div>
+<div class="photo-row"><button id="photoBtn" class="install" type="button">📷 Search by photo</button><input id="photoFile" type="file" accept="image/*" capture="environment" hidden></div><div id="photoOut"></div>
 <div id="summary" class="summary">Loading stock…</div><div id="status" class="status" role="status" aria-live="polite"></div>
 </section>
 <section id="results" class="results" aria-live="polite"></section>
