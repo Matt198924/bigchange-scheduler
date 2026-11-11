@@ -47,6 +47,7 @@ def _ref(rid, created):
     return f"RET-{str(created)[:4]}-{int(rid):04d}"
 
 
+DEFAULT_CATEGORY_ID = os.environ.get('BIGCHANGE_RETURN_CATEGORY_ID', '').strip() or '17045'
 DEFAULT_TYPE_ID = os.environ.get('BIGCHANGE_RETURN_TYPE_ID', '').strip() or '81698'     # 'Parts to be returned'
 
 
@@ -76,7 +77,8 @@ def raise_job(rid):
             f"Packaged: {o['packagedAt'].replace('T', ' ')}\n\nParts:\n{lines}"
             + (f"\n\nHenny Penny controller serial: {o['hpSerial']}" if o['hpController'] else ''))
     try:
-        res = h['post']('/jobs', {'typeId': int(type_id), 'contactId': int(contact), 'reference': o['ref'], 'description': desc[:4000]})
+        res = h['post']('/jobs', {'typeId': int(type_id), 'contactId': int(contact), 'reference': o['ref'], 'description': desc[:4000],
+                                 'categoryId': int(DEFAULT_CATEGORY_ID)})
         jid = str(res.get('id') or res.get('jobId') or '')
         if not jid: raise RuntimeError('BigChange did not return a job id')
     except Exception as ex:
