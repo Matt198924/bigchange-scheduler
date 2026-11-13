@@ -115,3 +115,28 @@ def unallocated():
            'unscheduled': sum(1 for j in counted if j.get('status') == 'unscheduled'), 'otherJobs': len(jobs) - len(counted)}
     _cache['unalloc'] = (time.time(), res)
     return jsonify(res)
+
+
+@dashboard_bp.route('/api/dashboard/booked')
+def booked():
+    """Allocated work still to be done over the next 3 months: planned, with an engineer, not completed or cancelled, in the counted categories."""
+    if _cache.get('booked') and time.time() - _cache['booked'][0] < 300: return jsonify(_cache['booked'][1])
+    today = datetime.now(LONDON).date()
+    jobs, seen = [], set()
+    try:
+        for i in range(3):       # three slices of 31 days (BigChange rejects very wide ranges)
+            _, a, _b = _day(str(today + timedelta(days=31 * i)))
+            _, _a, b = _day(str(today + timedelta(days=31 * i + 30)))
+            for j in _jobs(a, b):
+                if j.get('id') not in seen: seen.add(j.get('id')); jobs.append(j)
+    except Exception as ex: return jsonify({'error': str(ex)[:300]}), 502
+    live = [j for j in jobs if j.get('categoryId') in COUNT_CATEGORIES and j.get('resourceId') and j.get('status') not in ('completedOk', 'completedWithIssues', 'cancelled')]
+    months = {}
+    for j in live:
+        try: m = datetime.fromisoformat((j.get('plannedStartAt') or '')[:19]).strftime('%Y-%m')
+        except ValueError: continue
+        months[m] = months.get(m, 0) + 1
+    res = {'total': len(live), 'from': str(today), 'to': str(today + timedelta(days=92)),
+           'months': [{'month': k, 'jobs': v} for k, v in sorted(months.items())], 'engineers': len({j['resourceId'] for j in live})}
+    _cache['booked'] = (time.time(), res)
+    return jsonify(res)
