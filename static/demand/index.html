@@ -31,20 +31,20 @@ function demRender() {
   const q = ($('dm-q') ? $('dm-q').value : '').toLowerCase();
   const rows = d.parts.filter(p => !q || (p.part + ' ' + p.name).toLowerCase().includes(q)).sort((a, b) => demSort === 'part' ? a.part.localeCompare(b.part) : demSort === 'van' ? b.van - a.van : demSort === 'room' ? b.room - a.room : b.qty - a.qty);
   $('a-body').innerHTML = `<div class="card"><h2>Parts demand</h2>
-    <p class="muted">Usage is read from the parts booked to completed BigChange jobs over the last 6 months. Suggested levels are worked out from average weekly use plus a safety buffer for busy weeks, so they follow the real demand.</p>
+    <p class="muted">Usage is read from every BigChange invoice line coded to nominal 5000 (parts sold) over the last 6 months. Suggested levels are worked out from average weekly use plus a safety buffer for busy weeks, so they follow the real demand.</p>
     ${st.error ? `<div class="err">${E(st.error)}</div>` : ''}
-    <div class="muted">${st.running ? `<b>Syncing from BigChange</b> - ${E(st.msg || '')} (${st.windowsDone || 0} of ${st.windowsTotal || '?'} steps, ${st.jobsNew || 0} new jobs). This can take a while; you can leave this page.` : (st.finished ? 'Last sync finished ' + E(st.finished) + '.' : 'Not synced yet - press Sync to pull the last 6 months.')}
-      ${d.jobs} jobs with parts in the data since ${E(d.since)}.</div>
+    <div class="muted">${st.running ? `<b>Syncing from BigChange</b> - ${E(st.msg || '')} (${st.windowsDone || 0} of ${st.windowsTotal || '?'} steps, ${st.jobsNew || 0} new invoices). This can take a while; you can leave this page.` : (st.finished ? 'Last sync finished ' + E(st.finished) + '.' : 'Not synced yet - press Sync to pull the last 6 months.')}
+      ${d.jobs} invoices with parts in the data since ${E(d.since)}.</div>
     <div style="margin:.6rem 0"><button class="sm" onclick="demSync()" ${st.running ? 'disabled' : ''}>${d.jobs ? 'Sync latest' : 'Sync now'}</button>
       <button class="sm" onclick="demCsv()">Download CSV</button></div></div>
     <div class="card"><h2>Settings</h2>
     ${f('vans', 'Number of vans (0 = count from the data: ' + d.vansSeen + ')')}${f('van_cycle_weeks', 'Weeks between van restocks', 0.5)}${f('lead_weeks', 'Supplier lead time (weeks)', 0.5)}${f('review_weeks', 'Stock room order cycle (weeks)', 0.5)}
     <label style="display:inline-block;margin:.2rem .8rem .2rem 0">Cover for busy weeks<br><select id="dc-service">${[90, 95, 98, 99].map(v => `<option value="${v}" ${v == c.service ? 'selected' : ''}>${v}% of weeks</option>`).join('')}</select></label>
-    ${f('min_jobs', 'Jobs in 6 months before a part goes on a van')}
+    ${f('min_jobs', 'Invoices in 6 months before a part goes on a van')}
     <div><button class="sm" onclick="demSave()">Save &amp; recalculate</button> <span class="muted">Using ${d.vans} vans.</span></div></div>
     <div class="card"><input id="dm-q" placeholder="Search part or description" value="${E(q)}" oninput="demRender()" style="width:100%;margin-bottom:.5rem">
     <div class="muted" style="margin-bottom:.4rem">${rows.length} parts. Sort: ${[['qty', 'most used'], ['van', 'van level'], ['room', 'stock room'], ['part', 'part no.']].map(([k, l]) => `<a href="#" onclick="demSort='${k}';demRender();return false" style="${demSort === k ? 'font-weight:700' : ''}">${l}</a>`).join(' · ')}</div>
-    <div style="overflow-x:auto"><table style="width:100%;border-collapse:collapse;font-size:.85rem"><tr style="text-align:left"><th>Part</th><th>Used (6 mo)</th><th>By month</th><th>Jobs</th><th>Per week</th><th>Per van</th><th>Stock room</th><th>Reorder at</th><th>Plan</th></tr>`
+    <div style="overflow-x:auto"><table style="width:100%;border-collapse:collapse;font-size:.85rem"><tr style="text-align:left"><th>Part</th><th>Used (6 mo)</th><th>By month</th><th>Invoices</th><th>Per week</th><th>Per van</th><th>Stock room</th><th>Reorder at</th><th>Plan</th></tr>`
     + rows.slice(0, 400).map(p => `<tr style="border-top:1px solid #E2E6E7"><td><b>${E(p.part)}</b><br><span class="muted">${E(p.name)}</span></td><td>${p.qty}</td><td>${bars(p.months)}</td><td>${p.jobs}</td><td>${p.perWeek}</td><td><b>${p.van}</b></td><td><b>${p.room}</b></td><td>${p.reorder}</td><td class="muted">${E(p.kind)}</td></tr>`).join('')
     + `</table></div>${rows.length > 400 ? '<p class="muted">Showing the top 400 - search to find others.</p>' : ''}</div>`;
   const qi = $('dm-q'); if (qi && q && document.activeElement !== qi) { qi.focus(); qi.setSelectionRange(q.length, q.length); }
