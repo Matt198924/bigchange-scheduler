@@ -13,9 +13,11 @@ app.register_blueprint(leave_bp)
 from parts import parts_bp
 from demand import demand_bp  # parts demand planner (Staff admin)
 from reorder import reorder_bp  # stock reorder levels
+from stockmoves import stockmoves_bp  # stock movements
 app.register_blueprint(parts_bp)
 app.register_blueprint(demand_bp)
 app.register_blueprint(reorder_bp)
+app.register_blueprint(stockmoves_bp)
 from incident import incident_bp  # accident / incident reports (/incident)
 app.register_blueprint(incident_bp)
 from handbook import handbook_bp  # company handbook (/handbook)
@@ -108,6 +110,14 @@ def _bc_headers():
 def bc_post(path, body):
     resp = requests.post(f'{API_BASE}{path}', headers=_bc_headers(), json=body, timeout=15)
     print(f"[POST] {path} {resp.status_code}: {resp.text[:200]}")
+    if not resp.ok:
+        raise RuntimeError(f'BigChange {resp.status_code}: {resp.text[:200]}')
+    try: return resp.json()
+    except Exception: return {}
+
+def bc_patch(path, body):
+    resp = requests.patch(f'{API_BASE}{path}', headers=_bc_headers(), json=body, timeout=20)
+    print(f"[PATCH] {path} {resp.status_code}: {resp.text[:200]}")
     if not resp.ok:
         raise RuntimeError(f'BigChange {resp.status_code}: {resp.text[:200]}')
     try: return resp.json()
@@ -446,7 +456,7 @@ def assign_job(job_id):
         return jsonify({'error': str(e)}), 500
 
 import leave as _leave
-_leave.bc_hooks.update(post=bc_post, delete=bc_delete, get=bc_get)
+_leave.bc_hooks.update(post=bc_post, delete=bc_delete, get=bc_get, patch=bc_patch)
 
 if __name__ == '__main__':
     port = int(os.environ.get('PORT', 5000))

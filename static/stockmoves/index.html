@@ -1,0 +1,70 @@
+<!DOCTYPE html>
+<html lang="en"><head>
+<meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<meta name="theme-color" content="#0B2A4A"><title>Stock movements – R&amp;S Services</title>
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="/static/incident/common.css">
+<style>.wrap{max-width:1000px}.card{background:#fff;border:1px solid var(--line);border-radius:10px;box-shadow:var(--shadow);padding:1rem;margin:.8rem 0}
+.muted{color:var(--slate);font-size:13px}.err{color:#b00020;margin:.4rem 0}.ok{color:#0a7a3a}
+.sm{padding:.4rem .8rem;border-radius:8px;border:1px solid var(--line);background:#fff;font:inherit;font-weight:600;cursor:pointer}.sm.p{background:#0B2A4A;color:#fff}.sm:disabled{opacity:.5}
+.loc>summary{cursor:pointer;font-weight:700;padding:.2rem 0}table{width:100%;border-collapse:collapse;font-size:.9rem}th{text-align:left;padding:.3rem .4rem}td{padding:.3rem .4rem;border-top:1px solid #E2E6E7}
+input.q{width:5.5rem}pre{background:#f3f5f6;padding:.6rem;border-radius:8px;overflow:auto;font-size:12px}</style></head><body>
+<div class="topbar"><div class="brand"><div class="brand-mark"><img src="/static/logo-mark.png" alt="R&amp;S"></div><span class="brand-name">Stock movements</span></div><a class="btn-home" href="/">⌂ Home</a></div>
+<div class="wrap">
+<div class="card"><h2>1. Move from</h2><select id="from" onchange="clearPrev()"></select>
+  <h2 style="margin-top:1rem">2. Move to these vans</h2>
+  <div><a href="#" onclick="vsel(true);return false">Select all</a> · <a href="#" onclick="vsel(false);return false">Select none</a> <span id="vcount" class="muted"></span></div>
+  <div id="vlist" style="display:grid;grid-template-columns:repeat(auto-fill,minmax(10rem,1fr));gap:.2rem .8rem;margin-top:.4rem;max-height:14rem;overflow:auto">Loading...</div></div>
+<div class="card"><h2>3. Parts to move <span class="muted">(quantity per van)</span></h2>
+  <input id="sq" placeholder="Search part, click to add" oninput="srch()"><div id="sres" class="muted" style="margin:.3rem 0"></div>
+  <div class="muted" style="margin:.4rem 0">Or upload CSV / Excel: part in the first column, quantity in the second. <input type="file" accept=".csv,.xlsx" onchange="upl(this)" style="margin-top:.3rem"></div>
+  <div id="umsg"></div>
+  <table id="plist"></table></div>
+<div class="card"><button class="sm" onclick="check()">Check stock is available</button> <button class="sm p" id="go" onclick="move()" disabled>Move stock</button> <span id="msg" class="muted"></span>
+  <div id="prev"></div></div>
+<div class="card"><button class="sm" onclick="hist()">Show recent moves</button><div id="hist"></div></div>
+</div>
+<script>
+const $ = id => document.getElementById(id), esc = s => String(s ?? '').replace(/[&<>"]/g, c => ({'&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;'}[c]));
+let VANS = [], ROOMS = [], PARTS = [], st, SHORT = 0;
+async function api(path, method = 'GET', body, raw) {
+  const r = await fetch('/api/stockmoves' + path, {method, headers: raw ? {} : {'Content-Type': 'application/json'}, body: raw || (body ? JSON.stringify(body) : undefined)});
+  const j = await r.json().catch(() => ({}));
+  if (r.status === 401) { location.href = '/login?next=/stockmoves/'; throw new Error('Sign in again'); }
+  if (!r.ok) throw new Error(j.error || 'Server problem (HTTP ' + r.status + ')');
+  return j;
+}
+async function init() { try { const j = await api('/locations'); VANS = j.vans; ROOMS = j.rooms;
+  $('from').innerHTML = [...ROOMS.map(r => `<option value="contact:${r.id}">${esc(r.name)} (stock room)</option>`), ...VANS.map(v => `<option value="van:${v.id}">${esc(v.name)} (van)</option>`)].join('');
+  $('vlist').innerHTML = VANS.map(v => `<label style="display:flex;align-items:center;gap:.5rem;margin:0;font-weight:500;cursor:pointer"><input type="checkbox" class="vk" style="width:1.1rem;height:1.1rem;padding:0;margin:0;flex:none" value="${v.id}" onchange="vcnt()"><span>${esc(v.name)}</span></label>`).join(''); vcnt();
+  } catch (e) { $('vlist').innerHTML = '<span class="err">' + esc(e.message) + '</span>'; } }
+function vsel(on) { document.querySelectorAll('.vk').forEach(c => c.checked = on); vcnt(); }
+function vcnt() { $('vcount').textContent = document.querySelectorAll('.vk:checked').length + ' of ' + VANS.length + ' ticked'; clearPrev(); }
+function clearPrev() { $('prev').innerHTML = ''; $('go').disabled = true; }
+function srch() { clearTimeout(st); st = setTimeout(async () => { const q = $('sq').value.trim(); if (q.length < 2) { $('sres').textContent = ''; return; }
+  try { const j = await api('/search?q=' + encodeURIComponent(q)); $('sres').innerHTML = j.results.length ? j.results.map(r => `<a href="#" onclick="addPart(${r.id},this);return false" data-t="${esc(r.text)}" style="display:block;padding:.1rem 0">${esc(r.text)}</a>`).join('') : 'No match.'; } catch (e) { $('sres').innerHTML = '<span class="err">' + esc(e.message) + '</span>'; } }, 350); }
+function addPart(id, a) { if (!PARTS.find(p => p.stockId == id)) PARTS.push({stockId: id, name: a.dataset.t, quantity: 1}); $('sq').value = ''; $('sres').textContent = ''; drawParts(); }
+function drawParts() { $('plist').innerHTML = PARTS.length ? '<tr><th>Part</th><th>Qty per van</th><th></th></tr>' + PARTS.map((p, i) => `<tr><td>${esc(p.name)}</td><td><input class="q" type="number" min="1" value="${p.quantity}" onchange="PARTS[${i}].quantity=Number(this.value);clearPrev()"></td><td><a href="#" onclick="PARTS.splice(${i},1);drawParts();return false">remove</a></td></tr>`).join('') : ''; clearPrev(); }
+async function upl(inp) { const f = inp.files[0]; if (!f) return; $('umsg').textContent = 'Reading and matching...';
+  try { const j = await api('/upload-preview?entityType=2&entityId=0', 'POST', null, await f.arrayBuffer());
+    j.matched.forEach(m => { const e = PARTS.find(p => p.stockId == m.stockId); if (e) e.quantity = m.quantity; else PARTS.push({stockId: m.stockId, name: m.name, quantity: m.quantity}); });
+    $('umsg').innerHTML = j.matched.length + ' parts added' + (j.unmatched.length ? ', <span class="err">' + j.unmatched.length + ' not matched: ' + j.unmatched.slice(0, 30).map(x => esc(x.asked)).join(', ') + '</span>' : '') + '.'; drawParts();
+  } catch (e) { $('umsg').innerHTML = '<span class="err">' + esc(e.message) + '</span>'; } inp.value = ''; }
+function req() { const [fk, fid] = $('from').value.split(':'); return {fromKind: fk === 'contact' ? 'contact' : 'van', fromId: Number(fid), fromLabel: $('from').selectedOptions[0].text,
+  toVanIds: [...document.querySelectorAll('.vk:checked')].map(c => Number(c.value)), rows: PARTS.map(p => ({stockId: p.stockId, quantity: p.quantity}))}; }
+function ready(r) { if (!r.toVanIds.length) { $('msg').textContent = 'Tick at least one van.'; return false; } if (!r.rows.length) { $('msg').textContent = 'Add at least one part.'; return false; } if (r.toVanIds.includes(r.fromId) && r.fromKind === 'van') { $('msg').textContent = 'The source van is also ticked as a destination.'; return false; } return true; }
+async function check() { const r = req(); if (!ready(r)) return; $('msg').textContent = 'Checking stock in BigChange...'; $('prev').innerHTML = '';
+  try { const j = await api('/preview', 'POST', r); const short = j.rows.filter(x => !x.ok).length;
+    $('prev').innerHTML = `<table><tr><th>Part</th><th>Per van</th><th>Needed (${j.vans} vans)</th><th>Available</th></tr>${j.rows.map(x => `<tr><td>${esc(x.name)}</td><td>${x.each}</td><td>${x.need}</td><td class="${x.ok ? 'ok' : 'err'}">${x.have}${x.ok ? '' : ' (short)'}</td></tr>`).join('')}</table>`;
+    const any = j.rows.some(x => x.have >= x.each); SHORT = j.rows.filter(x => !x.ok).length;
+    $('msg').innerHTML = short ? `<span class="err"><b>${short} of ${j.rows.length} part(s) are short in the stock room.</b> ${any ? 'Moving will skip the vans/parts it cannot cover - see the red rows.' : 'Nothing can be moved.'}</span>` : '<span class="ok">All available.</span>'; $('go').disabled = !any;
+  } catch (e) { $('msg').innerHTML = '<span class="err">' + esc(e.message) + '</span>'; } }
+async function move() { const r = req(); if (!ready(r)) return;
+  if (SHORT && !confirm(`${SHORT} part(s) are short in the stock room. The ones that cannot be covered will be SKIPPED. Carry on?`)) return;
+  if (!confirm(`Move ${r.rows.length} part(s) from ${r.fromLabel} to ${r.toVanIds.length} van(s) in BigChange?`)) return;
+  $('go').disabled = true; $('msg').textContent = 'Moving stock... this can take a few minutes.';
+  try { const j = await api('/apply', 'POST', r); $('msg').innerHTML = `<span class="${j.failed.length || j.skipped.length ? 'err' : 'ok'}">${j.moved} moves done${j.failed.length ? ', ' + j.failed.length + ' failed' : ''}${j.skipped.length ? ', <b>' + j.skipped.length + ' skipped because the stock room did not have enough</b>' : ''}.</span>` + (j.skipped.length ? '<div class="err" style="margin-top:.4rem">Not moved:</div><ul>' + j.skipped.slice(0, 60).map(s => `<li>${esc(s.part)} to ${esc(s.van)} (wanted ${s.wanted}, stock room had ${s.have})</li>`).join('') + (j.skipped.length > 60 ? '<li>...and more (see recent moves)</li>' : '') + '</ul>' : '') + (j.failed.length ? '<ul>' + j.failed.slice(0, 30).map(f => `<li>${esc(f.van)} - ${esc(f.part)}: ${esc(f.error)}</li>`).join('') + '</ul>' : '');
+  } catch (e) { $('msg').innerHTML = '<span class="err">' + esc(e.message) + '</span>'; } }
+async function hist() { try { const j = await api('/log'); $('hist').innerHTML = '<table><tr><th>When</th><th>Who</th><th>From</th><th>To</th><th>Part</th><th>Qty</th><th></th></tr>' + j.log.map(l => `<tr><td>${esc(l.at)}</td><td>${esc(l.who)}</td><td>${esc(l.from_label)}</td><td>${esc(l.to_label)}</td><td>${esc(l.part)}</td><td>${l.qty}</td><td class="${l.ok ? 'ok' : 'err'}">${l.ok ? 'done' : esc(l.note || 'failed')}</td></tr>`).join('') + '</table>'; } catch (e) { $('hist').innerHTML = '<span class="err">' + esc(e.message) + '</span>'; } }
+init();
+</script></body></html>
