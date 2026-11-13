@@ -339,7 +339,7 @@ def set_level():
 def vans():
     try: v = _vehicles()
     except Exception as ex: return jsonify({'error': str(ex)[:300]}), 502
-    skip = (request.args.get('skip') or 'stock').strip().lower()
+    skip = request.args.get('skip', 'stock').strip().lower()
     return jsonify({'vans': [{'id': i, 'name': n} for i, n in sorted(v.items(), key=lambda x: x[1]) if not (skip and skip in n.lower())]})
 
 
