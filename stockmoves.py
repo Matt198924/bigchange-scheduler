@@ -108,7 +108,7 @@ def apply():
     try: cat = {s['id']: s['text'] for s in reorder._stock_catalog()}
     except Exception: cat = {}
     patch, post = leave.bc_hooks['patch'], leave.bc_hooks['post']
-    done, failed = 0, []
+    done, failed, skipped = 0, [], []
 
     def log(vid, sid, q, ok, note=''):
         leave.execute('INSERT INTO stock_moves_log (at, who, from_label, to_label, stock_id, part, qty, ok, note) VALUES (?,?,?,?,?,?,?,?,?)',
@@ -123,7 +123,7 @@ def apply():
         for sid, q in rows:
             pool = sorted(src[sid], key=lambda i: -float(i.get('quantity') or 0))
             if sum(float(i['quantity']) for i in pool) < q:
-                failed.append({'van': van_names.get(vid, vid), 'part': cat.get(sid, sid), 'error': 'not enough in source'}); log(vid, sid, q, False, 'not enough in source'); continue
+                skipped.append({'van': van_names.get(vid, vid), 'part': cat.get(sid, sid), 'wanted': q, 'have': sum(float(i['quantity']) for i in pool)}); log(vid, sid, q, False, 'skipped: not enough in source'); continue
             try:
                 ex_item = vitems.get(sid)
                 if ex_item:
@@ -142,7 +142,7 @@ def apply():
             except Exception as ex:
                 failed.append({'van': van_names.get(vid, vid), 'part': cat.get(sid, sid), 'error': str(ex)[:160]}); log(vid, sid, q, False, str(ex))
             time.sleep(0.15)
-    return jsonify({'moved': done, 'failed': failed})
+    return jsonify({'moved': done, 'failed': failed, 'skipped': skipped})
 
 
 @stockmoves_bp.route('/api/stockmoves/log')

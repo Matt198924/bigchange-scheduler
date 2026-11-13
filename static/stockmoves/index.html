@@ -26,7 +26,7 @@ input.q{width:5.5rem}pre{background:#f3f5f6;padding:.6rem;border-radius:8px;over
 </div>
 <script>
 const $ = id => document.getElementById(id), esc = s => String(s ?? '').replace(/[&<>"]/g, c => ({'&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;'}[c]));
-let VANS = [], ROOMS = [], PARTS = [], st;
+let VANS = [], ROOMS = [], PARTS = [], st, SHORT = 0;
 async function api(path, method = 'GET', body, raw) {
   const r = await fetch('/api/stockmoves' + path, {method, headers: raw ? {} : {'Content-Type': 'application/json'}, body: raw || (body ? JSON.stringify(body) : undefined)});
   const j = await r.json().catch(() => ({}));
@@ -56,12 +56,14 @@ function ready(r) { if (!r.toVanIds.length) { $('msg').textContent = 'Tick at le
 async function check() { const r = req(); if (!ready(r)) return; $('msg').textContent = 'Checking stock in BigChange...'; $('prev').innerHTML = '';
   try { const j = await api('/preview', 'POST', r); const short = j.rows.filter(x => !x.ok).length;
     $('prev').innerHTML = `<table><tr><th>Part</th><th>Per van</th><th>Needed (${j.vans} vans)</th><th>Available</th></tr>${j.rows.map(x => `<tr><td>${esc(x.name)}</td><td>${x.each}</td><td>${x.need}</td><td class="${x.ok ? 'ok' : 'err'}">${x.have}${x.ok ? '' : ' (short)'}</td></tr>`).join('')}</table>`;
-    $('msg').innerHTML = short ? `<span class="err">${short} part(s) are short. Lower the quantities or the number of vans.</span>` : '<span class="ok">All available.</span>'; $('go').disabled = !!short;
+    const any = j.rows.some(x => x.have >= x.each); SHORT = j.rows.filter(x => !x.ok).length;
+    $('msg').innerHTML = short ? `<span class="err"><b>${short} of ${j.rows.length} part(s) are short in the stock room.</b> ${any ? 'Moving will skip the vans/parts it cannot cover - see the red rows.' : 'Nothing can be moved.'}</span>` : '<span class="ok">All available.</span>'; $('go').disabled = !any;
   } catch (e) { $('msg').innerHTML = '<span class="err">' + esc(e.message) + '</span>'; } }
 async function move() { const r = req(); if (!ready(r)) return;
+  if (SHORT && !confirm(`${SHORT} part(s) are short in the stock room. The ones that cannot be covered will be SKIPPED. Carry on?`)) return;
   if (!confirm(`Move ${r.rows.length} part(s) from ${r.fromLabel} to ${r.toVanIds.length} van(s) in BigChange?`)) return;
   $('go').disabled = true; $('msg').textContent = 'Moving stock... this can take a few minutes.';
-  try { const j = await api('/apply', 'POST', r); $('msg').innerHTML = `<span class="${j.failed.length ? 'err' : 'ok'}">${j.moved} moves done${j.failed.length ? ', ' + j.failed.length + ' failed' : ''}.</span>` + (j.failed.length ? '<ul>' + j.failed.slice(0, 30).map(f => `<li>${esc(f.van)} - ${esc(f.part)}: ${esc(f.error)}</li>`).join('') + '</ul>' : '');
+  try { const j = await api('/apply', 'POST', r); $('msg').innerHTML = `<span class="${j.failed.length || j.skipped.length ? 'err' : 'ok'}">${j.moved} moves done${j.failed.length ? ', ' + j.failed.length + ' failed' : ''}${j.skipped.length ? ', <b>' + j.skipped.length + ' skipped because the stock room did not have enough</b>' : ''}.</span>` + (j.skipped.length ? '<div class="err" style="margin-top:.4rem">Not moved:</div><ul>' + j.skipped.slice(0, 60).map(s => `<li>${esc(s.part)} to ${esc(s.van)} (wanted ${s.wanted}, stock room had ${s.have})</li>`).join('') + (j.skipped.length > 60 ? '<li>...and more (see recent moves)</li>' : '') + '</ul>' : '') + (j.failed.length ? '<ul>' + j.failed.slice(0, 30).map(f => `<li>${esc(f.van)} - ${esc(f.part)}: ${esc(f.error)}</li>`).join('') + '</ul>' : '');
   } catch (e) { $('msg').innerHTML = '<span class="err">' + esc(e.message) + '</span>'; } }
 async function hist() { try { const j = await api('/log'); $('hist').innerHTML = '<table><tr><th>When</th><th>Who</th><th>From</th><th>To</th><th>Part</th><th>Qty</th><th></th></tr>' + j.log.map(l => `<tr><td>${esc(l.at)}</td><td>${esc(l.who)}</td><td>${esc(l.from_label)}</td><td>${esc(l.to_label)}</td><td>${esc(l.part)}</td><td>${l.qty}</td><td class="${l.ok ? 'ok' : 'err'}">${l.ok ? 'done' : esc(l.note || 'failed')}</td></tr>`).join('') + '</table>'; } catch (e) { $('hist').innerHTML = '<span class="err">' + esc(e.message) + '</span>'; } }
 init();
