@@ -47,7 +47,8 @@ def _split_model(model):
 
 def _details(sid):
     if sid not in _sd:
-        _sd[sid] = leave.bc_hooks['get'](f'/stockDetails/{int(sid)}', {}) or {}
+        try: _sd[sid] = leave.bc_hooks['get'](f'/stockDetails/{int(sid)}', {}) or {}
+        except Exception: _sd[sid] = {}       # deleted or hidden stock record: fall back to what the job line carries
     return _sd[sid]
 
 
@@ -87,7 +88,9 @@ def _sync(days):
                 rid, rname = str(j.get('resourceId') or ''), j.get('resourceName') or ''
                 when = (j.get('actualEndAt') or j.get('statusModifiedAt') or f)[:10]
                 n = 0
-                for s in _items(f'/jobs/{int(jid)}/stock', {'pageSize': 100}):
+                try: lines = _items(f'/jobs/{int(jid)}/stock', {'pageSize': 100})
+                except Exception: lines = []
+                for s in lines:
                     qty = s.get('quantityActual') or s.get('quantityPlanned') or 0
                     try: qty = float(qty)
                     except (TypeError, ValueError): qty = 0
@@ -95,7 +98,7 @@ def _sync(days):
                     det = _details(s['stockDetailsId']) if s.get('stockDetailsId') else {}
                     model = (det.get('model') or s.get('model') or '').strip()
                     part, desc = _split_model(model)
-                    if not part: part = (det.get('modelNumber') or det.get('stockCode') or '').strip()
+                    if not part: part = (det.get('modelNumber') or det.get('stockCode') or s.get('modelNumber') or s.get('stockCode') or '').strip()
                     if not part: continue
                     leave.execute('INSERT INTO demand_lines (job_id, part, name, qty, done_at, resource_id, resource_name) VALUES (?,?,?,?,?,?,?)',
                                   (jid, part, (desc or det.get('make') or '')[:120], qty, when, rid, rname))
