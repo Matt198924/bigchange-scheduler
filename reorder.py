@@ -19,9 +19,11 @@ _cache = {}
 
 
 def _ws(action, params=None):
-    from app import get_token, CUSTOMER_ID
+    user, pw, key = os.environ.get('BIGCHANGE_WS_USER', ''), os.environ.get('BIGCHANGE_WS_PASSWORD', ''), os.environ.get('BIGCHANGE_WS_KEY', '')
+    if not (user and pw and key):
+        raise RuntimeError('The older BigChange web service needs BIGCHANGE_WS_USER, BIGCHANGE_WS_PASSWORD and BIGCHANGE_WS_KEY set on Render')
     q = {'action': action, **(params or {})}
-    r = requests.get(WS_URL, params=q, headers={'Authorization': f'Bearer {get_token()}', 'customer-id': str(CUSTOMER_ID)}, timeout=40)
+    r = requests.get(WS_URL, params=q, auth=(user, pw), headers={'key': key}, timeout=40)
     print(f'[REORDER] {action} {r.status_code}: {r.text[:200]}')
     try: body = r.json()
     except ValueError: body = {'text': r.text[:500]}
@@ -129,10 +131,10 @@ def check():
         except Exception as ex:
             out.append({'try': name, 'error': str(ex)[:400]})
     try:      # control: a simple, unrelated call, to tell 'sign-in not accepted' from 'this call wants other parameters'
-        body = _ws('jobtypes')
-        out.append({'try': 'CONTROL: job types (unrelated call)', 'count': len(_rows(body)), 'raw': _j.dumps(body)[:300]})
+        body = _ws('ping')
+        out.append({'try': 'CONTROL: ping (sign-in test)', 'count': len(_rows(body)), 'raw': _j.dumps(body)[:300]})
     except Exception as ex:
-        out.append({'try': 'CONTROL: job types (unrelated call)', 'error': str(ex)[:300]})
+        out.append({'try': 'CONTROL: ping (sign-in test)', 'error': str(ex)[:300]})
     return jsonify({'results': out})
 
 
