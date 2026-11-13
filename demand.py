@@ -109,7 +109,7 @@ def _sync_costs():
             try: sup = _items(f'/stockDetails/{int(sid)}/suppliers', {'pageSize': 50})
             except Exception: sup = []
             costs = [float(s['cost']) for s in sup if s.get('cost')]
-            leave.execute('INSERT INTO demand_costs (sd_id, part, cost, checked) VALUES (?,?,?,?)', (sid, part, min(costs) if costs else 0, datetime.now().strftime('%Y-%m-%d')))
+            leave.execute('INSERT INTO demand_costs (sd_id, part, cost, checked) VALUES (?,?,?,?)', (sid, part, sum(costs) / len(costs) if costs else 0, datetime.now().strftime('%Y-%m-%d')))
             todo += 1
             _set_status(beat=time.time(), msg=f'Reading cost prices ({todo} parts so far)')
             time.sleep(0.1)
