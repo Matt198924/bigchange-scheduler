@@ -50,7 +50,7 @@ function draw() {
       <input id="vq-${k}" placeholder="Search part" style="width:60%" oninput="vsrch('${k}')"> <input id="vn-${k}" class="q" type="number" min="1" value="1"> <button class="sm" onclick="vadd('${k}')">Add</button>
       <div id="vr-${k}" class="muted"></div><div id="vp-${k}"></div><span id="vm-${k}" class="muted"></span></div>
     <div style="margin-top:.8rem;padding-top:.6rem;border-top:1px solid #E2E6E7"><b>Upload levels for ${esc(l.label)}</b> <span class="muted">CSV or Excel: part in the first column, level in the second.</span><br>
-      <label><input type="checkbox" id="vrep-${k}" checked> Replace existing levels for these parts</label><br><input type="file" accept=".csv,.xlsx" onchange="vup('${k}',this)"><div id="vu-${k}" style="margin-top:.4rem"></div></div>
+      <span class="muted">Existing levels for these parts are replaced.</span><br><input type="file" accept=".csv,.xlsx" onchange="vup('${k}',this)"><div id="vu-${k}" style="margin-top:.4rem"></div></div>
     <div style="margin-top:.8rem;padding-top:.6rem;border-top:1px solid #E2E6E7"><button class="sm" style="color:#b00020;border-color:#b00020" onclick="vdel('${k}',${l.items.length},'${esc(l.label).replace(/'/g, '')}')">Delete all ${l.items.length} reorder levels here</button> <span id="vd-${k}" class="muted"></span></div></details>`; }).join('');
   document.querySelectorAll('details.loc[open]').forEach(d => quant(d.dataset.k));
 }
@@ -90,7 +90,7 @@ async function vup(k, inp) { const f = inp.files[0]; if (!f) return; const [et, 
   } catch (e) { box.innerHTML = '<span class="err">' + esc(e.message) + '</span>'; } inp.value = ''; }
 async function vapply(k) { const [et, eid] = k.split('-'), box = $('vu-' + k), rows = vrows[k]; if (!rows || !confirm(`Apply ${rows.length} reorder level changes in BigChange?`)) return;
   box.textContent = 'Applying ' + rows.length + ' changes... this can take a while.';
-  try { const j = await api('/upload-apply', 'POST', {entityType: et, entityId: eid, replace: $('vrep-' + k).checked, rows: rows.map(x => ({stockId: x.stockId, quantity: x.quantity}))});
+  try { const j = await api('/upload-apply', 'POST', {entityType: et, entityId: eid, rows: rows.map(x => ({stockId: x.stockId, quantity: x.quantity}))});
     box.innerHTML = `<span class="${j.failed.length || j.mismatch.length ? 'err' : 'ok'}">${j.done} applied${j.failed.length ? ', ' + j.failed.length + ' failed' : ''}${j.mismatch.length ? ', ' + j.mismatch.length + ' do not show the level you asked for (BigChange may add rather than replace)' : ''}.</span>`; qcache = {}; load(); } catch (e) { box.innerHTML = '<span class="err">' + esc(e.message) + '</span>'; } }
 async function vdel(k, n, label) { const [et, eid] = k.split('-'), m = $('vd-' + k);
   if (!confirm(`Delete ALL ${n} reorder levels for ${label} in BigChange? This cannot be undone.`)) return;

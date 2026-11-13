@@ -299,7 +299,18 @@ def search():
     return jsonify({'results': [s for s in cat if all(w in s['text'].lower() for w in words)][:25]})
 
 
-def _set(stock_id, et, eid, qty):
+def _fresh_levels():
+    _cache.pop('levels', None)
+    return _levels()[0]
+
+
+def _set(stock_id, et, eid, qty, rows=None):
+    """Make the reorder level for this part at this location exactly qty: delete every existing row for it, then add one.
+    BigChange's add call creates a new row rather than replacing, so existing rows must go first. rows = fresh levels (pass once for bulk jobs)."""
+    if rows is None: rows = _fresh_levels()
+    old = [r for r in rows if r['stockId'] == stock_id and r['entityType'] == et and r['entityId'] == eid and r['reorderId']]
+    for r in old: _del(int(r['reorderId']))
+    if qty <= 0: return {'removed': len(old)}
     return _ws('AddStockReorderLevel', {'StockId': stock_id, 'EntityType': et, 'EntityId': eid, 'Quantity': qty})
 
 
@@ -365,8 +376,10 @@ def add_all():
     except (KeyError, TypeError, ValueError): return jsonify({'error': 'stockId, quantity and vanIds are needed'}), 400
     if qty <= 0 or not ids or len(ids) > 300: return jsonify({'error': 'Check the quantity and the van list'}), 400
     done, failed = [], []
+    try: cur = _fresh_levels()
+    except Exception as ex: return jsonify({'error': str(ex)[:300]}), 502
     for vid in ids:
-        try: _set(sid, 2, vid, qty); done.append(vid)
+        try: _set(sid, 2, vid, qty, cur); done.append(vid)
         except Exception as ex: failed.append({'id': vid, 'error': str(ex)[:200]})
         time.sleep(0.15)
     _cache.pop('levels', None)
@@ -433,18 +446,10 @@ def upload_apply():
     except (KeyError, TypeError, ValueError): return jsonify({'error': 'entityType, entityId and rows needed'}), 400
     if not isinstance(rows, list) or not rows or len(rows) > 2000: return jsonify({'error': 'Check the rows'}), 400
     failed = []
-    if b.get('replace'):   # remove the existing level for each part first so the new figure replaces rather than adds
-        try:
-            _cache.pop('levels', None); cur, _ = _levels()
-            want = {int(r['stockId']) for r in rows}
-            for c in cur:
-                if c['entityType'] == et and c['entityId'] == eid and c['stockId'] in want and c['reorderId']:
-                    try: _del(int(c['reorderId']))
-                    except Exception as ex: failed.append({'stockId': c['stockId'], 'error': 'delete: ' + str(ex)[:120]})
-                    time.sleep(0.1)
-        except Exception as ex: return jsonify({'error': str(ex)[:300]}), 502
+    try: cur = _fresh_levels()
+    except Exception as ex: return jsonify({'error': str(ex)[:300]}), 502
     for r in rows:
-        try: _set(int(r['stockId']), et, eid, float(r['quantity']))
+        try: _set(int(r['stockId']), et, eid, float(r['quantity']), cur)
         except Exception as ex: failed.append({'stockId': r.get('stockId'), 'error': str(ex)[:150]})
         time.sleep(0.15)
     _cache.pop('levels', None)
