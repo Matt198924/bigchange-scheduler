@@ -13,9 +13,11 @@ app.register_blueprint(leave_bp)
 from parts import parts_bp
 from demand import demand_bp  # parts demand planner (Staff admin)
 from reorder import reorder_bp  # stock reorder levels
+from stockmoves import stockmoves_bp  # stock movements
 app.register_blueprint(parts_bp)
 app.register_blueprint(demand_bp)
 app.register_blueprint(reorder_bp)
+app.register_blueprint(stockmoves_bp)
 from incident import incident_bp  # accident / incident reports (/incident)
 app.register_blueprint(incident_bp)
 from handbook import handbook_bp  # company handbook (/handbook)
