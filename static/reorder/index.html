@@ -19,6 +19,12 @@ input.q{width:5.5rem}pre{background:#f3f5f6;padding:.6rem;border-radius:8px;over
   <div style="margin-top:.6rem"><b>Vans</b> <a href="#" onclick="vsel(true);return false">Select all</a> · <a href="#" onclick="vsel(false);return false">Select none</a> <span id="vcount" class="muted"></span>
     <div id="vlist" style="display:grid;grid-template-columns:repeat(auto-fill,minmax(10rem,1fr));gap:.2rem .8rem;margin-top:.4rem;max-height:14rem;overflow:auto">Loading vans...</div></div>
   <div style="margin-top:.6rem"><button class="sm p" onclick="addAll()">Add to all vans</button> <span id="amsg" class="muted"></span></div></div>
+<div class="card"><h2>Remove one part from vans</h2><div class="muted">Search the part, tick the vans, and its reorder level is deleted from each of them.</div>
+  <input id="rq" placeholder="Search part" style="width:100%" oninput="rsrch()"><div id="rres" class="muted" style="margin:.3rem 0"></div>
+  <div id="rpick" style="margin:.3rem 0"></div>
+  <div><b>Vans</b> <a href="#" onclick="rsel(true);return false">Select all</a> &middot; <a href="#" onclick="rsel(false);return false">Select none</a> <span id="rcount" class="muted"></span></div>
+  <div id="rlist" style="display:grid;grid-template-columns:repeat(auto-fill,minmax(10rem,1fr));gap:.2rem .8rem;margin-top:.4rem;max-height:14rem;overflow:auto"></div>
+  <div style="margin-top:.6rem"><button class="sm" style="color:#b00020;border-color:#b00020" onclick="remPart()">Remove from ticked vans</button> <span id="rmsg" class="muted"></span></div></div>
 <div class="card"><h2>Locations with reorder levels</h2>
   <input id="fq" placeholder="Filter locations" style="width:100%;margin-bottom:.5rem" oninput="draw()">
   <div id="summary" class="muted">Loading…</div><div id="locs"></div></div>
@@ -100,11 +106,22 @@ async function vdel(k, n, label) { const [et, eid] = k.split('-'), m = $('vd-' +
 let st; function srch() { clearTimeout(st); st = setTimeout(async () => { const q = $('aq').value.trim(); if (q.length < 2) { $('ares').textContent = ''; return; }
   $('ares').textContent = 'Searching...'; try { const j = await api('/search?q=' + encodeURIComponent(q)); $('ares').innerHTML = j.results.length ? j.results.map(r => `<a href="#" onclick="pick(${r.id},this);return false" data-t="${esc(r.text)}" style="display:block;padding:.15rem 0">${esc(r.text)}</a>`).join('') : 'No match.'; } catch (e) { $('ares').innerHTML = '<span class="err">' + esc(e.message) + '</span>'; } }, 350); }
 function pick(id, a) { PICK = {id, text: a.dataset.t}; $('apick').innerHTML = '<b>Selected:</b> ' + esc(PICK.text); $('ares').textContent = ''; }
-let VANS = [];
+let VANS = [], RPICK = null, rt;
 async function loadVans() { try { VANS = (await api('/vans?skip=')).vans;
-  $('vlist').innerHTML = VANS.map(v => `<label style="display:flex;align-items:center;gap:.5rem;margin:0;font-weight:500;cursor:pointer"><input type="checkbox" class="vk" style="width:1.1rem;height:1.1rem;padding:0;margin:0;flex:none" value="${v.id}" ${/stock/i.test(v.name) ? '' : 'checked'} onchange="vcnt()"><span>${esc(v.name)}</span></label>`).join(''); vcnt(); } catch (e) { $('vlist').innerHTML = '<span class="err">' + esc(e.message) + '</span>'; } }
+  $('vlist').innerHTML = VANS.map(v => `<label style="display:flex;align-items:center;gap:.5rem;margin:0;font-weight:500;cursor:pointer"><input type="checkbox" class="vk" style="width:1.1rem;height:1.1rem;padding:0;margin:0;flex:none" value="${v.id}" ${/stock/i.test(v.name) ? '' : 'checked'} onchange="vcnt()"><span>${esc(v.name)}</span></label>`).join(''); vcnt();
+  $('rlist').innerHTML = VANS.map(v => `<label style="display:flex;align-items:center;gap:.5rem;margin:0;font-weight:500;cursor:pointer"><input type="checkbox" class="rk" style="width:1.1rem;height:1.1rem;padding:0;margin:0;flex:none" value="${v.id}" onchange="rcnt()"><span>${esc(v.name)}</span></label>`).join(''); rcnt(); } catch (e) { $('vlist').innerHTML = '<span class="err">' + esc(e.message) + '</span>'; } }
 function vsel(on) { document.querySelectorAll('.vk').forEach(c => c.checked = on); vcnt(); }
 function vcnt() { $('vcount').textContent = document.querySelectorAll('.vk:checked').length + ' of ' + VANS.length + ' ticked'; }
+function rsel(on) { document.querySelectorAll('.rk').forEach(c => c.checked = on); rcnt(); }
+function rcnt() { $('rcount').textContent = document.querySelectorAll('.rk:checked').length + ' of ' + VANS.length + ' ticked'; }
+function rsrch() { clearTimeout(rt); rt = setTimeout(async () => { const q = $('rq').value.trim(); if (q.length < 2) { $('rres').textContent = ''; return; }
+  try { const j = await api('/search?q=' + encodeURIComponent(q)); $('rres').innerHTML = j.results.length ? j.results.map(r => `<a href="#" onclick="rpick(${r.id},this);return false" data-t="${esc(r.text)}" style="display:block;padding:.15rem 0">${esc(r.text)}</a>`).join('') : 'No match.'; } catch (e) { $('rres').innerHTML = '<span class="err">' + esc(e.message) + '</span>'; } }, 350); }
+function rpick(id, a) { RPICK = {id, text: a.dataset.t}; $('rpick').innerHTML = '<b>Selected:</b> ' + esc(RPICK.text); $('rres').textContent = ''; }
+async function remPart() { const m = $('rmsg'); if (!RPICK) { m.textContent = 'Pick a part first.'; return; }
+  const ids = [...document.querySelectorAll('.rk:checked')].map(c => Number(c.value)); if (!ids.length) { m.textContent = 'Tick at least one van.'; return; }
+  if (!confirm(`Delete the reorder level for "${RPICK.text}" from ${ids.length} van(s)? This cannot be undone.`)) return;
+  m.textContent = 'Removing...';
+  try { const j = await api('/remove-part', 'POST', {stockId: RPICK.id, vanIds: ids}); m.innerHTML = `<span class="${j.failed.length ? 'err' : 'ok'}">${j.deleted} reorder level(s) deleted from ${j.vansWith} van(s)${j.failed.length ? ', ' + j.failed.length + ' failed' : ''}. ${j.vansChecked - j.vansWith} ticked van(s) did not have it.</span>`; qcache = {}; load(); } catch (e) { m.innerHTML = '<span class="err">' + esc(e.message) + '</span>'; } }
 async function addAll() {
   if (!PICK) { $('amsg').textContent = 'Pick a part first.'; return; } const qty = Number($('aqty').value); if (!(qty > 0)) { $('amsg').textContent = 'Enter a quantity.'; return; }
   const ids = [...document.querySelectorAll('.vk:checked')].map(c => Number(c.value)); if (!ids.length) { $('amsg').textContent = 'Tick at least one van.'; return; }
