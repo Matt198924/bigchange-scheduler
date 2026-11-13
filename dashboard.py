@@ -85,3 +85,28 @@ def settings():
     if not 0 < n < 500: return jsonify({'error': 'Check the number'}), 400
     leave.init_db(); leave.set_setting('dash_engineers', str(n))
     return jsonify({'totalEngineers': n})
+
+
+@dashboard_bp.route('/api/dashboard/unallocated')
+def unallocated():
+    """Jobs with no engineer booked yet (status new or unscheduled), counted in the chosen categories."""
+    if _cache.get('unalloc') and time.time() - _cache['unalloc'][0] < 120: return jsonify(_cache['unalloc'][1])
+    now = datetime.now(timezone.utc)
+    f, t = (now - timedelta(days=730)).strftime('%Y-%m-%dT00:00:00Z'), (now + timedelta(days=90)).strftime('%Y-%m-%dT23:59:59Z')
+    seen, jobs = set(), []
+    try:
+        for st in ('new', 'unscheduled'):
+            page = 1
+            while page <= 10:
+                data = leave.bc_hooks['get']('/jobs', {'statusModifiedAtFrom': f, 'statusModifiedAtTo': t, 'status': st, 'pageSize': 1000, 'pageNumber': page})
+                items = data if isinstance(data, list) else (data.get('items') or [])
+                for j in items:
+                    if j.get('id') not in seen: seen.add(j.get('id')); jobs.append(j)
+                if len(items) < 1000: break
+                page += 1
+    except Exception as ex: return jsonify({'error': str(ex)[:300]}), 502
+    counted = [j for j in jobs if j.get('categoryId') in COUNT_CATEGORIES]
+    res = {'unallocated': len(counted), 'new': sum(1 for j in counted if j.get('status') == 'new'),
+           'unscheduled': sum(1 for j in counted if j.get('status') == 'unscheduled'), 'otherJobs': len(jobs) - len(counted)}
+    _cache['unalloc'] = (time.time(), res)
+    return jsonify(res)
