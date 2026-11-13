@@ -117,10 +117,14 @@ def check():
     if sid.isdigit():
         variants += [('StockId only', {'StockId': sid})]
         if eid.isdigit(): variants += [('EntityType=2 + EntityId + StockId', {'EntityType': 2, 'EntityId': eid, 'StockId': sid})]
+    raw_q = (request.args.get('q') or '').strip()
+    if raw_q:      # free-form test, e.g. StockId=348050&EntityType=2&EntityId=233377
+        from urllib.parse import parse_qsl
+        variants = [('your own: ' + raw_q, dict(parse_qsl(raw_q)))] + variants
     out = []
     for name, p in variants:
         try:
-            body = _ws('ListStockReorderLevel', p)
+            body = _ws(request.args.get('action') or 'ListStockReorderLevel', p)
             out.append({'try': name, 'count': len(_rows(body)), 'raw': _j.dumps(body)[:700]})
         except Exception as ex:
             out.append({'try': name, 'error': str(ex)[:400]})
