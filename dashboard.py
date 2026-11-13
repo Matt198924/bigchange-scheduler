@@ -161,6 +161,7 @@ def booked():
 # ── Flags (pink / black / yellow) on jobs that are not financially complete ─────────────────────
 _flag_lock = threading.Lock()
 COLOURS = ('pink', 'black', 'yellow')
+DEFAULT_FLAGS = {'pink': [10121], 'black': [210481], 'yellow': [10122]}     # R&S flag ids, used until changed under Flag setup
 
 
 def _jget(key, default):
@@ -187,7 +188,7 @@ def _flag_map(flags):
     m = {}
     for c in COLOURS:
         if saved.get(c) is not None: m[c] = [int(x) for x in saved[c]]
-        else: m[c] = [f['id'] for f in flags if c in str(f.get('color') or '').lower() or c in str(f.get('name') or '').lower()]
+        else: m[c] = DEFAULT_FLAGS[c]
     return m
 
 
