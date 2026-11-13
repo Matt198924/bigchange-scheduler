@@ -1,6 +1,6 @@
 """Parts demand planner (office only, inside Staff admin).
 
-Syncs the last ~6 months of parts used on completed BigChange jobs into our own tables (resumable background job),
+Syncs the last ~6 months of parts sold (BigChange invoice lines coded to nominal 5000) into our own tables (resumable background job),
 then turns that usage into a suggested stock level per van and for the stock room.
 """
 import json
@@ -61,54 +61,88 @@ def _set_status(**kw):
     s = _status(); s.update(kw); leave.set_setting('demand_sync', json.dumps(s))
 
 
+_nominal = {}
+
+
+def _nominal_id(code='5000'):
+    if code not in _nominal:
+        page = 1
+        while page <= 20 and code not in _nominal:
+            items = _items('/nominalCodes', {'pageSize': 200, 'pageNumber': page})
+            for n in items:
+                _nominal[str(n.get('code'))] = n.get('id')
+            if len(items) < 200: break
+            page += 1
+    return _nominal.get(code)
+
+
+_jobres = {}
+
+
+def _job_resource(jid):
+    if jid not in _jobres:
+        try:
+            j = leave.bc_hooks['get'](f'/jobs/{int(jid)}', {}) or {}
+            _jobres[jid] = (str(j.get('resourceId') or ''), j.get('resourceName') or '')
+        except Exception:
+            _jobres[jid] = ('', '')
+    return _jobres[jid]
+
+
 def _sync(days):
+    """Parts sold = invoice lines coded to nominal 5000, over the last `days` days."""
     try:
         _tables()
+        if leave.get_setting('demand_source') != 'invoice':      # earlier job-stock data is replaced by invoice data
+            leave.execute('DELETE FROM demand_lines'); leave.execute('DELETE FROM demand_jobs'); leave.set_setting('demand_source', 'invoice')
+        nid = _nominal_id('5000')
+        if not nid: raise RuntimeError('Nominal code 5000 was not found in BigChange')
         end = datetime.now(timezone.utc)
         start = end - timedelta(days=days)
         windows, a = [], start
         while a < end:
             b = min(a + timedelta(days=3), end); windows.append((a, b)); a = b
-        _set_status(beat=time.time(), running=True, windowsTotal=len(windows), windowsDone=0, jobsNew=0, lineCount=0, error='', msg='Starting...',
+        _set_status(beat=time.time(), running=True, windowsTotal=len(windows), windowsDone=0, jobsNew=0, error='', msg='Starting...',
                     started=datetime.now().strftime('%d %b %Y %H:%M'))
         new = 0
         for i, (a, b) in enumerate(windows):
             f, t = a.strftime('%Y-%m-%dT%H:%M:%SZ'), b.strftime('%Y-%m-%dT%H:%M:%SZ')
-            page, jobs = 1, []
+            page, invs = 1, []
             while page <= 30:
-                base = {'statusModifiedAtFrom': f, 'statusModifiedAtTo': t, 'pageSize': 200, 'pageNumber': page}
-                try: items = _items('/jobs', {**base, 'status': list(DONE)})
-                except Exception: items = [j for j in _items('/jobs', base) if j.get('status') in DONE]
-                jobs += [j for j in items if j.get('status') in DONE]
+                items = _items('/finance/invoices', {'createdAtFrom': f, 'createdAtTo': t, 'pageSize': 200, 'pageNumber': page})
+                invs += items
                 if len(items) < 200: break
                 page += 1
-            for j in jobs:
-                jid = str(j.get('id'))
-                if leave.query('SELECT 1 FROM demand_jobs WHERE job_id = ?', (jid,)): continue
-                rid, rname = str(j.get('resourceId') or ''), j.get('resourceName') or ''
-                when = (j.get('actualEndAt') or j.get('statusModifiedAt') or f)[:10]
+            for inv in invs:
+                iid = str(inv.get('id'))
+                if inv.get('cancelledAt') or leave.query('SELECT 1 FROM demand_jobs WHERE job_id = ?', (iid,)): continue
+                when = (inv.get('createdAt') or f)[:10]
                 n = 0
-                try: lines = _items(f'/jobs/{int(jid)}/stock', {'pageSize': 100})
-                except Exception: lines = []
-                for s in lines:
-                    qty = s.get('quantityActual') or s.get('quantityPlanned') or 0
-                    try: qty = float(qty)
+                lines, p2 = [], 1
+                while p2 <= 10:
+                    try: got = _items(f'/finance/invoices/{int(iid)}/lineItems', {'pageSize': 200, 'pageNumber': p2})
+                    except Exception: got = []
+                    lines += got
+                    if len(got) < 200: break
+                    p2 += 1
+                rid, rname = ('', '')
+                for ln in lines:
+                    if ln.get('nominalCodeId') != nid: continue
+                    try: qty = float(ln.get('quantity') or 0)
                     except (TypeError, ValueError): qty = 0
-                    if qty <= 0: continue
-                    det = _details(s['stockDetailsId']) if s.get('stockDetailsId') else {}
-                    model = (det.get('model') or s.get('model') or '').strip()
-                    part, desc = _split_model(model)
-                    if not part: part = (det.get('modelNumber') or det.get('stockCode') or s.get('modelNumber') or s.get('stockCode') or '').strip()
-                    if not part: continue
+                    desc = (ln.get('description') or '').strip()
+                    if not qty or not desc: continue
+                    part, name = _split_model(desc)
+                    if not part: part, name = desc[:60], ''
+                    if not rid and inv.get('jobId'): rid, rname = _job_resource(inv['jobId'])
                     leave.execute('INSERT INTO demand_lines (job_id, part, name, qty, done_at, resource_id, resource_name) VALUES (?,?,?,?,?,?,?)',
-                                  (jid, part, (desc or det.get('make') or '')[:120], qty, when, rid, rname))
+                                  (iid, part, name[:120], qty, when, rid, rname))
                     n += 1
-                leave.execute('INSERT INTO demand_jobs (job_id, resource_id, resource_name, done_at, lines) VALUES (?,?,?,?,?)',
-                              (jid, rid, rname, when, n))
+                leave.execute('INSERT INTO demand_jobs (job_id, resource_id, resource_name, done_at, lines) VALUES (?,?,?,?,?)', (iid, rid, rname, when, n))
                 new += 1
-                time.sleep(0.12)
-            _set_status(beat=time.time(), windowsDone=i + 1, jobsNew=new, msg=f'Reading jobs up to {b.strftime("%d %b %Y")}')
-        _set_status(running=False, msg='Finished', finished=datetime.now().strftime('%d %b %Y %H:%M'))
+                time.sleep(0.1)
+            _set_status(beat=time.time(), windowsDone=i + 1, jobsNew=new, msg=f'Reading invoices up to {b.strftime("%d %b %Y")}')
+        _set_status(running=False, msg='Finished', finished=datetime.now().strftime('%d %b %Y %H:%M'), finishedTs=time.time())
     except Exception as ex:
         resp = getattr(ex, 'response', None)
         _set_status(running=False, error=f"{ex}{' - ' + resp.text[:200] if resp is not None else ''}"[:400], msg='Stopped - press Sync to carry on')
@@ -159,6 +193,7 @@ def analyse(cfg, days=182):
         room = math.ceil(m * horizon + z * s * math.sqrt(horizon) - 1e-9) if jobs >= 2 else 0
         rop = math.ceil(m * lead + z * s * math.sqrt(lead) - 1e-9) if jobs >= 2 else 0
         if jobs >= 2: room, rop = max(room, 1), max(rop, 1)
+        if p['qty'] <= 0: continue
         out.append({'part': p['part'], 'name': p['name'], 'qty': round(p['qty'], 2), 'jobs': jobs, 'engineers': len(p['eng']),
                     'perWeek': round(m, 2), 'months': [round(x, 1) for x in p['mo'][:6]], 'last': p['last'],
                     'van': van, 'room': room, 'reorder': rop, 'totalHeld': room + van * vans, 'kind': kind})
@@ -174,6 +209,11 @@ def demand_page():
 
 @demand_bp.route('/api/demand')
 def demand():
+    st = _status()      # keep it fresh: if the last full sync is over 12 hours old, top up the last 14 days in the background
+    if st.get('finishedTs') and not st.get('running') and time.time() - st['finishedTs'] > 12 * 3600:
+        with _lock:
+            _set_status(beat=time.time(), running=True, error='', msg='Topping up...')
+            threading.Thread(target=_sync, args=(14,), daemon=True).start()
     return jsonify({**analyse(_cfg()), 'sync': _status()})
 
 
