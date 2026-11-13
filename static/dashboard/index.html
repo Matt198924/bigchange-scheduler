@@ -11,13 +11,19 @@
 input.q{width:5.5rem}pre{background:#f3f5f6;padding:.6rem;border-radius:8px;overflow:auto;font-size:12px}</style></head><body>
 <div class="topbar"><div class="brand"><div class="brand-mark"><img src="/static/logo-mark.png" alt="R&amp;S"></div><span class="brand-name">Daily dashboard</span></div><a class="btn-home" href="/">⌂ Home</a></div>
 <div class="wrap">
-<div class="card" style="display:flex;gap:1rem;align-items:center;flex-wrap:wrap"><h2 style="margin:0">Operations dashboard</h2><input id="date" type="date" style="width:auto" onchange="load()"> <button class="sm" onclick="load()">Refresh</button></div>
+<div class="card" style="display:flex;gap:1rem;align-items:center;flex-wrap:wrap"><h2 style="margin:0">Operations dashboard</h2><input id="date" type="date" style="width:auto" onchange="load()"> <button class="sm" onclick="load();loadNext();loadUn()">Refresh</button></div>
 <div class="card"><h2 id="dh">Jobs</h2>
   <div style="display:flex;gap:2.5rem;flex-wrap:wrap">
     <div><div class="muted" id="l1">Jobs completed</div><div id="done" style="font-size:2.4rem;font-weight:700">...</div></div>
     <div><div class="muted">Engineers with jobs</div><div style="font-size:2.4rem;font-weight:700"><span id="eng">...</span> / <input id="tot" type="number" min="1" style="width:5rem;font:inherit;font-size:2.4rem;font-weight:700;padding:0 .2rem;border:1px dashed #9aa5ab" onchange="saveTot()"></div></div>
     <div><div class="muted">Average jobs per engineer</div><div id="avg" style="font-size:2.4rem;font-weight:700">...</div></div></div>
   <div id="doneNote" class="muted" style="margin-top:.5rem"></div></div>
+<div class="card" style="background:#fdeaea"><h2 style="color:#b00020">Unallocated jobs</h2>
+  <div style="display:flex;gap:2.5rem;flex-wrap:wrap"><div><div class="muted">Total unallocated</div><div id="un" style="font-size:2.4rem;font-weight:700">...</div></div>
+  <div><div class="muted">New</div><div id="unNew" style="font-size:1.6rem;font-weight:700;margin-top:.6rem">...</div></div>
+  <div><div class="muted">Unscheduled</div><div id="unSch" style="font-size:1.6rem;font-weight:700;margin-top:.6rem">...</div></div></div>
+  <div id="unNote" class="muted" style="margin-top:.4rem"></div></div>
+<div id="next"></div>
 </div>
 <script>
 const $ = id => document.getElementById(id);
@@ -31,5 +37,14 @@ async function load() {
   } catch (e) { $('done').textContent = '-'; $('eng').textContent = '-'; $('avg').textContent = '-'; $('doneNote').innerHTML = '<span class="err">' + e.message + '</span>'; }
 }
 async function saveTot() { try { const r = await fetch('/api/dashboard/settings', {method: 'PUT', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({totalEngineers: Number($('tot').value)})}); if (!r.ok) throw 0; } catch (e) { alert('Could not save that number'); } }
-$('date').value = today(); load();
+async function loadNext() { const box = $('next'); box.innerHTML = '<div class="card muted">Loading planned jobs...</div>';
+  try { const j = await get('/next');
+    box.innerHTML = '<div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(20rem,1fr));gap:.8rem">' + j.days.map(x => `<div class="card" style="margin:.8rem 0 0"><h2 style="color:#0a7a3a">${new Date(x.date + 'T12:00:00').toLocaleDateString('en-GB', {weekday: 'long', day: 'numeric', month: 'long'})} - planned jobs</h2>
+      <div style="display:flex;gap:1.8rem;flex-wrap:wrap"><div><div class="muted">Planned jobs</div><div style="font-size:2.2rem;font-weight:700">${x.planned}</div></div>
+      <div><div class="muted">Engineers with jobs</div><div style="font-size:2.2rem;font-weight:700">${x.engineers} / ${x.totalEngineers}</div></div>
+      <div><div class="muted">Average per engineer</div><div style="font-size:2.2rem;font-weight:700">${x.average}</div></div></div></div>`).join('') + '</div>';
+  } catch (e) { box.innerHTML = '<div class="card err">' + e.message + '</div>'; } }
+async function loadUn() { try { const j = await get('/unallocated'); $('un').textContent = j.unallocated; $('unNew').textContent = j.new; $('unSch').textContent = j.unscheduled; $('unNote').textContent = j.otherJobs + ' job(s) in other categories are not counted.'; }
+  catch (e) { $('un').textContent = '-'; $('unNote').innerHTML = '<span class="err">' + e.message + '</span>'; } }
+$('date').value = today(); load(); loadNext(); loadUn();
 </script></body></html>
