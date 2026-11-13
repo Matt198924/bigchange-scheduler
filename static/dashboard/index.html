@@ -64,7 +64,7 @@ const FC = {pink: ['#f6c6ee', 'Pink flags'], black: ['#d9dcde', 'Black flags'], 
 let flTimer;
 async function loadFl() { clearTimeout(flTimer);
   try { const j = await get('/flags'); const n = j.now;
-    $('fl').innerHTML = Object.keys(FC).map(c => `<div style="background:${FC[c][0]};border-radius:10px;padding:.7rem 1.2rem;min-width:11rem;text-align:center"><div style="font-weight:700">${FC[c][1]}</div><div style="font-size:2.4rem;font-weight:700">${n ? n[c] : '...'}</div>
+    $('fl').innerHTML = Object.keys(FC).map(c => `<div style="background:${FC[c][0]};border-radius:10px;padding:.7rem 1.2rem;min-width:11rem;text-align:center"><div style="font-weight:700">${FC[c][1]}</div><div class="muted" style="margin-top:-.1rem">${(j.names[c] || []).map(esc).join(', ')}</div><div style="font-size:2.4rem;font-weight:700">${n ? n[c] : '...'}</div>
       <div class="muted">Started day on ${j.startDay ? j.startDay[c] : '-'}<br>Started week on ${j.startWeek ? j.startWeek[c] : '-'}</div></div>`).join('');
     const s = j.state; $('flNote').innerHTML = s.running ? `<b>Counting...</b> ${esc(s.msg || '')} (this runs in the background; you can leave the page)` : (s.error ? '<span class="err">' + esc(s.error) + '</span>' : (s.finishedTs ? 'Counted ' + s.jobs + ' open jobs, updated ' + new Date(s.finishedTs * 1000).toLocaleTimeString('en-GB', {hour: '2-digit', minute: '2-digit'}) + '. Refreshes hourly. ' : '') + '<a href="#" onclick="recount();return false">Recount now</a>');
     $('flSet').innerHTML = Object.keys(FC).map(c => `<label style="display:inline-block;margin-right:1rem">${FC[c][1]} ids <input id="fm-${c}" value="${j.map[c].join(', ')}" style="width:12rem"></label>`).join('') + ' <button class="sm" onclick="saveFl()">Save</button>';

@@ -262,7 +262,7 @@ def flags():
     return jsonify({'state': {k: s.get(k) for k in ('running', 'msg', 'error', 'done', 'total', 'jobs', 'finishedTs')},
                     'now': _by_colour(s.get('counts') or {}, fmap) if s.get('counts') else None,
                     'startDay': _by_colour(day_s, fmap) if day_s else None, 'startWeek': _by_colour(week_s, fmap) if week_s else None,
-                    'map': fmap, 'flags': [{'id': f['id'], 'name': f.get('name'), 'color': f.get('color'), 'count': (s.get('counts') or {}).get(str(f['id']), 0)} for f in fl]})
+                    'map': fmap, 'names': {c: [(next((f.get('name') for f in fl if f['id'] == i), None) or f'Flag {i}') for i in fmap[c]] for c in COLOURS}, 'flags': [{'id': f['id'], 'name': f.get('name'), 'color': f.get('color'), 'count': (s.get('counts') or {}).get(str(f['id']), 0)} for f in fl]})
 
 
 @dashboard_bp.route('/api/dashboard/flags/config', methods=['PUT'])
