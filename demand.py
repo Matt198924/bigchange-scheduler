@@ -17,7 +17,7 @@ import leave
 
 demand_bp = Blueprint('demand', __name__)
 DONE = ('completedOk', 'completedWithIssues')
-DEFAULT_CFG = {'vans': 0, 'van_cycle_weeks': 2, 'lead_weeks': 2, 'review_weeks': 1, 'service': 95, 'min_jobs': 3}
+DEFAULT_CFG = {'vans': 0, 'van_cycle_weeks': 2, 'lead_weeks': 2, 'review_weeks': 1, 'service': 95, 'min_jobs': 3, 'room_match': 'stock'}
 Z = {90: 1.28, 95: 1.65, 98: 2.05, 99: 2.33}
 _lock = threading.Lock()
 _sd = {}
@@ -34,6 +34,8 @@ def _tables():
         try: leave.execute(f'ALTER TABLE demand_lines ADD COLUMN {col} REAL DEFAULT 0')
         except Exception: pass
     leave.execute('CREATE TABLE IF NOT EXISTS demand_costs (sd_id TEXT PRIMARY KEY, part TEXT, cost REAL, checked TEXT)')
+    leave.execute('CREATE TABLE IF NOT EXISTS demand_stock (part TEXT, vehicle_id TEXT, qty REAL)')
+    leave.execute('CREATE TABLE IF NOT EXISTS demand_vehicles (vehicle_id TEXT PRIMARY KEY, label TEXT, active INTEGER)')
     leave.execute('CREATE INDEX IF NOT EXISTS demand_lines_part ON demand_lines (part)')
 
 
@@ -131,6 +133,37 @@ def _invoice_lines(inv):
     return inv, lines[0:0] + lines
 
 
+def _sync_stock():
+    """Vehicles, then current stock on hand per vehicle (items with no vehicle are held at a contact/site)."""
+    leave.execute('DELETE FROM demand_vehicles')
+    page = 1
+    while page <= 20:
+        items = _items('/vehicles', {'pageSize': 200, 'pageNumber': page})
+        for v in items:
+            label = ' '.join(str(v.get(k) or '') for k in ('reference', 'registration', 'groupName')).strip()
+            leave.execute('INSERT INTO demand_vehicles (vehicle_id, label, active) VALUES (?,?,?)',
+                          (str(v.get('id')), label, 0 if v.get('isArchived') else 1))
+        if len(items) < 200: break
+        page += 1
+    sdmap = {r['sd_id']: r['part'] for r in leave.query('SELECT sd_id, part FROM demand_costs')}
+    rows, page = {}, 1
+    while page <= 200:
+        _set_status(beat=time.time(), msg=f'Reading current stock (page {page})')
+        items = _items('/stockItems', {'isSold': False, 'pageSize': 200, 'pageNumber': page})
+        for s in items:
+            part = sdmap.get(str(s.get('stockDetailsId')))
+            if not part: continue
+            try: q = float(s.get('quantity') or 0)
+            except (TypeError, ValueError): q = 0
+            k = (part, str(s.get('locationVehicleId') or ''))
+            rows[k] = rows.get(k, 0) + q
+        if len(items) < 200: break
+        page += 1
+    leave.execute('DELETE FROM demand_stock')
+    for (part, vid), q in rows.items():
+        leave.execute('INSERT INTO demand_stock (part, vehicle_id, qty) VALUES (?,?,?)', (part, vid, q))
+
+
 def _sync(days):
     """Parts sold = invoice lines coded to nominal 5000, over the last `days` days."""
     try:
@@ -181,6 +214,8 @@ def _sync(days):
             _set_status(beat=time.time(), windowsDone=i + 1, jobsNew=new, msg=f'Reading invoices up to {b.strftime("%d %b %Y")}')
         try: _sync_costs()
         except Exception as ex: _set_status(costError=str(ex)[:200])
+        try: _sync_stock()
+        except Exception as ex: _set_status(stockError=str(ex)[:200])
         _set_status(running=False, msg='Finished', finished=datetime.now().strftime('%d %b %Y %H:%M'), finishedTs=time.time())
     except Exception as ex:
         resp = getattr(ex, 'response', None)
@@ -201,7 +236,15 @@ def analyse(cfg, days=182):
     weeks = max(1, days // 7)
     t0 = datetime.strptime(since, '%Y-%m-%d')
     vans_seen = {r['resource_id'] for r in rows if r['resource_id']}
-    vans = int(cfg['vans']) or max(1, len(vans_seen))
+    vrows = leave.query('SELECT vehicle_id, label, active FROM demand_vehicles')
+    key = (cfg.get('room_match') or '').strip().lower()
+    room_ids = {v['vehicle_id'] for v in vrows if key and key in (v['label'] or '').lower()}
+    api_vans = sum(1 for v in vrows if v['active'] and v['vehicle_id'] not in room_ids)
+    vans = int(cfg['vans']) or api_vans or max(1, len(vans_seen))
+    onvan, onroom = {}, {}
+    for s in leave.query('SELECT part, vehicle_id, qty FROM demand_stock'):
+        (onvan if s['vehicle_id'] and s['vehicle_id'] not in room_ids else onroom)[s['part']] = (onvan if s['vehicle_id'] and s['vehicle_id'] not in room_ids else onroom).get(s['part'], 0) + float(s['qty'])
+    have_stock = bool(onvan or onroom)
     z = Z.get(int(cfg['service']), 1.65)
     parts = {}
     for r in rows:
@@ -238,12 +281,15 @@ def analyse(cfg, days=182):
         if p['qty'] <= 0: continue
         cost = round(cmap[p['part']], 2) if p['part'] in cmap else (round(p['cv'] / p['cq'], 2) if p['cq'] else 0)
         sell = round(p['sv'] / p['cq'], 2) if p['cq'] else 0
-        out.append({'cost': cost, 'sell': sell, 'vanValue': round(van * cost, 2), 'roomValue': round(room * cost, 2), 'totalValue': round((room + van * vans) * cost, 2), 'part': p['part'], 'name': p['name'], 'qty': round(p['qty'], 2), 'jobs': jobs, 'engineers': len(p['eng']),
+        ov, orr = round(onvan.get(p['part'], 0), 2), round(onroom.get(p['part'], 0), 2)
+        target = room + van * vans
+        order = max(0, math.ceil(target - ov - orr)) if have_stock else 0
+        out.append({'onVans': ov, 'onRoom': orr, 'vanTarget': van * vans, 'order': order, 'orderValue': round(order * cost, 2), 'cost': cost, 'sell': sell, 'vanValue': round(van * cost, 2), 'roomValue': round(room * cost, 2), 'totalValue': round((room + van * vans) * cost, 2), 'part': p['part'], 'name': p['name'], 'qty': round(p['qty'], 2), 'jobs': jobs, 'engineers': len(p['eng']),
                     'perWeek': round(m, 2), 'perMonth': round(m * 52 / 12, 1), 'months': [round(x, 1) for x in p['mo'][:6]], 'last': p['last'],
                     'van': van, 'room': room, 'reorder': rop, 'totalHeld': room + van * vans, 'kind': kind})
     out.sort(key=lambda x: -x['qty'])
-    tot = {'room': round(sum(x['roomValue'] for x in out), 2), 'perVan': round(sum(x['vanValue'] for x in out), 2), 'allVans': round(sum(x['vanValue'] for x in out) * vans, 2), 'noCost': sum(1 for x in out if not x['cost'])}
-    return {'totals': tot, 'parts': out, 'vans': vans, 'vansSeen': len(vans_seen), 'since': since, 'jobs': len({r['job_id'] for r in rows}), 'cfg': cfg}
+    tot = {'room': round(sum(x['roomValue'] for x in out), 2), 'perVan': round(sum(x['vanValue'] for x in out), 2), 'allVans': round(sum(x['vanValue'] for x in out) * vans, 2), 'noCost': sum(1 for x in out if not x['cost']), 'order': round(sum(x['orderValue'] for x in out), 2), 'orderLines': sum(1 for x in out if x['order'] > 0), 'haveStock': have_stock}
+    return {'totals': tot, 'parts': out, 'vans': vans, 'vansSeen': api_vans or len(vans_seen), 'since': since, 'jobs': len({r['job_id'] for r in rows}), 'cfg': cfg}
 
 
 @demand_bp.route('/demand')
@@ -268,7 +314,7 @@ def demand_config():
     c = _cfg()
     for k in DEFAULT_CFG:
         if k in body:
-            try: c[k] = max(0, float(body[k])) if k != 'service' else int(body[k])
+            try: c[k] = str(body[k])[:60] if k == 'room_match' else (max(0, float(body[k])) if k != 'service' else int(body[k]))
             except (TypeError, ValueError): pass
     leave.init_db(); leave.set_setting('demand_cfg', json.dumps(c))
     return jsonify({'cfg': c})
