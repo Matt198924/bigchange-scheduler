@@ -272,20 +272,36 @@ def quantities():
     return jsonify({'quantities': qty})
 
 
+def _items_retry(path, params, tries=6):
+    """Like _items, but waits and retries when BigChange says 429 (too many requests)."""
+    for n in range(tries):
+        try: return _items(path, params)
+        except Exception as ex:
+            if '429' not in str(ex) or n == tries - 1: raise
+            time.sleep(2 + n * 3)
+
+
 def _stock_catalog():
-    if _cache.get('cat') and time.time() - _cache['cat'][0] < 900: return _cache['cat'][1]
-    out, page = [], 1
-    while page <= 100:
-        items = _items('/stockDetails', {'pageSize': 200, 'pageNumber': page})
-        from demand import _split_model
+    """All stock records, cached for an hour. Pages are fetched gently and kept, so a rate-limit stop resumes where it left off."""
+    if _cache.get('cat') and time.time() - _cache['cat'][0] < 3600: return _cache['cat'][1]
+    from demand import _split_model
+    st = _cache.setdefault('catpart', {'page': 1, 'out': []})
+    out = st['out']
+    while st['page'] <= 100:
+        try: items = _items_retry('/stockDetails', {'pageSize': 200, 'pageNumber': st['page']})
+        except Exception:
+            if _cache.get('cat'): return _cache['cat'][1]     # use the older copy rather than fail
+            raise
         for s in items:
             if not s.get('id'): continue
             part = _split_model((s.get('model') or '').strip())[0] or (s.get('modelNumber') or s.get('stockCode') or '').strip()
             out.append({'id': s['id'], 'text': ' '.join(str(x) for x in (s.get('make'), s.get('model'), s.get('modelNumber')) if x).strip(),
                         'part': part, 'num': (s.get('modelNumber') or '').strip()})
         if len(items) < 200: break
-        page += 1
+        st['page'] += 1
+        time.sleep(0.4)
     _cache['cat'] = (time.time(), out)
+    _cache.pop('catpart', None)
     return out
 
 
