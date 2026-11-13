@@ -287,6 +287,34 @@ def _set(stock_id, et, eid, qty):
     return _ws('AddStockReorderLevel', {'StockId': stock_id, 'EntityType': et, 'EntityId': eid, 'Quantity': qty})
 
 
+def _del(rid):
+    return _ws('DeleteStockReorderLevel', {'StockReorderId': rid})
+
+
+@reorder_bp.route('/api/reorder/delete-all', methods=['POST'])
+def delete_all():
+    """Remove every reorder level held at one location (van or contact)."""
+    b = request.get_json(silent=True) or {}
+    try: et, eid = int(b['entityType']), int(b['entityId'])
+    except (KeyError, TypeError, ValueError): return jsonify({'error': 'entityType and entityId needed'}), 400
+    _cache.pop('levels', None)
+    try: rows, _ = _levels()
+    except Exception as ex: return jsonify({'error': str(ex)[:300]}), 502
+    mine = [r for r in rows if r['entityType'] == et and r['entityId'] == eid and r['reorderId']]
+    if b.get('expect') is not None and int(b['expect']) != len(mine):
+        return jsonify({'error': f'Expected {b["expect"]} levels but BigChange now has {len(mine)}. Reload and try again.'}), 409
+    failed = []
+    for r in mine:
+        try: _del(int(r['reorderId']))
+        except Exception as ex: failed.append({'stockId': r['stockId'], 'error': str(ex)[:150]})
+        time.sleep(0.1)
+    _cache.pop('levels', None)
+    left = None
+    try: left = sum(1 for r in _levels()[0] if r['entityType'] == et and r['entityId'] == eid)
+    except Exception: pass
+    return jsonify({'deleted': len(mine) - len(failed), 'failed': failed, 'left': left})
+
+
 @reorder_bp.route('/api/reorder/set', methods=['POST'])
 def set_level():
     b = request.get_json(silent=True) or {}
@@ -388,6 +416,16 @@ def upload_apply():
     except (KeyError, TypeError, ValueError): return jsonify({'error': 'entityType, entityId and rows needed'}), 400
     if not isinstance(rows, list) or not rows or len(rows) > 2000: return jsonify({'error': 'Check the rows'}), 400
     failed = []
+    if b.get('replace'):   # remove the existing level for each part first so the new figure replaces rather than adds
+        try:
+            _cache.pop('levels', None); cur, _ = _levels()
+            want = {int(r['stockId']) for r in rows}
+            for c in cur:
+                if c['entityType'] == et and c['entityId'] == eid and c['stockId'] in want and c['reorderId']:
+                    try: _del(int(c['reorderId']))
+                    except Exception as ex: failed.append({'stockId': c['stockId'], 'error': 'delete: ' + str(ex)[:120]})
+                    time.sleep(0.1)
+        except Exception as ex: return jsonify({'error': str(ex)[:300]}), 502
     for r in rows:
         try: _set(int(r['stockId']), et, eid, float(r['quantity']))
         except Exception as ex: failed.append({'stockId': r.get('stockId'), 'error': str(ex)[:150]})
