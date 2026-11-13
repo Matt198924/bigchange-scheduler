@@ -32,6 +32,7 @@ def _tables():
     for col in ('cost', 'sell'):
         try: leave.execute(f'ALTER TABLE demand_lines ADD COLUMN {col} REAL DEFAULT 0')
         except Exception: pass
+    leave.execute('CREATE TABLE IF NOT EXISTS demand_costs (sd_id TEXT PRIMARY KEY, part TEXT, cost REAL, checked TEXT)')
     leave.execute('CREATE INDEX IF NOT EXISTS demand_lines_part ON demand_lines (part)')
 
 
@@ -92,6 +93,30 @@ def _job_resource(jid):
     return _jobres[jid]
 
 
+def _sync_costs():
+    """Cost price per part from BigChange stock details (make/model) -> supplier cost. Only parts we have sold are looked up."""
+    sold = {r['part'] for r in leave.query('SELECT DISTINCT part FROM demand_lines')}
+    page, todo = 1, 0
+    while page <= 100:
+        items = _items('/stockDetails', {'pageSize': 200, 'pageNumber': page})
+        for sd in items:
+            sid = str(sd.get('id'))
+            part, _ = _split_model((sd.get('model') or '').strip())
+            for cand in (part, (sd.get('modelNumber') or '').strip(), (sd.get('stockCode') or '').strip()):
+                if cand in sold: part = cand; break
+            else: continue
+            if leave.query('SELECT 1 FROM demand_costs WHERE sd_id = ?', (sid,)): continue
+            try: sup = _items(f'/stockDetails/{int(sid)}/suppliers', {'pageSize': 50})
+            except Exception: sup = []
+            costs = [float(s['cost']) for s in sup if s.get('cost')]
+            leave.execute('INSERT INTO demand_costs (sd_id, part, cost, checked) VALUES (?,?,?,?)', (sid, part, min(costs) if costs else 0, datetime.now().strftime('%Y-%m-%d')))
+            todo += 1
+            _set_status(beat=time.time(), msg=f'Reading cost prices ({todo} parts so far)')
+            time.sleep(0.1)
+        if len(items) < 200: break
+        page += 1
+
+
 def _sync(days):
     """Parts sold = invoice lines coded to nominal 5000, over the last `days` days."""
     try:
@@ -147,6 +172,8 @@ def _sync(days):
                 new += 1
                 time.sleep(0.1)
             _set_status(beat=time.time(), windowsDone=i + 1, jobsNew=new, msg=f'Reading invoices up to {b.strftime("%d %b %Y")}')
+        try: _sync_costs()
+        except Exception as ex: _set_status(costError=str(ex)[:200])
         _set_status(running=False, msg='Finished', finished=datetime.now().strftime('%d %b %Y %H:%M'), finishedTs=time.time())
     except Exception as ex:
         resp = getattr(ex, 'response', None)
@@ -182,6 +209,8 @@ def analyse(cfg, days=182):
         p['mo'][min(6, (d - t0).days // 30)] += q
         p['last'] = max(p['last'], r['done_at'])
         if not p['name'] and r['name']: p['name'] = r['name']
+    cmap = {}
+    for r in leave.query('SELECT part, cost FROM demand_costs WHERE cost > 0'): cmap[r['part']] = float(r['cost'])
     out = []
     cyc, lead, rev = float(cfg['van_cycle_weeks']), float(cfg['lead_weeks']), float(cfg['review_weeks'])
     for p in parts.values():
@@ -200,7 +229,7 @@ def analyse(cfg, days=182):
         rop = math.ceil(m * lead + z * s * math.sqrt(lead) - 1e-9) if jobs >= 2 else 0
         if jobs >= 2: room, rop = max(room, 1), max(rop, 1)
         if p['qty'] <= 0: continue
-        cost = round(p['cv'] / p['cq'], 2) if p['cq'] else 0
+        cost = round(cmap[p['part']], 2) if p['part'] in cmap else (round(p['cv'] / p['cq'], 2) if p['cq'] else 0)
         sell = round(p['sv'] / p['cq'], 2) if p['cq'] else 0
         out.append({'cost': cost, 'sell': sell, 'vanValue': round(van * cost, 2), 'roomValue': round(room * cost, 2), 'totalValue': round((room + van * vans) * cost, 2), 'part': p['part'], 'name': p['name'], 'qty': round(p['qty'], 2), 'jobs': jobs, 'engineers': len(p['eng']),
                     'perWeek': round(m, 2), 'months': [round(x, 1) for x in p['mo'][:6]], 'last': p['last'],
