@@ -72,38 +72,57 @@ def _plan_rows(rows):
     return [(s, q) for s, q in merged.items() if q > 0]
 
 
+def _parse(b):
+    """mode 'out': stock room (fromId) -> ticked vans. mode 'back': ticked vans -> stock room (toId)."""
+    mode = b.get('mode') or 'out'
+    vans = [int(x) for x in b['vanIds']]
+    room = int(b['roomId'] if 'roomId' in b else b['fromId'])
+    rk = b.get('roomKind') or b.get('fromKind') or 'contact'
+    return mode, rk, room, vans
+
+
 @stockmoves_bp.route('/api/stockmoves/preview', methods=['POST'])
 def preview():
-    """Check the source location holds enough of each part for every destination van."""
+    """Check enough stock is held at the source(s) for what is being moved."""
     b = request.get_json(silent=True) or {}
-    try: fk, fid, vans = b['fromKind'], int(b['fromId']), [int(x) for x in b['toVanIds']]
-    except (KeyError, TypeError, ValueError): return jsonify({'error': 'fromKind, fromId and toVanIds needed'}), 400
+    try: mode, rk, room, vans = _parse(b)
+    except (KeyError, TypeError, ValueError): return jsonify({'error': 'roomId and vanIds needed'}), 400
     rows = _plan_rows(b.get('rows') or [])
     if not rows or not vans or len(rows) > 300 or len(vans) > 100: return jsonify({'error': 'Check the parts and vans (up to 300 parts, 100 vans)'}), 400
     try: cat = {s['id']: s['text'] for s in reorder._stock_catalog()}
     except Exception: cat = {}
     res = []
     try:
-        for sid, q in rows:
-            have = sum(float(i.get('quantity') or 0) for i in _at(fk, fid, sid) if i.get('quantity') is not None)
-            need = q * len(vans)
-            res.append({'stockId': sid, 'name': cat.get(sid) or f'Stock {sid}', 'each': q, 'need': need, 'have': have, 'ok': have >= need})
-            time.sleep(0.1)
+        if mode == 'out':
+            for sid, q in rows:
+                have = sum(float(i.get('quantity') or 0) for i in _at(rk, room, sid))
+                res.append({'stockId': sid, 'name': cat.get(sid) or f'Stock {sid}', 'each': q, 'need': q * len(vans), 'have': have, 'ok': have >= q * len(vans), 'canDo': int(have // q) if q else 0})
+                time.sleep(0.1)
+        else:   # back: every van must hold the quantity being returned
+            held = {}
+            for vid in vans:
+                for i in _at('van', vid):
+                    if i.get('quantity') is not None: held[(vid, i.get('stockDetailsId'))] = held.get((vid, i.get('stockDetailsId')), 0) + float(i['quantity'])
+                time.sleep(0.1)
+            for sid, q in rows:
+                ok_vans = sum(1 for v in vans if held.get((v, sid), 0) >= q)
+                res.append({'stockId': sid, 'name': cat.get(sid) or f'Stock {sid}', 'each': q, 'need': q * len(vans), 'have': q * ok_vans, 'ok': ok_vans == len(vans), 'canDo': ok_vans,
+                            'note': f'{len(vans) - ok_vans} van(s) do not hold {q}' if ok_vans < len(vans) else ''})
     except Exception as ex: return jsonify({'error': str(ex)[:300]}), 502
-    return jsonify({'rows': res, 'vans': len(vans)})
+    return jsonify({'rows': res, 'vans': len(vans), 'mode': mode})
 
 
 @stockmoves_bp.route('/api/stockmoves/apply', methods=['POST'])
 def apply():
-    """Move stock: add to each van first, then take the same quantity off the source (so a failure never loses stock)."""
+    """Move stock. The destination is added to first, then the source reduced, so a failure never loses stock."""
     b = request.get_json(silent=True) or {}
-    try: fk, fid, vans = b['fromKind'], int(b['fromId']), [int(x) for x in b['toVanIds']]
-    except (KeyError, TypeError, ValueError): return jsonify({'error': 'fromKind, fromId and toVanIds needed'}), 400
+    try: mode, rk, room, vans = _parse(b)
+    except (KeyError, TypeError, ValueError): return jsonify({'error': 'roomId and vanIds needed'}), 400
     rows = _plan_rows(b.get('rows') or [])
     if not rows or not vans or len(rows) > 300 or len(vans) > 100: return jsonify({'error': 'Check the parts and vans'}), 400
     _init()
     van_names = reorder._vans()
-    flabel = b.get('fromLabel') or f'{fk} {fid}'
+    room_label = b.get('roomLabel') or f'{rk} {room}'
     who, now = _who(), datetime.now().strftime('%Y-%m-%d %H:%M')
     try: cat = {s['id']: s['text'] for s in reorder._stock_catalog()}
     except Exception: cat = {}
@@ -111,33 +130,56 @@ def apply():
     done, failed, skipped = 0, [], []
 
     def log(vid, sid, q, ok, note=''):
+        vn = van_names.get(vid, str(vid))
         leave.execute('INSERT INTO stock_moves_log (at, who, from_label, to_label, stock_id, part, qty, ok, note) VALUES (?,?,?,?,?,?,?,?,?)',
-                      (now, who, flabel, van_names.get(vid, str(vid)), str(sid), cat.get(sid, ''), q, 1 if ok else 0, note[:200]))
+                      (now, who, room_label if mode == 'out' else vn, vn if mode == 'out' else room_label, str(sid), cat.get(sid, ''), q, 1 if ok else 0, note[:200]))
 
-    try: src = {sid: [i for i in _at(fk, fid, sid) if i.get('quantity') is not None] for sid, _ in rows}
+    def take(pool, q):
+        left = q
+        for i in sorted(pool, key=lambda i: -float(i.get('quantity') or 0)):
+            if left <= 0: break
+            t = min(left, float(i['quantity']))
+            if t <= 0: continue
+            patch(f"/stockItems/{i['id']}", {'quantity': float(i['quantity']) - t}); i['quantity'] = float(i['quantity']) - t; left -= t
+
+    def give(items, kind, loc, sid, q):
+        e = items.get(sid)
+        if e:
+            patch(f"/stockItems/{e['id']}", {'quantity': float(e.get('quantity') or 0) + q}); e['quantity'] = float(e.get('quantity') or 0) + q
+        else:
+            r = post('/stockItems', {'stockDetailsId': sid, 'quantity': q, 'locationVehicleId' if kind == 'van' else 'locationContactId': loc})
+            items[sid] = {'id': r.get('id') if isinstance(r, dict) else r, 'stockDetailsId': sid, 'quantity': q}
+
+    def by_part(items):
+        m = {}
+        for i in items: m.setdefault(i.get('stockDetailsId'), i)
+        return m
+
+    try:
+        room_items = [i for i in _items({('locationVehicleId' if rk == 'van' else 'locationContactId'): room}) if i.get('quantity') is not None]
     except Exception as ex: return jsonify({'error': str(ex)[:300]}), 502
+    room_pool = {}
+    for i in room_items: room_pool.setdefault(i.get('stockDetailsId'), []).append(i)
+    room_first = by_part(room_items)
+
     for vid in vans:
-        try: vitems = {}; [vitems.setdefault(i.get('stockDetailsId'), i) for i in _at('van', vid)]
+        try: vit = [i for i in _items({'locationVehicleId': vid}) if i.get('quantity') is not None]
         except Exception as ex:
             failed.append({'van': van_names.get(vid, vid), 'part': 'all', 'error': 'could not read van stock: ' + str(ex)[:120]}); continue
+        van_pool = {}
+        for i in vit: van_pool.setdefault(i.get('stockDetailsId'), []).append(i)
+        van_first = by_part(vit)
         for sid, q in rows:
-            pool = sorted(src[sid], key=lambda i: -float(i.get('quantity') or 0))
-            if sum(float(i['quantity']) for i in pool) < q:
-                skipped.append({'van': van_names.get(vid, vid), 'part': cat.get(sid, sid), 'wanted': q, 'have': sum(float(i['quantity']) for i in pool)}); log(vid, sid, q, False, 'skipped: not enough in source'); continue
+            src = room_pool.get(sid, []) if mode == 'out' else van_pool.get(sid, [])
+            have = sum(float(i['quantity']) for i in src)
+            if have < q:
+                skipped.append({'van': van_names.get(vid, vid), 'part': cat.get(sid, sid), 'wanted': q, 'have': have, 'from': 'stock room' if mode == 'out' else 'van'})
+                log(vid, sid, q, False, 'skipped: not enough in source'); continue
             try:
-                ex_item = vitems.get(sid)
-                if ex_item:
-                    patch(f"/stockItems/{ex_item['id']}", {'quantity': float(ex_item.get('quantity') or 0) + q})
-                    ex_item['quantity'] = float(ex_item.get('quantity') or 0) + q
+                if mode == 'out':
+                    give(van_first, 'van', vid, sid, q); take(src, q)
                 else:
-                    r = post('/stockItems', {'stockDetailsId': sid, 'quantity': q, 'locationVehicleId': vid})
-                    vitems[sid] = {'id': r.get('id') if isinstance(r, dict) else r, 'stockDetailsId': sid, 'quantity': q}
-                left = q
-                for i in pool:
-                    if left <= 0: break
-                    take = min(left, float(i['quantity']))
-                    patch(f"/stockItems/{i['id']}", {'quantity': float(i['quantity']) - take})
-                    i['quantity'] = float(i['quantity']) - take; left -= take
+                    give(room_first, rk, room, sid, q); take(src, q)
                 done += 1; log(vid, sid, q, True)
             except Exception as ex:
                 failed.append({'van': van_names.get(vid, vid), 'part': cat.get(sid, sid), 'error': str(ex)[:160]}); log(vid, sid, q, False, str(ex))
