@@ -92,10 +92,10 @@ def unallocated():
     """Jobs with no engineer booked yet (status new or unscheduled), counted in the chosen categories."""
     if _cache.get('unalloc') and time.time() - _cache['unalloc'][0] < 120: return jsonify(_cache['unalloc'][1])
     now = datetime.now()
-    # BigChange rejects very wide date ranges, so look back in 150-day slices (plus the next 90 days)
+    # BigChange rejects very wide date ranges, so look back about 6 months in two slices (plus the next 90 days)
     slices, end = [], now + timedelta(days=90)
-    for _ in range(6):
-        start = end - timedelta(days=150)
+    for _ in range(2):
+        start = end - timedelta(days=135)
         slices.append((start.strftime('%Y-%m-%dT00:00:00'), end.strftime('%Y-%m-%dT23:59:59'))); end = start
     seen, jobs = set(), []
     try:
