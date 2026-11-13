@@ -8,6 +8,7 @@ import os
 import math
 import re
 import threading
+from concurrent.futures import ThreadPoolExecutor
 import time
 from datetime import datetime, timedelta, timezone
 from flask import Blueprint, jsonify, request, send_from_directory
@@ -109,12 +110,25 @@ def _sync_costs():
             try: sup = _items(f'/stockDetails/{int(sid)}/suppliers', {'pageSize': 50})
             except Exception: sup = []
             costs = [float(s['cost']) for s in sup if s.get('cost')]
-            leave.execute('INSERT INTO demand_costs (sd_id, part, cost, checked) VALUES (?,?,?,?)', (sid, part, min(costs) if costs else 0, datetime.now().strftime('%Y-%m-%d')))
+            leave.execute('INSERT INTO demand_costs (sd_id, part, cost, checked) VALUES (?,?,?,?)', (sid, part, sum(costs) / len(costs) if costs else 0, datetime.now().strftime('%Y-%m-%d')))
             todo += 1
             _set_status(beat=time.time(), msg=f'Reading cost prices ({todo} parts so far)')
             time.sleep(0.1)
         if len(items) < 200: break
         page += 1
+
+
+def _invoice_lines(inv):
+    lines, page = [], 1
+    while page <= 10:
+        got = []
+        for attempt in range(3):
+            try: got = _items(f"/finance/invoices/{int(inv['id'])}/lineItems", {'pageSize': 200, 'pageNumber': page}); break
+            except Exception: time.sleep(1 + attempt)
+        lines += got
+        if len(got) < 200: break
+        page += 1
+    return inv, lines[0:0] + lines
 
 
 def _sync(days):
@@ -141,19 +155,13 @@ def _sync(days):
                 invs += items
                 if len(items) < 200: break
                 page += 1
-            for inv in invs:
+            todo = [inv for inv in invs if not inv.get('cancelledAt') and not leave.query('SELECT 1 FROM demand_jobs WHERE job_id = ?', (str(inv.get('id')),))]
+            with ThreadPoolExecutor(max_workers=6) as pool:           # line items are read in parallel, saved one at a time
+                fetched = list(pool.map(_invoice_lines, todo))
+            for inv, lines in fetched:
                 iid = str(inv.get('id'))
-                if inv.get('cancelledAt') or leave.query('SELECT 1 FROM demand_jobs WHERE job_id = ?', (iid,)): continue
                 when = (inv.get('createdAt') or f)[:10]
-                n = 0
-                lines, p2 = [], 1
-                while p2 <= 10:
-                    try: got = _items(f'/finance/invoices/{int(iid)}/lineItems', {'pageSize': 200, 'pageNumber': p2})
-                    except Exception: got = []
-                    lines += got
-                    if len(got) < 200: break
-                    p2 += 1
-                rid, rname = ('', '')
+                n, rid, rname = 0, '', ''
                 for ln in lines:
                     if ln.get('nominalCodeId') != nid: continue
                     try: qty = float(ln.get('quantity') or 0)
@@ -170,7 +178,6 @@ def _sync(days):
                     n += 1
                 leave.execute('INSERT INTO demand_jobs (job_id, resource_id, resource_name, done_at, lines) VALUES (?,?,?,?,?)', (iid, rid, rname, when, n))
                 new += 1
-                time.sleep(0.1)
             _set_status(beat=time.time(), windowsDone=i + 1, jobsNew=new, msg=f'Reading invoices up to {b.strftime("%d %b %Y")}')
         try: _sync_costs()
         except Exception as ex: _set_status(costError=str(ex)[:200])
