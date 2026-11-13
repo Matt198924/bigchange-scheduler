@@ -358,6 +358,25 @@ def delete_all():
     return jsonify({'deleted': len(mine) - len(failed), 'failed': failed, 'left': left})
 
 
+@reorder_bp.route('/api/reorder/remove-part', methods=['POST'])
+def remove_part():
+    """Remove one part's reorder level (every row for it) from each of the vans given."""
+    b = request.get_json(silent=True) or {}
+    try: sid, ids = int(b['stockId']), {int(x) for x in b['vanIds']}
+    except (KeyError, TypeError, ValueError): return jsonify({'error': 'stockId and vanIds needed'}), 400
+    if not ids or len(ids) > 300: return jsonify({'error': 'Check the van list'}), 400
+    try: rows = _fresh_levels()
+    except Exception as ex: return jsonify({'error': str(ex)[:300]}), 502
+    mine = [r for r in rows if r['stockId'] == sid and r['entityType'] == 2 and r['entityId'] in ids and r['reorderId']]
+    failed = []
+    for r in mine:
+        try: _del(int(r['reorderId']))
+        except Exception as ex: failed.append({'id': r['entityId'], 'error': str(ex)[:150]})
+        time.sleep(0.1)
+    _cache.pop('levels', None)
+    return jsonify({'deleted': len(mine) - len(failed), 'failed': failed, 'vansChecked': len(ids), 'vansWith': len({r['entityId'] for r in mine})})
+
+
 @reorder_bp.route('/api/reorder/set', methods=['POST'])
 def set_level():
     b = request.get_json(silent=True) or {}
