@@ -62,7 +62,11 @@ def _status():
     except ValueError: return {}
 
 
+BOOT = __import__('uuid').uuid4().hex      # changes every time the app restarts (each deploy), so a stuck 'running' from an older run is spotted at once
+
+
 def _set_status(**kw):
+    if kw.get('running'): kw['boot'] = BOOT
     s = _status(); s.update(kw); leave.set_setting('demand_sync', json.dumps(s))
 
 
@@ -156,8 +160,11 @@ def _sync(days):
                 if len(items) < 200: break
                 page += 1
             todo = [inv for inv in invs if not inv.get('cancelledAt') and not leave.query('SELECT 1 FROM demand_jobs WHERE job_id = ?', (str(inv.get('id')),))]
+            fetched = []
             with ThreadPoolExecutor(max_workers=6) as pool:           # line items are read in parallel, saved one at a time
-                fetched = list(pool.map(_invoice_lines, todo))
+                for k, r in enumerate(pool.map(_invoice_lines, todo)):
+                    fetched.append(r)
+                    if k % 25 == 0: _set_status(beat=time.time())
             for inv, lines in fetched:
                 iid = str(inv.get('id'))
                 when = (inv.get('createdAt') or f)[:10]
@@ -255,10 +262,11 @@ def demand_page():
 def _revive():
     """A redeploy kills the sync thread and leaves 'running' stuck on. If nothing has moved for 10 minutes, pick the sync up again (it resumes)."""
     st = _status()
-    if st.get('running') and time.time() - float(st.get('beat', 0) or 0) > 600:
+    def dead(s): return s.get('running') and (s.get('boot') != BOOT or time.time() - float(s.get('beat', 0) or 0) > 600)
+    if dead(st):
         with _lock:
             st = _status()
-            if st.get('running') and time.time() - float(st.get('beat', 0) or 0) > 600:
+            if dead(st):
                 _tables(); _set_status(beat=time.time(), running=True, error='', msg='Resuming after an interruption...')
                 threading.Thread(target=_sync, args=(183,), daemon=True).start()
 
@@ -290,7 +298,7 @@ def demand_config():
 def demand_sync():
     with _lock:
         st = _status()
-        if st.get('running') and time.time() - float(st.get('beat', 0) or 0) < 600:
+        if st.get('running') and st.get('boot') == BOOT and time.time() - float(st.get('beat', 0) or 0) < 600:
             return jsonify({'sync': st})
         _tables()
         _set_status(running=True, error='', msg='Starting...')

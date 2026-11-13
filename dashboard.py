@@ -160,6 +160,7 @@ def booked():
 
 # ── Flags (pink / black / yellow) on jobs that are not financially complete ─────────────────────
 _flag_lock = threading.Lock()
+BOOT = os.urandom(8).hex()      # changes on every restart, so a count left 'running' by an older process is restarted at once
 COLOURS = ('pink', 'black', 'yellow')
 DEFAULT_FLAGS = {'pink': [10121], 'black': [210481], 'yellow': [10122]}     # R&S flag ids, used until changed under Flag setup
 
@@ -215,7 +216,7 @@ def _flag_count():
                     if j.get('id') not in seen and not j.get('isFinanciallyComplete'): seen.add(j.get('id')); jobs.append(j)
                 if len(items) < 1000: break
                 page += 1
-            st(beat=time.time(), running=True, msg=f'Finding jobs ({i + 1} of 6)')
+            st(beat=time.time(), running=True, boot=BOOT, msg=f'Finding jobs ({i + 1} of 6)')
         counts, done = {}, 0
 
         def one(j):
@@ -245,10 +246,10 @@ def flags():
     leave.init_db()
     with _flag_lock:
         s = _jget('dash_flagcount', {})
-        stale = s.get('running') and time.time() - float(s.get('beat') or 0) > 600
+        stale = s.get('running') and (s.get('boot') != BOOT or time.time() - float(s.get('beat') or 0) > 600)
         due = not s.get('running') and (not s.get('finishedTs') or time.time() - float(s['finishedTs']) > 3600) and time.time() - float(s.get('lastTry') or 0) > 300
         if stale or due:
-            leave.set_setting('dash_flagcount', json.dumps({**s, 'running': True, 'beat': time.time(), 'lastTry': time.time(), 'msg': 'Starting...', 'error': ''}))
+            leave.set_setting('dash_flagcount', json.dumps({**s, 'running': True, 'boot': BOOT, 'beat': time.time(), 'lastTry': time.time(), 'msg': 'Starting...', 'error': ''}))
             threading.Thread(target=_flag_count, daemon=True).start()
             s = _jget('dash_flagcount', {})
     try: fl = _job_flags()
@@ -278,7 +279,7 @@ def flags_config():
 def flags_recount():
     with _flag_lock:
         s = _jget('dash_flagcount', {})
-        if s.get('running') and time.time() - float(s.get('beat') or 0) < 600: return jsonify({'ok': True})
-        leave.set_setting('dash_flagcount', json.dumps({**s, 'running': True, 'beat': time.time(), 'lastTry': time.time(), 'msg': 'Starting...', 'error': ''}))
+        if s.get('running') and s.get('boot') == BOOT and time.time() - float(s.get('beat') or 0) < 600: return jsonify({'ok': True})
+        leave.set_setting('dash_flagcount', json.dumps({**s, 'running': True, 'boot': BOOT, 'beat': time.time(), 'lastTry': time.time(), 'msg': 'Starting...', 'error': ''}))
         threading.Thread(target=_flag_count, daemon=True).start()
     return jsonify({'ok': True})
