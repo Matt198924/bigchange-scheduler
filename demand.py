@@ -4,12 +4,13 @@ Syncs the last ~6 months of parts used on completed BigChange jobs into our own 
 then turns that usage into a suggested stock level per van and for the stock room.
 """
 import json
+import os
 import math
 import re
 import threading
 import time
 from datetime import datetime, timedelta, timezone
-from flask import Blueprint, jsonify, request
+from flask import Blueprint, jsonify, request, send_from_directory
 
 import leave
 
@@ -162,15 +163,19 @@ def analyse(cfg, days=182):
     return {'parts': out, 'vans': vans, 'vansSeen': len(vans_seen), 'since': since, 'jobs': len({r['job_id'] for r in rows}), 'cfg': cfg}
 
 
-@demand_bp.route('/api/parts/admin/demand')
+@demand_bp.route('/demand')
+@demand_bp.route('/demand/')
+def demand_page():
+    return send_from_directory(os.path.join(os.path.dirname(os.path.abspath(__file__)), 'static', 'demand'), 'index.html')
+
+
+@demand_bp.route('/api/demand')
 def demand():
-    if not leave.is_admin(): return leave._auth_error()
     return jsonify({**analyse(_cfg()), 'sync': _status()})
 
 
-@demand_bp.route('/api/parts/admin/demand/config', methods=['PUT'])
+@demand_bp.route('/api/demand/config', methods=['PUT'])
 def demand_config():
-    if not leave.is_admin(): return leave._auth_error()
     body = request.get_json(silent=True) or {}
     c = _cfg()
     for k in DEFAULT_CFG:
@@ -181,9 +186,8 @@ def demand_config():
     return jsonify({'cfg': c})
 
 
-@demand_bp.route('/api/parts/admin/demand/sync', methods=['POST'])
+@demand_bp.route('/api/demand/sync', methods=['POST'])
 def demand_sync():
-    if not leave.is_admin(): return leave._auth_error()
     with _lock:
         st = _status()
         if st.get('running') and time.time() - float(st.get('beat', 0) or 0) < 600:
@@ -194,7 +198,6 @@ def demand_sync():
     return jsonify({'sync': _status()})
 
 
-@demand_bp.route('/api/parts/admin/demand/status')
+@demand_bp.route('/api/demand/status')
 def demand_status():
-    if not leave.is_admin(): return leave._auth_error()
     return jsonify({'sync': _status()})

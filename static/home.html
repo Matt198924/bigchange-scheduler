@@ -55,11 +55,12 @@ const APPS = [
   {name: 'Parts', icon: '🔧', url: '/parts/', desc: 'Search van stock by part number and find it in the locker.'},
   {name: 'Accident / incident report', icon: '🚨', url: '/incident/', desc: 'Report an accident, near miss or hazard.'},
   {name: 'Call out rota', icon: '📞', url: '/callout/', desc: 'The 2027 on call rota and engineer groups.'},
+  {name: 'Parts demand', icon: '📈', url: '/demand/', desc: 'Parts usage over 6 months and suggested van and stock room levels.'},
   {name: 'Company handbook', icon: '📘', url: '/handbook/', desc: 'Policies and procedures. Searchable.'},
   {name: 'Staff admin', icon: '🛠️', url: '/staff-admin', desc: 'Office only: staff sign-in PINs and who can use which tool.'},
   {name: 'Company policies', icon: '📋', url: '/policies/', desc: 'Health & safety, drugs & alcohol, GDPR and more. Searchable.'},
 ];
-const KEYS = {'/scheduler': 'scheduler', '/leave': 'leave', '/parts/': 'parts', '/incident/': 'incident', '/handbook/': 'handbook', '/callout/': 'callout', '/policies/': 'policies', '/staff-admin': 'office'};
+const KEYS = {'/scheduler': 'scheduler', '/leave': 'leave', '/parts/': 'parts', '/incident/': 'incident', '/handbook/': 'handbook', '/callout/': 'callout', '/demand/': 'demand', '/policies/': 'policies', '/staff-admin': 'office'};
 fetch('/api/hub/me').then(r => r.json()).then(me => {
   if (!me.signedIn) { location.replace('/login'); return; }
   document.getElementById('hi').textContent = 'Hi ' + (me.role === 'admin' ? 'Office' : me.name.split(' ')[0]);
