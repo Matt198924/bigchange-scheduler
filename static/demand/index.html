@@ -1,0 +1,64 @@
+<!DOCTYPE html>
+<html lang="en"><head>
+<meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<meta name="theme-color" content="#0B2A4A"><title>Parts demand – R&amp;S Services</title>
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="/static/incident/common.css">
+<style>.wrap{max-width:1100px}.card{background:#fff;border:1px solid var(--line);border-radius:10px;box-shadow:var(--shadow);padding:1rem;margin:.8rem 0}.muted{color:var(--slate);font-size:13px}.err{color:#b00020;margin:.4rem 0}
+.sm{padding:.4rem .8rem;border-radius:8px;border:1px solid var(--line);background:#fff;font:inherit;font-weight:600;cursor:pointer}.sm:disabled{opacity:.5}th{padding:.3rem .4rem}td{padding:.35rem .4rem;vertical-align:top}</style></head><body>
+<div class="topbar"><div class="brand"><div class="brand-mark"><img src="/static/logo-mark.png" alt="R&amp;S"></div><span class="brand-name">Parts demand</span></div><a class="btn-home" href="/">⌂ Home</a></div>
+<div class="wrap"><div id="a-body"><div class="card"><p class="muted">Loading…</p></div></div></div>
+<script>
+const $ = id => document.getElementById(id);
+const esc = t => String(t == null ? '' : t).replace(/[&<>"]/g, c => ({'&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;'}[c]));
+async function api(path, method = 'GET', body) {
+  const r = await fetch('/api/demand' + path, {method, headers: {'Content-Type': 'application/json'}, body: body ? JSON.stringify(body) : undefined});
+  const j = await r.json().catch(() => ({}));
+  if (r.status === 401) { location.href = '/login?next=/demand/'; throw new Error('Sign in again'); }
+  if (!r.ok) throw new Error(j.error || 'Server problem (HTTP ' + r.status + ')');
+  return j;
+}
+let DEM = null, demTimer = null, demSort = 'qty';
+async function tabDemand() {
+  clearTimeout(demTimer);
+  DEM = await api(''); demRender();
+  if (DEM.sync && DEM.sync.running) demTimer = setTimeout(() => { tabDemand(); }, 8000);
+}
+function demRender() {
+  const d = DEM, c = d.cfg, st = d.sync || {}, E = esc;
+  const f = (k, label, step) => `<label style="display:inline-block;margin:.2rem .8rem .2rem 0">${label}<br><input id="dc-${k}" type="number" step="${step || 1}" min="0" value="${c[k]}" style="width:5.5rem"></label>`;
+  const bars = m => { const mx = Math.max(1, ...m); return '<span style="display:inline-flex;gap:2px;align-items:flex-end;height:22px">' + m.map(v => `<span title="${v}" style="width:6px;background:#22C7F0;height:${Math.max(2, Math.round(v / mx * 22))}px"></span>`).join('') + '</span>'; };
+  const q = ($('dm-q') ? $('dm-q').value : '').toLowerCase();
+  const rows = d.parts.filter(p => !q || (p.part + ' ' + p.name).toLowerCase().includes(q)).sort((a, b) => demSort === 'part' ? a.part.localeCompare(b.part) : demSort === 'van' ? b.van - a.van : demSort === 'room' ? b.room - a.room : b.qty - a.qty);
+  $('a-body').innerHTML = `<div class="card"><h2>Parts demand</h2>
+    <p class="muted">Usage is read from the parts booked to completed BigChange jobs over the last 6 months. Suggested levels are worked out from average weekly use plus a safety buffer for busy weeks, so they follow the real demand.</p>
+    ${st.error ? `<div class="err">${E(st.error)}</div>` : ''}
+    <div class="muted">${st.running ? `<b>Syncing from BigChange</b> - ${E(st.msg || '')} (${st.windowsDone || 0} of ${st.windowsTotal || '?'} steps, ${st.jobsNew || 0} new jobs). This can take a while; you can leave this page.` : (st.finished ? 'Last sync finished ' + E(st.finished) + '.' : 'Not synced yet - press Sync to pull the last 6 months.')}
+      ${d.jobs} jobs with parts in the data since ${E(d.since)}.</div>
+    <div style="margin:.6rem 0"><button class="sm" onclick="demSync()" ${st.running ? 'disabled' : ''}>${d.jobs ? 'Sync latest' : 'Sync now'}</button>
+      <button class="sm" onclick="demCsv()">Download CSV</button></div></div>
+    <div class="card"><h2>Settings</h2>
+    ${f('vans', 'Number of vans (0 = count from the data: ' + d.vansSeen + ')')}${f('van_cycle_weeks', 'Weeks between van restocks', 0.5)}${f('lead_weeks', 'Supplier lead time (weeks)', 0.5)}${f('review_weeks', 'Stock room order cycle (weeks)', 0.5)}
+    <label style="display:inline-block;margin:.2rem .8rem .2rem 0">Cover for busy weeks<br><select id="dc-service">${[90, 95, 98, 99].map(v => `<option value="${v}" ${v == c.service ? 'selected' : ''}>${v}% of weeks</option>`).join('')}</select></label>
+    ${f('min_jobs', 'Jobs in 6 months before a part goes on a van')}
+    <div><button class="sm" onclick="demSave()">Save &amp; recalculate</button> <span class="muted">Using ${d.vans} vans.</span></div></div>
+    <div class="card"><input id="dm-q" placeholder="Search part or description" value="${E(q)}" oninput="demRender()" style="width:100%;margin-bottom:.5rem">
+    <div class="muted" style="margin-bottom:.4rem">${rows.length} parts. Sort: ${[['qty', 'most used'], ['van', 'van level'], ['room', 'stock room'], ['part', 'part no.']].map(([k, l]) => `<a href="#" onclick="demSort='${k}';demRender();return false" style="${demSort === k ? 'font-weight:700' : ''}">${l}</a>`).join(' · ')}</div>
+    <div style="overflow-x:auto"><table style="width:100%;border-collapse:collapse;font-size:.85rem"><tr style="text-align:left"><th>Part</th><th>Used (6 mo)</th><th>By month</th><th>Jobs</th><th>Per week</th><th>Per van</th><th>Stock room</th><th>Reorder at</th><th>Plan</th></tr>`
+    + rows.slice(0, 400).map(p => `<tr style="border-top:1px solid #E2E6E7"><td><b>${E(p.part)}</b><br><span class="muted">${E(p.name)}</span></td><td>${p.qty}</td><td>${bars(p.months)}</td><td>${p.jobs}</td><td>${p.perWeek}</td><td><b>${p.van}</b></td><td><b>${p.room}</b></td><td>${p.reorder}</td><td class="muted">${E(p.kind)}</td></tr>`).join('')
+    + `</table></div>${rows.length > 400 ? '<p class="muted">Showing the top 400 - search to find others.</p>' : ''}</div>`;
+  const qi = $('dm-q'); if (qi && q && document.activeElement !== qi) { qi.focus(); qi.setSelectionRange(q.length, q.length); }
+}
+async function demSave() {
+  const b = {}; ['vans', 'van_cycle_weeks', 'lead_weeks', 'review_weeks', 'service', 'min_jobs'].forEach(k => b[k] = $('dc-' + k).value);
+  try { await api('/config', 'PUT', b); tabDemand(); } catch (e) { alert(e.message); }
+}
+async function demSync() { try { await api('/sync', 'POST', {}); tabDemand(); } catch (e) { alert(e.message); } }
+function demCsv() {
+  const h = ['Part', 'Description', 'Used 6 months', 'Jobs', 'Per week', 'Suggested per van', 'Suggested stock room', 'Reorder at', 'Plan'];
+  const q = v => '"' + String(v).replace(/"/g, '""') + '"';
+  const t = [h.map(q).join(',')].concat(DEM.parts.map(p => [p.part, p.name, p.qty, p.jobs, p.perWeek, p.van, p.room, p.reorder, p.kind].map(q).join(','))).join('\n');
+  const a = document.createElement('a'); a.href = URL.createObjectURL(new Blob([t], {type: 'text/csv'})); a.download = 'parts-demand.csv'; a.click();
+}
+tabDemand().catch(e => { $('a-body').innerHTML = '<div class="card"><div class="err">Could not load: ' + esc(e.message) + '</div></div>'; });
+</script></body></html>
