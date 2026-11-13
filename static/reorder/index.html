@@ -44,7 +44,12 @@ function draw() {
     return `<details class="loc" data-k="${k}" ${open.has(k) ? 'open' : ''} ontoggle="if(this.open)quant('${k}')"><summary>${esc(l.label)} <span class="muted">${esc(l.kind)} · ${l.items.length} items</span></summary>
     <table><tr><th>Item</th><th>Reorder level</th><th>Current qty</th><th>New level</th></tr>${l.items.map(i => `<tr><td>${esc(i.name)}</td><td>${i.level}</td><td id="cq-${k}-${i.stockId}" class="muted">…</td>
     <td><input class="q" type="number" min="0" step="1" data-loc="${k}" data-stock="${i.stockId}" data-old="${i.level}" placeholder="${i.level}"></td></tr>`).join('')}</table>
-    <div style="margin-top:.5rem"><button class="sm p" onclick="upd('${k}')">Update</button> <span id="um-${k}" class="muted"></span></div></details>`; }).join('');
+    <div style="margin-top:.5rem"><button class="sm p" onclick="upd('${k}')">Update</button> <span id="um-${k}" class="muted"></span></div>
+    <div style="margin-top:.8rem;padding-top:.6rem;border-top:1px solid #E2E6E7"><b>Add a part here</b><br>
+      <input id="vq-${k}" placeholder="Search part" style="width:60%" oninput="vsrch('${k}')"> <input id="vn-${k}" class="q" type="number" min="1" value="1"> <button class="sm" onclick="vadd('${k}')">Add</button>
+      <div id="vr-${k}" class="muted"></div><div id="vp-${k}"></div><span id="vm-${k}" class="muted"></span></div>
+    <div style="margin-top:.8rem;padding-top:.6rem;border-top:1px solid #E2E6E7"><b>Upload levels for ${esc(l.label)}</b> <span class="muted">CSV or Excel: part in the first column, level in the second.</span><br>
+      <input type="file" accept=".csv,.xlsx" onchange="vup('${k}',this)"><div id="vu-${k}" style="margin-top:.4rem"></div></div></details>`; }).join('');
   document.querySelectorAll('details.loc[open]').forEach(d => quant(d.dataset.k));
 }
 async function quant(k) {
@@ -64,6 +69,27 @@ async function upd(k) {
   msg.innerHTML = bad ? `<span class="err">${bad} did not end up at the value you typed (marked red) - BigChange may add to the level instead of replacing it. Reloaded the real levels.</span>` : '<span class="ok">Updated.</span>';
   qcache = {}; await load();
 }
+const vt = {}, vpick = {};
+function vsrch(k) { clearTimeout(vt[k]); vt[k] = setTimeout(async () => { const q = $('vq-' + k).value.trim(); if (q.length < 2) { $('vr-' + k).textContent = ''; return; }
+  try { const j = await api('/search?q=' + encodeURIComponent(q)); $('vr-' + k).innerHTML = j.results.length ? j.results.map(r => `<a href="#" onclick="vpickit('${k}',${r.id},this);return false" data-t="${esc(r.text)}" style="display:block;padding:.1rem 0">${esc(r.text)}</a>`).join('') : 'No match.'; } catch (e) { $('vr-' + k).textContent = e.message; } }, 350); }
+function vpickit(k, id, a) { vpick[k] = {id, text: a.dataset.t}; $('vp-' + k).innerHTML = '<b>Selected:</b> ' + esc(vpick[k].text); $('vr-' + k).textContent = ''; }
+async function vadd(k) { const [et, eid] = k.split('-'), m = $('vm-' + k), p = vpick[k], qty = Number($('vn-' + k).value);
+  if (!p) { m.textContent = 'Pick a part first.'; return; } if (!(qty > 0)) { m.textContent = 'Enter a level.'; return; }
+  if (!confirm(`Add "${p.text}" with a reorder level of ${qty} here?`)) return;
+  try { const j = await api('/set', 'POST', {stockId: p.id, entityType: et, entityId: eid, quantity: qty}); m.innerHTML = (j.now != null && Number(j.now) !== qty) ? `<span class="err">BigChange now shows ${j.now}, not ${qty}.</span>` : '<span class="ok">Added.</span>'; qcache = {}; load(); } catch (e) { m.innerHTML = '<span class="err">' + esc(e.message) + '</span>'; } }
+const vrows = {};
+async function vup(k, inp) { const f = inp.files[0]; if (!f) return; const [et, eid] = k.split('-'), box = $('vu-' + k); box.textContent = 'Reading and matching...';
+  try { const r = await fetch(`/api/reorder/upload-preview?entityType=${et}&entityId=${eid}`, {method: 'POST', body: await f.arrayBuffer()}); const j = await r.json(); if (!r.ok) throw new Error(j.error || 'Server problem');
+    vrows[k] = j.matched.filter(x => x.now == null || Number(x.now) !== x.quantity);
+    box.innerHTML = `<div>${j.matched.length} parts matched, ${vrows[k].length} would change${j.unmatched.length ? ', <span class="err">' + j.unmatched.length + ' not matched</span>' : ''}.</div>
+      <table><tr><th>Part</th><th>Now</th><th>New level</th></tr>${vrows[k].slice(0, 200).map(x => `<tr><td>${esc(x.name)}</td><td>${x.now ?? '-'}</td><td><b>${x.quantity}</b></td></tr>`).join('')}</table>
+      ${j.unmatched.length ? '<div class="muted">Not matched: ' + j.unmatched.slice(0, 40).map(x => esc(x.asked) + ' (' + x.why + ')').join(', ') + '</div>' : ''}
+      ${vrows[k].length ? `<div style="margin-top:.4rem"><button class="sm p" onclick="vapply('${k}')">Apply ${vrows[k].length} changes</button></div>` : ''}`;
+  } catch (e) { box.innerHTML = '<span class="err">' + esc(e.message) + '</span>'; } inp.value = ''; }
+async function vapply(k) { const [et, eid] = k.split('-'), box = $('vu-' + k), rows = vrows[k]; if (!rows || !confirm(`Apply ${rows.length} reorder level changes in BigChange?`)) return;
+  box.textContent = 'Applying ' + rows.length + ' changes... this can take a while.';
+  try { const j = await api('/upload-apply', 'POST', {entityType: et, entityId: eid, rows: rows.map(x => ({stockId: x.stockId, quantity: x.quantity}))});
+    box.innerHTML = `<span class="${j.failed.length || j.mismatch.length ? 'err' : 'ok'}">${j.done} applied${j.failed.length ? ', ' + j.failed.length + ' failed' : ''}${j.mismatch.length ? ', ' + j.mismatch.length + ' do not show the level you asked for (BigChange may add rather than replace)' : ''}.</span>`; qcache = {}; load(); } catch (e) { box.innerHTML = '<span class="err">' + esc(e.message) + '</span>'; } }
 let st; function srch() { clearTimeout(st); st = setTimeout(async () => { const q = $('aq').value.trim(); if (q.length < 2) { $('ares').textContent = ''; return; }
   $('ares').textContent = 'Searching...'; try { const j = await api('/search?q=' + encodeURIComponent(q)); $('ares').innerHTML = j.results.length ? j.results.map(r => `<a href="#" onclick="pick(${r.id},this);return false" data-t="${esc(r.text)}" style="display:block;padding:.15rem 0">${esc(r.text)}</a>`).join('') : 'No match.'; } catch (e) { $('ares').innerHTML = '<span class="err">' + esc(e.message) + '</span>'; } }, 350); }
 function pick(id, a) { PICK = {id, text: a.dataset.t}; $('apick').innerHTML = '<b>Selected:</b> ' + esc(PICK.text); $('ares').textContent = ''; }

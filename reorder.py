@@ -261,7 +261,12 @@ def _stock_catalog():
     out, page = [], 1
     while page <= 100:
         items = _items('/stockDetails', {'pageSize': 200, 'pageNumber': page})
-        out += [{'id': s['id'], 'text': ' '.join(str(x) for x in (s.get('make'), s.get('model'), s.get('modelNumber')) if x).strip()} for s in items if s.get('id')]
+        from demand import _split_model
+        for s in items:
+            if not s.get('id'): continue
+            part = _split_model((s.get('model') or '').strip())[0] or (s.get('modelNumber') or s.get('stockCode') or '').strip()
+            out.append({'id': s['id'], 'text': ' '.join(str(x) for x in (s.get('make'), s.get('model'), s.get('modelNumber')) if x).strip(),
+                        'part': part, 'num': (s.get('modelNumber') or '').strip()})
         if len(items) < 200: break
         page += 1
     _cache['cat'] = (time.time(), out)
@@ -321,3 +326,76 @@ def add_all():
         time.sleep(0.15)
     _cache.pop('levels', None)
     return jsonify({'done': len(done), 'failed': failed})
+
+
+def _norm(t):
+    return re.sub(r'\s+', ' ', str(t or '').strip().lower())
+
+
+def _read_upload(data):
+    """Rows of (part text, quantity) from a CSV or Excel file: first two columns, header row optional."""
+    rows = []
+    if data[:2] == b'PK':
+        import io
+        from openpyxl import load_workbook
+        ws = load_workbook(io.BytesIO(data), read_only=True, data_only=True).worksheets[0]
+        raw = [list(r) for r in ws.iter_rows(values_only=True)]
+    else:
+        import csv, io
+        txt = data.decode('utf-8-sig', errors='replace')
+        raw = list(csv.reader(io.StringIO(txt)))
+    for r in raw:
+        if len(r) < 2 or r[0] in (None, ''): continue
+        try: q = float(str(r[1]).replace(',', '').strip())
+        except ValueError: continue       # header row or junk
+        rows.append((str(r[0]).strip(), q))
+    return rows
+
+
+@reorder_bp.route('/api/reorder/upload-preview', methods=['POST'])
+def upload_preview():
+    """Match an uploaded list (part, quantity) to stock records, and show what would change at one location."""
+    try: et, eid = int(request.args.get('entityType')), int(request.args.get('entityId'))
+    except (TypeError, ValueError): return jsonify({'error': 'entityType and entityId needed'}), 400
+    data = request.get_data()
+    if not data: return jsonify({'error': 'No file received'}), 400
+    try: rows = _read_upload(data)
+    except Exception as ex: return jsonify({'error': f'Could not read that file: {ex}'}), 400
+    if not rows: return jsonify({'error': 'No rows found - the first column needs the part, the second the quantity'}), 400
+    if len(rows) > 2000: return jsonify({'error': 'Too many rows (limit 2000)'}), 400
+    try: cat = _stock_catalog(); cur, _ = _levels()
+    except Exception as ex: return jsonify({'error': str(ex)[:300]}), 502
+    by_part = {}
+    for s in cat:
+        for k in (_norm(s['part']), _norm(s['num'])):
+            if k: by_part.setdefault(k, []).append(s)
+    have = {r['stockId']: r['level'] for r in cur if r['entityType'] == et and r['entityId'] == eid}
+    ok, bad = [], []
+    for text, q in rows:
+        k = _norm(text); hits = by_part.get(k) or []
+        if not hits:
+            hits = [s for s in cat if k and k in _norm(s['text'])]
+            hits = hits if len(hits) == 1 else []
+        if len(hits) == 1: ok.append({'stockId': hits[0]['id'], 'name': hits[0]['text'], 'asked': text, 'quantity': q, 'now': have.get(hits[0]['id'])})
+        else: bad.append({'asked': text, 'quantity': q, 'why': 'More than one match' if len(by_part.get(k) or []) > 1 else 'Not found'})
+    return jsonify({'matched': ok, 'unmatched': bad})
+
+
+@reorder_bp.route('/api/reorder/upload-apply', methods=['POST'])
+def upload_apply():
+    b = request.get_json(silent=True) or {}
+    try: et, eid, rows = int(b['entityType']), int(b['entityId']), b['rows']
+    except (KeyError, TypeError, ValueError): return jsonify({'error': 'entityType, entityId and rows needed'}), 400
+    if not isinstance(rows, list) or not rows or len(rows) > 2000: return jsonify({'error': 'Check the rows'}), 400
+    failed = []
+    for r in rows:
+        try: _set(int(r['stockId']), et, eid, float(r['quantity']))
+        except Exception as ex: failed.append({'stockId': r.get('stockId'), 'error': str(ex)[:150]})
+        time.sleep(0.15)
+    _cache.pop('levels', None)
+    mismatch = []
+    try:
+        cur, _ = _levels(); have = {r['stockId']: r['level'] for r in cur if r['entityType'] == et and r['entityId'] == eid}
+        mismatch = [{'stockId': r['stockId'], 'asked': r['quantity'], 'now': have.get(int(r['stockId']))} for r in rows if have.get(int(r['stockId'])) != float(r['quantity'])][:50]
+    except Exception: pass
+    return jsonify({'done': len(rows) - len(failed), 'failed': failed, 'mismatch': mismatch})
