@@ -115,6 +115,14 @@ def bc_post(path, body):
     try: return resp.json()
     except Exception: return {}
 
+def bc_patch(path, body):
+    resp = requests.patch(f'{API_BASE}{path}', headers=_bc_headers(), json=body, timeout=20)
+    print(f"[PATCH] {path} {resp.status_code}: {resp.text[:200]}")
+    if not resp.ok:
+        raise RuntimeError(f'BigChange {resp.status_code}: {resp.text[:200]}')
+    try: return resp.json()
+    except Exception: return {}
+
 def bc_delete(path):
     resp = requests.delete(f'{API_BASE}{path}', headers=_bc_headers(), timeout=15)
     print(f"[DELETE] {path} {resp.status_code}: {resp.text[:200]}")
@@ -448,7 +456,7 @@ def assign_job(job_id):
         return jsonify({'error': str(e)}), 500
 
 import leave as _leave
-_leave.bc_hooks.update(post=bc_post, delete=bc_delete, get=bc_get)
+_leave.bc_hooks.update(post=bc_post, delete=bc_delete, get=bc_get, patch=bc_patch)
 
 if __name__ == '__main__':
     port = int(os.environ.get('PORT', 5000))
