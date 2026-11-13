@@ -56,6 +56,14 @@ def _pick(row, *names):
     return None
 
 
+def _find(row, *needles, exclude=()):
+    """First value whose key (lower-cased) contains one of the needles."""
+    for k, v in row.items():
+        kl = str(k).lower()
+        if any(n in kl for n in needles) and not any(x in kl for x in exclude) and v not in (None, ''): return k, v
+    return None, None
+
+
 def _levels():
     if _cache.get('levels') and time.time() - _cache['levels'][0] < 45: return _cache['levels'][1]
     body = _ws('ListStockReorderLevel')
@@ -73,17 +81,23 @@ def _levels():
     for r in rows_in:
         if not isinstance(r, dict): continue
         try:
-            sid = int(_pick(r, 'stockid', 'stockdetailsid', 'stockitemid', 'stock_id'))
-            etype = int(_pick(r, 'entitytype', 'entitytypeid', 'locationtype') or 0)
-            eid = int(_pick(r, 'entityid', 'locationid', 'assetid', 'contactid'))
-            qty = float(_pick(r, 'quantity', 'reorderlevel', 'level', 'reorderquantity') or 0)
+            _, sid = _find(r, 'stockid')
+            if sid is None: _, sid = _find(r, 'stockdetailsid', 'stockitemid')
+            _, qty = _find(r, 'quantity', 'level')
+            vk, vid = _find(r, 'vehicle', 'asset', exclude=('name', 'registration'))
+            ck, cid = _find(r, 'contact', exclude=('name',))
+            if vid not in (None, '', 0) and int(vid): etype, eid = 2, int(vid)
+            elif cid not in (None, '', 0) and int(cid): etype, eid = 1, int(cid)
+            else: continue
+            sid, qty = int(sid), float(qty or 0)
         except (TypeError, ValueError): continue
-        make = _pick(r, 'make', 'stockmake') or ''
-        model = _pick(r, 'model', 'stockmodel', 'stockname', 'description') or ''
-        num = _pick(r, 'number', 'modelnumber', 'stocknumber') or ''
-        out.append({'reorderId': _pick(r, 'stockreorderid', 'reorderid', 'id'), 'stockId': sid, 'entityType': etype, 'entityId': eid, 'level': qty,
-                    'name': ' '.join(str(x) for x in (make, model, num) if x).strip(),
-                    'entityName': _pick(r, 'entityname', 'registration', 'assetname', 'contactname', 'locationname') or ''})
+        _, make = _find(r, 'make')
+        _, model = _find(r, 'model')
+        _, num = _find(r, 'number')
+        _, ename = _find(r, 'registration', 'vehiclename', 'assetname', 'contactname', 'locationname')
+        _, rid = _find(r, 'reorderid', 'stockreorderid')
+        out.append({'reorderId': rid, 'stockId': sid, 'entityType': etype, 'entityId': eid, 'level': qty,
+                    'name': ' '.join(str(x) for x in (make, model, num) if x).strip(), 'entityName': ename or ''})
     _cache['levels'] = (time.time(), (out, body))
     return out, body
 
@@ -127,7 +141,8 @@ def check():
     for name, p in variants:
         try:
             body = _ws(request.args.get('action') or 'ListStockReorderLevel', p)
-            out.append({'try': name, 'count': len(_rows(body)), 'raw': _j.dumps(body)[:700]})
+            rr = _rows(body)
+            out.append({'try': name, 'count': len(rr), 'firstRow': rr[0] if rr else None, 'raw': _j.dumps(body)[:300]})
         except Exception as ex:
             out.append({'try': name, 'error': str(ex)[:400]})
     try:      # control: a simple, unrelated call, to tell 'sign-in not accepted' from 'this call wants other parameters'
@@ -150,6 +165,11 @@ def levels():
         L = locs.setdefault(k, {'entityType': r['entityType'], 'entityId': r['entityId'], 'kind': ETYPE.get(r['entityType'], 'Location'), 'items': [], 'label': ''})
         L['label'] = L['label'] or r['entityName'] or (veh.get(r['entityId']) if r['entityType'] == 2 else '') or f"{ETYPE.get(r['entityType'], 'Location')} {r['entityId']}"
         L['items'].append({'stockId': r['stockId'], 'name': r['name'] or f"Stock {r['stockId']}", 'level': r['level'], 'reorderId': r['reorderId']})
+    try: names = {s['id']: s['text'] for s in _stock_catalog()}
+    except Exception: names = {}
+    for L in locs.values():
+        for i in L['items']:
+            if names.get(i['stockId']): i['name'] = names[i['stockId']]
     out = sorted(locs.values(), key=lambda x: (x['entityType'], x['label'].lower()))
     for L in out: L['items'].sort(key=lambda i: i['name'].lower())
     return jsonify({'locations': out, 'total': len(rows)})
