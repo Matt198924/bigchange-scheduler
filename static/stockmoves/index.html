@@ -11,8 +11,10 @@
 input.q{width:5.5rem}pre{background:#f3f5f6;padding:.6rem;border-radius:8px;overflow:auto;font-size:12px}</style></head><body>
 <div class="topbar"><div class="brand"><div class="brand-mark"><img src="/static/logo-mark.png" alt="R&amp;S"></div><span class="brand-name">Stock movements</span></div><a class="btn-home" href="/">⌂ Home</a></div>
 <div class="wrap">
-<div class="card"><h2>1. Move from</h2><select id="from" onchange="clearPrev()"></select>
-  <h2 style="margin-top:1rem">2. Move to these vans</h2>
+<div class="card"><label style="display:inline-flex;gap:.4rem;align-items:center;margin:0 1rem .5rem 0"><input type="radio" name="mode" value="out" checked onchange="setMode()" style="width:auto"> Stock room &rarr; vans</label>
+  <label style="display:inline-flex;gap:.4rem;align-items:center;margin:0 0 .5rem"><input type="radio" name="mode" value="back" onchange="setMode()" style="width:auto"> Vans &rarr; stock room (returns)</label>
+  <h2 id="h1">1. Move from</h2><select id="from" onchange="clearPrev()"></select>
+  <h2 id="h2" style="margin-top:1rem">2. Move to these vans</h2>
   <div><a href="#" onclick="vsel(true);return false">Select all</a> · <a href="#" onclick="vsel(false);return false">Select none</a> <span id="vcount" class="muted"></span></div>
   <div id="vlist" style="display:grid;grid-template-columns:repeat(auto-fill,minmax(10rem,1fr));gap:.2rem .8rem;margin-top:.4rem;max-height:14rem;overflow:auto">Loading...</div></div>
 <div class="card"><h2>3. Parts to move <span class="muted">(quantity per van)</span></h2>
@@ -27,6 +29,8 @@ input.q{width:5.5rem}pre{background:#f3f5f6;padding:.6rem;border-radius:8px;over
 <script>
 const $ = id => document.getElementById(id), esc = s => String(s ?? '').replace(/[&<>"]/g, c => ({'&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;'}[c]));
 let VANS = [], ROOMS = [], PARTS = [], st, SHORT = 0;
+function mode() { return document.querySelector('input[name=mode]:checked').value; }
+function setMode() { const b = mode() === 'back'; $('h1').textContent = b ? '1. Return to' : '1. Move from'; $('h2').textContent = b ? '2. Take stock back from these vans' : '2. Move to these vans'; clearPrev(); }
 async function api(path, method = 'GET', body, raw) {
   const r = await fetch('/api/stockmoves' + path, {method, headers: raw ? {} : {'Content-Type': 'application/json'}, body: raw || (body ? JSON.stringify(body) : undefined)});
   const j = await r.json().catch(() => ({}));
@@ -50,20 +54,20 @@ async function upl(inp) { const f = inp.files[0]; if (!f) return; $('umsg').text
     j.matched.forEach(m => { const e = PARTS.find(p => p.stockId == m.stockId); if (e) e.quantity = m.quantity; else PARTS.push({stockId: m.stockId, name: m.name, quantity: m.quantity}); });
     $('umsg').innerHTML = j.matched.length + ' parts added' + (j.unmatched.length ? ', <span class="err">' + j.unmatched.length + ' not matched: ' + j.unmatched.slice(0, 30).map(x => esc(x.asked)).join(', ') + '</span>' : '') + '.'; drawParts();
   } catch (e) { $('umsg').innerHTML = '<span class="err">' + esc(e.message) + '</span>'; } inp.value = ''; }
-function req() { const [fk, fid] = $('from').value.split(':'); return {fromKind: fk === 'contact' ? 'contact' : 'van', fromId: Number(fid), fromLabel: $('from').selectedOptions[0].text,
-  toVanIds: [...document.querySelectorAll('.vk:checked')].map(c => Number(c.value)), rows: PARTS.map(p => ({stockId: p.stockId, quantity: p.quantity}))}; }
-function ready(r) { if (!r.toVanIds.length) { $('msg').textContent = 'Tick at least one van.'; return false; } if (!r.rows.length) { $('msg').textContent = 'Add at least one part.'; return false; } if (r.toVanIds.includes(r.fromId) && r.fromKind === 'van') { $('msg').textContent = 'The source van is also ticked as a destination.'; return false; } return true; }
+function req() { const [fk, fid] = $('from').value.split(':'); return {mode: mode(), roomKind: fk === 'contact' ? 'contact' : 'van', roomId: Number(fid), roomLabel: $('from').selectedOptions[0].text,
+  vanIds: [...document.querySelectorAll('.vk:checked')].map(c => Number(c.value)), rows: PARTS.map(p => ({stockId: p.stockId, quantity: p.quantity}))}; }
+function ready(r) { if (!r.vanIds.length) { $('msg').textContent = 'Tick at least one van.'; return false; } if (!r.rows.length) { $('msg').textContent = 'Add at least one part.'; return false; } if (r.vanIds.includes(r.roomId) && r.roomKind === 'van') { $('msg').textContent = 'That van is both the stock location and a ticked van.'; return false; } return true; }
 async function check() { const r = req(); if (!ready(r)) return; $('msg').textContent = 'Checking stock in BigChange...'; $('prev').innerHTML = '';
   try { const j = await api('/preview', 'POST', r); const short = j.rows.filter(x => !x.ok).length;
-    $('prev').innerHTML = `<table><tr><th>Part</th><th>Per van</th><th>Needed (${j.vans} vans)</th><th>Available</th></tr>${j.rows.map(x => `<tr><td>${esc(x.name)}</td><td>${x.each}</td><td>${x.need}</td><td class="${x.ok ? 'ok' : 'err'}">${x.have}${x.ok ? '' : ' (short)'}</td></tr>`).join('')}</table>`;
+    $('prev').innerHTML = `<table><tr><th>Part</th><th>Per van</th><th>Needed (${j.vans} vans)</th><th>Available</th></tr>${j.rows.map(x => `<tr><td>${esc(x.name)}</td><td>${x.each}</td><td>${x.need}</td><td class="${x.ok ? 'ok' : 'err'}">${x.have}${x.ok ? '' : ' (short' + (x.note ? ': ' + esc(x.note) : '') + ')'}</td></tr>`).join('')}</table>`;
     const any = j.rows.some(x => x.have >= x.each); SHORT = j.rows.filter(x => !x.ok).length;
-    $('msg').innerHTML = short ? `<span class="err"><b>${short} of ${j.rows.length} part(s) are short in the stock room.</b> ${any ? 'Moving will skip the vans/parts it cannot cover - see the red rows.' : 'Nothing can be moved.'}</span>` : '<span class="ok">All available.</span>'; $('go').disabled = !any;
+    $('msg').innerHTML = short ? `<span class="err"><b>${short} of ${j.rows.length} part(s) are short.</b> ${any ? 'Moving will skip the vans/parts it cannot cover - see the red rows.' : 'Nothing can be moved.'}</span>` : '<span class="ok">All available.</span>'; $('go').disabled = !any;
   } catch (e) { $('msg').innerHTML = '<span class="err">' + esc(e.message) + '</span>'; } }
 async function move() { const r = req(); if (!ready(r)) return;
-  if (SHORT && !confirm(`${SHORT} part(s) are short in the stock room. The ones that cannot be covered will be SKIPPED. Carry on?`)) return;
-  if (!confirm(`Move ${r.rows.length} part(s) from ${r.fromLabel} to ${r.toVanIds.length} van(s) in BigChange?`)) return;
+  if (SHORT && !confirm(`${SHORT} part(s) are short. The ones that cannot be covered will be SKIPPED. Carry on?`)) return;
+  if (!confirm(r.mode === 'back' ? `Return ${r.rows.length} part(s) from ${r.vanIds.length} van(s) to ${r.roomLabel} in BigChange?` : `Move ${r.rows.length} part(s) from ${r.roomLabel} to ${r.vanIds.length} van(s) in BigChange?`)) return;
   $('go').disabled = true; $('msg').textContent = 'Moving stock... this can take a few minutes.';
-  try { const j = await api('/apply', 'POST', r); $('msg').innerHTML = `<span class="${j.failed.length || j.skipped.length ? 'err' : 'ok'}">${j.moved} moves done${j.failed.length ? ', ' + j.failed.length + ' failed' : ''}${j.skipped.length ? ', <b>' + j.skipped.length + ' skipped because the stock room did not have enough</b>' : ''}.</span>` + (j.skipped.length ? '<div class="err" style="margin-top:.4rem">Not moved:</div><ul>' + j.skipped.slice(0, 60).map(s => `<li>${esc(s.part)} to ${esc(s.van)} (wanted ${s.wanted}, stock room had ${s.have})</li>`).join('') + (j.skipped.length > 60 ? '<li>...and more (see recent moves)</li>' : '') + '</ul>' : '') + (j.failed.length ? '<ul>' + j.failed.slice(0, 30).map(f => `<li>${esc(f.van)} - ${esc(f.part)}: ${esc(f.error)}</li>`).join('') + '</ul>' : '');
+  try { const j = await api('/apply', 'POST', r); $('msg').innerHTML = `<span class="${j.failed.length || j.skipped.length ? 'err' : 'ok'}">${j.moved} moves done${j.failed.length ? ', ' + j.failed.length + ' failed' : ''}${j.skipped.length ? ', <b>' + j.skipped.length + ' skipped because there was not enough to move</b>' : ''}.</span>` + (j.skipped.length ? '<div class="err" style="margin-top:.4rem">Not moved:</div><ul>' + j.skipped.slice(0, 60).map(s => `<li>${esc(s.part)} to ${esc(s.van)} (wanted ${s.wanted}, ${s.from} had ${s.have})</li>`).join('') + (j.skipped.length > 60 ? '<li>...and more (see recent moves)</li>' : '') + '</ul>' : '') + (j.failed.length ? '<ul>' + j.failed.slice(0, 30).map(f => `<li>${esc(f.van)} - ${esc(f.part)}: ${esc(f.error)}</li>`).join('') + '</ul>' : '');
   } catch (e) { $('msg').innerHTML = '<span class="err">' + esc(e.message) + '</span>'; } }
 async function hist() { try { const j = await api('/log'); $('hist').innerHTML = '<table><tr><th>When</th><th>Who</th><th>From</th><th>To</th><th>Part</th><th>Qty</th><th></th></tr>' + j.log.map(l => `<tr><td>${esc(l.at)}</td><td>${esc(l.who)}</td><td>${esc(l.from_label)}</td><td>${esc(l.to_label)}</td><td>${esc(l.part)}</td><td>${l.qty}</td><td class="${l.ok ? 'ok' : 'err'}">${l.ok ? 'done' : esc(l.note || 'failed')}</td></tr>`).join('') + '</table>'; } catch (e) { $('hist').innerHTML = '<span class="err">' + esc(e.message) + '</span>'; } }
 init();
