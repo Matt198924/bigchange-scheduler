@@ -123,6 +123,41 @@ def _contact_names(ids):
     return cache
 
 
+def _asset_names(ids):
+    """Asset id -> registration, from the web service (asset groups, then one by one for any left)."""
+    from concurrent.futures import ThreadPoolExecutor
+    cache = _cache.setdefault('an', {})
+    miss = [i for i in ids if i not in cache]
+    if not miss: return cache
+    def reg_of(row):
+        _, reg = _find(row, 'registration', 'reg')
+        if not reg: _, reg = _find(row, 'assetname', 'name', 'reference')
+        return str(reg).strip() if reg else ''
+    try:
+        for g in _rows(_ws('AssetGroups')):
+            if not isinstance(g, dict): continue
+            _, gid = _find(g, 'assetgroupid', 'groupid', 'id')
+            if gid is None: continue
+            for a in _rows(_ws('Assets', {'AssetGroupId': gid})):
+                if not isinstance(a, dict): continue
+                _, aid = _find(a, 'assetid', 'id')
+                try: aid = int(aid)
+                except (TypeError, ValueError): continue
+                if reg_of(a): cache[aid] = reg_of(a)
+    except Exception as ex: print(f'[REORDER] asset groups unavailable: {ex}')
+    left = [i for i in miss if i not in cache][:150]
+    def one(i):
+        try:
+            rows = _rows(_ws('Asset', {'AssetId': i}))
+            return i, reg_of(rows[0]) if rows and isinstance(rows[0], dict) else ''
+        except Exception: return i, ''
+    if left:
+        with ThreadPoolExecutor(max_workers=6) as pool:
+            for i, n in pool.map(one, left):
+                if n: cache[i] = n
+    return cache
+
+
 def _vehicles():
     if _cache.get('veh') and time.time() - _cache['veh'][0] < 600: return _cache['veh'][1]
     out, page = {}, 1
@@ -183,11 +218,14 @@ def levels():
     cn = {}
     try: cn = _contact_names(sorted({r['entityId'] for r in rows if r['entityType'] == 1}))
     except Exception: pass
+    an = {}
+    try: an = _asset_names(sorted({r['entityId'] for r in rows if r['entityType'] == 2}))
+    except Exception: pass
     locs = {}
     for r in rows:
         k = (r['entityType'], r['entityId'])
         L = locs.setdefault(k, {'entityType': r['entityType'], 'entityId': r['entityId'], 'kind': ETYPE.get(r['entityType'], 'Location'), 'items': [], 'label': ''})
-        L['label'] = L['label'] or r['entityName'] or (veh.get(r['entityId']) if r['entityType'] == 2 else cn.get(r['entityId'])) or f"{ETYPE.get(r['entityType'], 'Location')} {r['entityId']}"
+        L['label'] = L['label'] or r['entityName'] or (an.get(r['entityId']) or veh.get(r['entityId']) if r['entityType'] == 2 else cn.get(r['entityId'])) or f"{ETYPE.get(r['entityType'], 'Location')} {r['entityId']}"
         L['items'].append({'stockId': r['stockId'], 'name': r['name'] or f"Stock {r['stockId']}", 'level': r['level'], 'reorderId': r['reorderId']})
     try: names = {s['id']: s['text'] for s in _stock_catalog()}
     except Exception: names = {}
