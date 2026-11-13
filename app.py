@@ -10,8 +10,10 @@ CORS(app)
 
 from leave import leave_bp  # annual leave booking (/leave)
 app.register_blueprint(leave_bp)
-from parts import parts_bp  # van parts finder (/parts)
+from parts import parts_bp
+from demand import demand_bp  # parts demand planner (Staff admin)
 app.register_blueprint(parts_bp)
+app.register_blueprint(demand_bp)
 from incident import incident_bp  # accident / incident reports (/incident)
 app.register_blueprint(incident_bp)
 from handbook import handbook_bp  # company handbook (/handbook)
