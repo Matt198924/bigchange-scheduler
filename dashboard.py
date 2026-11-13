@@ -35,13 +35,26 @@ def _day(date_str=None):
     return d, a.astimezone(timezone.utc), (a + timedelta(days=1)).astimezone(timezone.utc)
 
 
+def _get_retry(path, params=None, tries=4):
+    """GET from BigChange, retrying after a pause when it is busy or throws a passing error; real errors show BigChange's own message."""
+    for n in range(tries):
+        try: return leave.bc_hooks['get'](path, params or {})
+        except Exception as ex:
+            resp = getattr(ex, 'response', None)
+            code = getattr(resp, 'status_code', 0) or (429 if '429' in str(ex) else 0)
+            if code in (400, 429, 500, 502, 503, 504) and n < tries - 1:
+                time.sleep(2 + n * 3); continue
+            body = (getattr(resp, 'text', '') or '')[:200]
+            raise RuntimeError(f"{ex}{' - ' + body if body else ''}"[:400])
+
+
 def _jobs(start, end, statuses=None):
     """Jobs planned within [start, end), all pages (cancelled jobs are left out by BigChange unless asked for)."""
     out, page = [], 1
     while page <= 20:
         p = {'plannedAtFrom': start.strftime('%Y-%m-%dT%H:%M:%SZ'), 'plannedAtTo': end.strftime('%Y-%m-%dT%H:%M:%SZ'), 'pageSize': 1000, 'pageNumber': page}
         if statuses: p['status'] = statuses
-        data = leave.bc_hooks['get']('/jobs', p)
+        data = _get_retry('/jobs', p)
         items = data if isinstance(data, list) else (data.get('items') or [])
         out += items
         if len(items) < 1000: break
@@ -119,7 +132,7 @@ def unallocated():
             for st in ('new', 'unscheduled'):
                 page = 1
                 while page <= 10:
-                    data = leave.bc_hooks['get']('/jobs', {'statusModifiedAtFrom': f, 'statusModifiedAtTo': t, 'status': st, 'pageSize': 1000, 'pageNumber': page})
+                    data = _get_retry('/jobs', {'statusModifiedAtFrom': f, 'statusModifiedAtTo': t, 'status': st, 'pageSize': 1000, 'pageNumber': page})
                     items = data if isinstance(data, list) else (data.get('items') or [])
                     for j in items:
                         if j.get('id') not in seen: seen.add(j.get('id')); jobs.append(j)
@@ -174,7 +187,7 @@ def _job_flags():
     if _cache.get('flaglist') and time.time() - _cache['flaglist'][0] < 600: return _cache['flaglist'][1]
     out, page = [], 1
     while page <= 10:
-        data = leave.bc_hooks['get']('/flags', {'entityType': 'job', 'pageSize': 200, 'pageNumber': page})
+        data = _get_retry('/flags', {'entityType': 'job', 'pageSize': 200, 'pageNumber': page})
         items = data if isinstance(data, list) else (data.get('items') or [])
         out += items
         if len(items) < 200: break
@@ -191,14 +204,6 @@ def _flag_map(flags):
         if saved.get(c) is not None: m[c] = [int(x) for x in saved[c]]
         else: m[c] = DEFAULT_FLAGS[c]
     return m
-
-
-def _get_retry(path, params=None, tries=5):
-    for n in range(tries):
-        try: return leave.bc_hooks['get'](path, params or {})
-        except Exception as ex:
-            if '429' not in str(ex) or n == tries - 1: raise
-            time.sleep(2 + n * 3)
 
 
 def _flag_count():
