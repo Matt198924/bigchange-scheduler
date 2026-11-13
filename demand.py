@@ -142,7 +142,7 @@ def _sync(days):
                 new += 1
                 time.sleep(0.1)
             _set_status(beat=time.time(), windowsDone=i + 1, jobsNew=new, msg=f'Reading invoices up to {b.strftime("%d %b %Y")}')
-        _set_status(running=False, msg='Finished', finished=datetime.now().strftime('%d %b %Y %H:%M'))
+        _set_status(running=False, msg='Finished', finished=datetime.now().strftime('%d %b %Y %H:%M'), finishedTs=time.time())
     except Exception as ex:
         resp = getattr(ex, 'response', None)
         _set_status(running=False, error=f"{ex}{' - ' + resp.text[:200] if resp is not None else ''}"[:400], msg='Stopped - press Sync to carry on')
@@ -209,6 +209,11 @@ def demand_page():
 
 @demand_bp.route('/api/demand')
 def demand():
+    st = _status()      # keep it fresh: if the last full sync is over 12 hours old, top up the last 14 days in the background
+    if st.get('finishedTs') and not st.get('running') and time.time() - st['finishedTs'] > 12 * 3600:
+        with _lock:
+            _set_status(beat=time.time(), running=True, error='', msg='Topping up...')
+            threading.Thread(target=_sync, args=(14,), daemon=True).start()
     return jsonify({**analyse(_cfg()), 'sync': _status()})
 
 
