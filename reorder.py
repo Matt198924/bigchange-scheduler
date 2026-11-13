@@ -84,11 +84,17 @@ def _levels():
             _, sid = _find(r, 'stockid')
             if sid is None: _, sid = _find(r, 'stockdetailsid', 'stockitemid')
             _, qty = _find(r, 'quantity', 'level')
-            vk, vid = _find(r, 'vehicle', 'asset', exclude=('name', 'registration'))
-            ck, cid = _find(r, 'contact', exclude=('name',))
-            if vid not in (None, '', 0) and int(vid): etype, eid = 2, int(vid)
-            elif cid not in (None, '', 0) and int(cid): etype, eid = 1, int(cid)
-            else: continue
+            _, eid = _find(r, 'entityid')
+            _, et = _find(r, 'entitytype')
+            if eid is None:      # older shape: separate vehicle / contact id fields
+                _, vid = _find(r, 'vehicle', 'asset', exclude=('name', 'registration'))
+                _, cid = _find(r, 'contact', exclude=('name',))
+                if vid not in (None, '', 0) and int(vid): et, eid = 'asset', vid
+                elif cid not in (None, '', 0) and int(cid): et, eid = 'contact', cid
+            t = str(et).strip().lower()
+            etype = 1 if (t == '1' or t.startswith('contact')) else 2 if (t == '2' or t.startswith(('asset', 'vehicle'))) else 0
+            if not etype or eid is None: continue
+            eid = int(eid)
             sid, qty = int(sid), float(qty or 0)
         except (TypeError, ValueError): continue
         _, make = _find(r, 'make')
@@ -96,10 +102,25 @@ def _levels():
         _, num = _find(r, 'number')
         _, ename = _find(r, 'registration', 'vehiclename', 'assetname', 'contactname', 'locationname')
         _, rid = _find(r, 'reorderid', 'stockreorderid')
-        out.append({'reorderId': rid, 'stockId': sid, 'entityType': etype, 'entityId': eid, 'level': qty,
+        out.append({'reorderId': rid, 'stockId': sid, 'entityType': etype, 'entityId': eid, 'level': qty, 'rawType': str(et),
                     'name': ' '.join(str(x) for x in (make, model, num) if x).strip(), 'entityName': ename or ''})
     _cache['levels'] = (time.time(), (out, body))
     return out, body
+
+
+def _contact_names(ids):
+    from concurrent.futures import ThreadPoolExecutor
+    cache = _cache.setdefault('cn', {})
+    todo = [i for i in ids if i not in cache]
+    def one(i):
+        try:
+            c = _rest(f'/contacts/{int(i)}', {}) or {}
+            return i, c.get('name') or c.get('contactName') or ''
+        except Exception: return i, ''
+    if todo:
+        with ThreadPoolExecutor(max_workers=6) as pool:
+            for i, n in pool.map(one, todo[:300]): cache[i] = n
+    return cache
 
 
 def _vehicles():
@@ -159,11 +180,14 @@ def levels():
     except Exception as ex: return jsonify({'error': str(ex)[:500]}), 502
     try: veh = _vehicles()
     except Exception: veh = {}
+    cn = {}
+    try: cn = _contact_names(sorted({r['entityId'] for r in rows if r['entityType'] == 1}))
+    except Exception: pass
     locs = {}
     for r in rows:
         k = (r['entityType'], r['entityId'])
         L = locs.setdefault(k, {'entityType': r['entityType'], 'entityId': r['entityId'], 'kind': ETYPE.get(r['entityType'], 'Location'), 'items': [], 'label': ''})
-        L['label'] = L['label'] or r['entityName'] or (veh.get(r['entityId']) if r['entityType'] == 2 else '') or f"{ETYPE.get(r['entityType'], 'Location')} {r['entityId']}"
+        L['label'] = L['label'] or r['entityName'] or (veh.get(r['entityId']) if r['entityType'] == 2 else cn.get(r['entityId'])) or f"{ETYPE.get(r['entityType'], 'Location')} {r['entityId']}"
         L['items'].append({'stockId': r['stockId'], 'name': r['name'] or f"Stock {r['stockId']}", 'level': r['level'], 'reorderId': r['reorderId']})
     try: names = {s['id']: s['text'] for s in _stock_catalog()}
     except Exception: names = {}
