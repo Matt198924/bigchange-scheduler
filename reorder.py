@@ -128,6 +128,11 @@ def check():
             out.append({'try': name, 'count': len(_rows(body)), 'raw': _j.dumps(body)[:700]})
         except Exception as ex:
             out.append({'try': name, 'error': str(ex)[:400]})
+    try:      # control: a simple, unrelated call, to tell 'sign-in not accepted' from 'this call wants other parameters'
+        body = _ws('jobtypes')
+        out.append({'try': 'CONTROL: job types (unrelated call)', 'count': len(_rows(body)), 'raw': _j.dumps(body)[:300]})
+    except Exception as ex:
+        out.append({'try': 'CONTROL: job types (unrelated call)', 'error': str(ex)[:300]})
     return jsonify({'results': out})
 
 
