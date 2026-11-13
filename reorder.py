@@ -127,8 +127,9 @@ def _asset_names(ids):
     """Asset id -> registration, from the web service (asset groups, then one by one for any left)."""
     from concurrent.futures import ThreadPoolExecutor
     cache = _cache.setdefault('an', {})
-    miss = [i for i in ids if i not in cache]
-    if not miss: return cache
+    everything = ids is None
+    miss = [i for i in (ids or []) if i not in cache]
+    if not miss and not everything: return cache
     def reg_of(row):
         _, reg = _find(row, 'registration', 'reg')
         if not reg: _, reg = _find(row, 'assetname', 'name', 'reference')
@@ -145,7 +146,7 @@ def _asset_names(ids):
                 except (TypeError, ValueError): continue
                 if reg_of(a): cache[aid] = reg_of(a)
     except Exception as ex: print(f'[REORDER] asset groups unavailable: {ex}')
-    left = [i for i in miss if i not in cache][:150]
+    left = [i for i in (miss or []) if i not in cache][:150]
     def one(i):
         try:
             rows = _rows(_ws('Asset', {'AssetId': i}))
@@ -156,6 +157,18 @@ def _asset_names(ids):
             for i, n in pool.map(one, left):
                 if n: cache[i] = n
     return cache
+
+
+def _vans():
+    """Every van: BigChange assets (the ids reorder levels are held against) plus any REST vehicles."""
+    if _cache.get('vans') and time.time() - _cache['vans'][0] < 600: return _cache['vans'][1]
+    out = {}
+    try: out.update(_vehicles())
+    except Exception as ex: print(f'[REORDER] vehicles unavailable: {ex}')
+    try: out.update(_asset_names(None))
+    except Exception as ex: print(f'[REORDER] assets unavailable: {ex}')
+    _cache['vans'] = (time.time(), out)
+    return out
 
 
 def _vehicles():
@@ -213,7 +226,7 @@ def check():
 def levels():
     try: rows, _ = _levels()
     except Exception as ex: return jsonify({'error': str(ex)[:500]}), 502
-    try: veh = _vehicles()
+    try: veh = _vans()
     except Exception: veh = {}
     cn = {}
     try: cn = _contact_names(sorted({r['entityId'] for r in rows if r['entityType'] == 1}))
@@ -337,8 +350,9 @@ def set_level():
 
 @reorder_bp.route('/api/reorder/vans')
 def vans():
-    try: v = _vehicles()
+    try: v = _vans()
     except Exception as ex: return jsonify({'error': str(ex)[:300]}), 502
+    if not v: return jsonify({'error': 'BigChange returned no vans'}), 502
     skip = request.args.get('skip', 'stock').strip().lower()
     return jsonify({'vans': [{'id': i, 'name': n} for i, n in sorted(v.items(), key=lambda x: x[1]) if not (skip and skip in n.lower())]})
 
