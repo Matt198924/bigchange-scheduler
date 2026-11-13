@@ -232,6 +232,9 @@ def levels():
     for L in locs.values():
         for i in L['items']:
             if names.get(i['stockId']): i['name'] = names[i['stockId']]
+    for vid, vname in veh.items():   # vans with no reorder levels yet still get listed so parts can be added
+        if (2, vid) not in locs and 'stock' not in vname.lower():
+            locs[(2, vid)] = {'entityType': 2, 'entityId': vid, 'kind': 'Asset', 'items': [], 'label': vname}
     out = sorted(locs.values(), key=lambda x: (x['entityType'], x['label'].lower()))
     for L in out: L['items'].sort(key=lambda i: i['name'].lower())
     return jsonify({'locations': out, 'total': len(rows)})

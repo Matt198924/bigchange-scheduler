@@ -35,13 +35,13 @@ async function api(path, method = 'GET', body) {
 }
 let LOCS = [], PICK = null, qcache = {};
 async function load() {
-  try { const j = await api('/levels'); LOCS = j.locations; $('summary').textContent = LOCS.length + ' locations, ' + j.total + ' reorder levels.'; draw(); }
+  try { const j = await api('/levels'); LOCS = j.locations; $('summary').textContent = LOCS.length + ' locations (' + LOCS.filter(l => !l.items.length).length + ' with none yet), ' + j.total + ' reorder levels.'; draw(); }
   catch (e) { $('summary').innerHTML = '<span class="err">' + esc(e.message) + '</span>'; }
 }
 function draw() {
   const q = $('fq').value.toLowerCase(); const open = new Set([...document.querySelectorAll('details.loc[open]')].map(d => d.dataset.k));
   $('locs').innerHTML = LOCS.filter(l => !q || l.label.toLowerCase().includes(q)).map(l => { const k = l.entityType + '-' + l.entityId;
-    return `<details class="loc" data-k="${k}" ${open.has(k) ? 'open' : ''} ontoggle="if(this.open)quant('${k}')"><summary>${esc(l.label)} <span class="muted">${esc(l.kind)} · ${l.items.length} items</span></summary>
+    return `<details class="loc" data-k="${k}" ${open.has(k) ? 'open' : ''} ontoggle="if(this.open)quant('${k}')"><summary>${esc(l.label)} <span class="muted">${esc(l.kind)} · ${l.items.length ? l.items.length + ' items' : 'no reorder levels yet'}</span></summary>
     <table><tr><th>Item</th><th>Reorder level</th><th>Current qty</th><th>New level</th></tr>${l.items.map(i => `<tr><td>${esc(i.name)}</td><td>${i.level}</td><td id="cq-${k}-${i.stockId}" class="muted">…</td>
     <td><input class="q" type="number" min="0" step="1" data-loc="${k}" data-stock="${i.stockId}" data-old="${i.level}" placeholder="${i.level}"></td></tr>`).join('')}</table>
     <div style="margin-top:.5rem"><button class="sm p" onclick="upd('${k}')">Update</button> <span id="um-${k}" class="muted"></span></div>
