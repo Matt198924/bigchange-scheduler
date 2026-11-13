@@ -13,6 +13,19 @@ COUNT_CATEGORIES = {142643, 82693, 82694, 142645, 82695, 142646}
 _cache = {}
 
 
+def _by_category(jobs, limit=400):
+    """Group jobs by category name with a short job list each (for the expandable breakdowns)."""
+    cats = {}
+    for j in jobs:
+        c = cats.setdefault(j.get('categoryId'), {'id': j.get('categoryId'), 'name': j.get('categoryName') or f"Category {j.get('categoryId')}", 'count': 0, 'jobs': []})
+        c['count'] += 1
+        if len(c['jobs']) < limit:
+            c['jobs'].append({'ref': str(j.get('reference') or j.get('id') or ''), 'client': j.get('contactName') or '', 'desc': (j.get('description') or '')[:90],
+                              'engineer': j.get('resourceName') or '', 'date': (j.get('plannedStartAt') or '')[:10], 'status': j.get('status') or ''})
+    for c in cats.values(): c['jobs'].sort(key=lambda x: x['date'] or '9')
+    return sorted(cats.values(), key=lambda c: -c['count'])
+
+
 def _day(date_str=None):
     d = datetime.strptime(date_str, '%Y-%m-%d').date() if date_str else datetime.now(LONDON).date()
     a = datetime(d.year, d.month, d.day, tzinfo=LONDON)
@@ -112,7 +125,7 @@ def unallocated():
     except Exception as ex: return jsonify({'error': str(ex)[:300]}), 502
     counted = [j for j in jobs if j.get('categoryId') in COUNT_CATEGORIES]
     res = {'unallocated': len(counted), 'new': sum(1 for j in counted if j.get('status') == 'new'),
-           'unscheduled': sum(1 for j in counted if j.get('status') == 'unscheduled'), 'otherJobs': len(jobs) - len(counted)}
+           'unscheduled': sum(1 for j in counted if j.get('status') == 'unscheduled'), 'otherJobs': len(jobs) - len(counted), 'categories': _by_category(counted)}
     _cache['unalloc'] = (time.time(), res)
     return jsonify(res)
 
@@ -137,6 +150,6 @@ def booked():
         except ValueError: continue
         months[m] = months.get(m, 0) + 1
     res = {'total': len(live), 'from': str(today), 'to': str(today + timedelta(days=92)),
-           'months': [{'month': k, 'jobs': v} for k, v in sorted(months.items())], 'engineers': len({j['resourceId'] for j in live})}
+           'months': [{'month': k, 'jobs': v} for k, v in sorted(months.items())], 'engineers': len({j['resourceId'] for j in live}), 'categories': _by_category(live)}
     _cache['booked'] = (time.time(), res)
     return jsonify(res)
