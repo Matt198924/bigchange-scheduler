@@ -57,8 +57,18 @@ def _pick(row, *names):
 def _levels():
     if _cache.get('levels') and time.time() - _cache['levels'][0] < 45: return _cache['levels'][1]
     body = _ws('ListStockReorderLevel')
+    rows_in = _rows(body)
+    if not rows_in:      # some accounts only answer when asked about one van at a time
+        from concurrent.futures import ThreadPoolExecutor
+        def one(vid):
+            try: return _rows(_ws('ListStockReorderLevel', {'EntityType': 2, 'EntityId': vid}))
+            except Exception: return []
+        try: ids = list(_vehicles().keys())
+        except Exception: ids = []
+        with ThreadPoolExecutor(max_workers=6) as pool:
+            for res in pool.map(one, ids): rows_in += res
     out = []
-    for r in _rows(body):
+    for r in rows_in:
         if not isinstance(r, dict): continue
         try:
             sid = int(_pick(r, 'stockid', 'stockdetailsid', 'stockitemid', 'stock_id'))
@@ -96,13 +106,25 @@ def page(): return send_from_directory(PAGE_DIR, 'index.html')
 
 @reorder_bp.route('/api/reorder/check')
 def check():
-    """Raw answer from BigChange, to see the connection and the field names."""
-    try:
-        body = _ws('ListStockReorderLevel')
-        rows = _rows(body)
-        return jsonify({'ok': True, 'count': len(rows), 'sample': rows[:3], 'wrapperKeys': list(body.keys()) if isinstance(body, dict) else 'list'})
-    except Exception as ex:
-        return jsonify({'ok': False, 'error': str(ex)[:500]})
+    """Raw answers from BigChange. With ?entityId= also tries asking for one van in several ways."""
+    import json as _j
+    variants = [('no filter', {})]
+    eid = (request.args.get('entityId') or '').strip()
+    if eid.isdigit():
+        variants += [('EntityType=2 + EntityId', {'EntityType': 2, 'EntityId': eid}), ('EntityId only', {'EntityId': eid}),
+                     ('AssetId', {'AssetId': eid}), ('EntityType=2 + EntityId + StockId=0', {'EntityType': 2, 'EntityId': eid, 'StockId': 0})]
+    sid = (request.args.get('stockId') or '').strip()
+    if sid.isdigit():
+        variants += [('StockId only', {'StockId': sid})]
+        if eid.isdigit(): variants += [('EntityType=2 + EntityId + StockId', {'EntityType': 2, 'EntityId': eid, 'StockId': sid})]
+    out = []
+    for name, p in variants:
+        try:
+            body = _ws('ListStockReorderLevel', p)
+            out.append({'try': name, 'count': len(_rows(body)), 'raw': _j.dumps(body)[:700]})
+        except Exception as ex:
+            out.append({'try': name, 'error': str(ex)[:400]})
+    return jsonify({'results': out})
 
 
 @reorder_bp.route('/api/reorder/levels')
