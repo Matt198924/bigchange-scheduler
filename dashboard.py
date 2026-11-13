@@ -219,8 +219,14 @@ def _flag_count():
             st(beat=time.time(), running=True, boot=BOOT, msg=f'Finding jobs ({i + 1} of 6)')
         counts, done = {}, 0
 
+        skipped = [0]
+
         def one(j):
-            data = _get_retry(f"/jobs/{j['id']}/flags")
+            try:
+                data = _get_retry(f"/jobs/{j['id']}/flags")
+            except Exception as ex:       # a job that has gone or cannot be read (404 etc.) is skipped, not fatal
+                skipped[0] += 1
+                return []
             return data if isinstance(data, list) else (data.get('items') or [])
         with ThreadPoolExecutor(max_workers=4) as pool:
             for flags in pool.map(one, jobs):
@@ -232,7 +238,7 @@ def _flag_count():
         snaps.setdefault(day, counts)
         for k in sorted(snaps)[:-70]: snaps.pop(k, None)
         leave.set_setting('dash_flagsnaps', json.dumps(snaps))
-        st(running=False, counts=counts, jobs=len(jobs), done=len(jobs), total=len(jobs), error='', msg='Finished', finishedTs=time.time())
+        st(running=False, counts=counts, jobs=len(jobs), skipped=skipped[0], done=len(jobs), total=len(jobs), error='', msg='Finished', finishedTs=time.time())
     except Exception as ex:
         st(running=False, error=str(ex)[:300], msg='Stopped - will retry')
 
@@ -260,7 +266,7 @@ def flags():
     monday = str(today - timedelta(days=today.weekday()))
     day_s = snaps.get(str(today))
     week_s = next((snaps[k] for k in sorted(snaps) if k >= monday), None)
-    return jsonify({'state': {k: s.get(k) for k in ('running', 'msg', 'error', 'done', 'total', 'jobs', 'finishedTs')},
+    return jsonify({'state': {k: s.get(k) for k in ('running', 'msg', 'error', 'done', 'total', 'jobs', 'skipped', 'finishedTs')},
                     'now': _by_colour(s.get('counts') or {}, fmap) if s.get('counts') else None,
                     'startDay': _by_colour(day_s, fmap) if day_s else None, 'startWeek': _by_colour(week_s, fmap) if week_s else None,
                     'map': fmap, 'names': {c: [(next((f.get('name') for f in fl if f['id'] == i), None) or f'Flag {i}') for i in fmap[c]] for c in COLOURS}, 'flags': [{'id': f['id'], 'name': f.get('name'), 'color': f.get('color'), 'count': (s.get('counts') or {}).get(str(f['id']), 0)} for f in fl]})
