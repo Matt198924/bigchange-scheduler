@@ -34,8 +34,8 @@ mark{background:#FFF1A8;padding:0 1px;border-radius:2px}
 .photo-row{margin-top:10px}#photoBtn{background:#0B2A4A;color:#fff;padding:11px 16px}
 
 
-.tabs{display:grid!important;grid-template-columns:1fr 1fr;gap:10px;max-width:760px;margin:14px auto 0;padding:0 16px}
-.tab{display:flex!important;flex-direction:column;align-items:center;justify-content:center;gap:4px;text-decoration:none;min-height:84px;padding:12px 6px!important;font-size:17px!important;font-weight:800;border-radius:14px!important;background:#fff!important;color:#0B2A4A!important;border:1px solid #E2E6E7!important;box-shadow:0 1px 2px rgba(11,42,74,.05),0 4px 14px rgba(11,42,74,.08);position:relative;overflow:hidden}
+.tabs{display:grid!important;grid-template-columns:repeat(3,1fr);gap:8px;max-width:760px;margin:14px auto 0;padding:0 16px}
+.tab{display:flex!important;flex-direction:column;align-items:center;justify-content:center;gap:4px;text-decoration:none;min-height:84px;padding:12px 4px!important;font-size:15px!important;font-weight:800;border-radius:14px!important;background:#fff!important;color:#0B2A4A!important;border:1px solid #E2E6E7!important;box-shadow:0 1px 2px rgba(11,42,74,.05),0 4px 14px rgba(11,42,74,.08);position:relative;overflow:hidden}
 .tab::before{content:'';position:absolute;left:0;top:0;right:0;height:3px;background:#22C7F0}
 .tab i{font-style:normal;font-size:26px;line-height:1}
 .tab.on{background:#0B2A4A!important;color:#fff!important;border-color:#0B2A4A!important}
