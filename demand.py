@@ -252,8 +252,20 @@ def demand_page():
     return send_from_directory(os.path.join(os.path.dirname(os.path.abspath(__file__)), 'static', 'demand'), 'index.html')
 
 
+def _revive():
+    """A redeploy kills the sync thread and leaves 'running' stuck on. If nothing has moved for 10 minutes, pick the sync up again (it resumes)."""
+    st = _status()
+    if st.get('running') and time.time() - float(st.get('beat', 0) or 0) > 600:
+        with _lock:
+            st = _status()
+            if st.get('running') and time.time() - float(st.get('beat', 0) or 0) > 600:
+                _tables(); _set_status(beat=time.time(), running=True, error='', msg='Resuming after an interruption...')
+                threading.Thread(target=_sync, args=(183,), daemon=True).start()
+
+
 @demand_bp.route('/api/demand')
 def demand():
+    _revive()
     st = _status()      # keep it fresh: if the last full sync is over 12 hours old, top up the last 14 days in the background
     if st.get('finishedTs') and not st.get('running') and time.time() - st['finishedTs'] > 12 * 3600:
         with _lock:
@@ -288,4 +300,5 @@ def demand_sync():
 
 @demand_bp.route('/api/demand/status')
 def demand_status():
+    _revive()
     return jsonify({'sync': _status()})
