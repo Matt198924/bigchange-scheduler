@@ -43,15 +43,11 @@ def _total_engineers():
 def page(): return send_from_directory(PAGE_DIR, 'index.html')
 
 
-@dashboard_bp.route('/api/dashboard/day')
-def day():
-    """Jobs, engineers with work and the average per engineer for one day (counted categories only)."""
-    try: d, a, b = _day(request.args.get('date'))
-    except ValueError: return jsonify({'error': 'Bad date'}), 400
+def _stats(date_str):
+    d, a, b = _day(date_str)
     key = f'day-{d}'
-    if _cache.get(key) and time.time() - _cache[key][0] < 60: return jsonify({**_cache[key][1], 'totalEngineers': _total_engineers()})
-    try: jobs = _jobs(a, b)
-    except Exception as ex: return jsonify({'error': str(ex)[:300]}), 502
+    if _cache.get(key) and time.time() - _cache[key][0] < 60: return {**_cache[key][1], 'totalEngineers': _total_engineers()}
+    jobs = _jobs(a, b)
     counted = [j for j in jobs if j.get('categoryId') in COUNT_CATEGORIES]
     done = [j for j in counted if j.get('status') in ('completedOk', 'completedWithIssues')]
     engineers = {j.get('resourceId') for j in counted if j.get('resourceId')}
@@ -61,7 +57,24 @@ def day():
            'engineers': len(engineers), 'basis': 'completed' if is_past else 'planned', 'jobs': jobs_n,
            'average': round(jobs_n / len(engineers), 1) if engineers else 0, 'otherJobs': len(jobs) - len(counted)}
     _cache[key] = (time.time(), res)
-    return jsonify({**res, 'totalEngineers': _total_engineers()})
+    return {**res, 'totalEngineers': _total_engineers()}
+
+
+@dashboard_bp.route('/api/dashboard/day')
+def day():
+    """Jobs, engineers with work and the average per engineer for one day (counted categories only)."""
+    try: return jsonify(_stats(request.args.get('date')))
+    except ValueError: return jsonify({'error': 'Bad date'}), 400
+    except Exception as ex: return jsonify({'error': str(ex)[:300]}), 502
+
+
+@dashboard_bp.route('/api/dashboard/next')
+def next_days():
+    """The next working day(s) to plan for: tomorrow, or on a Friday the weekend days then Monday (Saturday and Sunday ask for Sunday/Monday and Monday)."""
+    today = datetime.now(LONDON).date()
+    n = {4: 3, 5: 2, 6: 1}.get(today.weekday(), 1)       # Fri: Sat, Sun, Mon. Sat: Sun, Mon. Sun: Mon. Otherwise tomorrow.
+    try: return jsonify({'days': [_stats(str(today + timedelta(days=i))) for i in range(1, n + 1)]})
+    except Exception as ex: return jsonify({'error': str(ex)[:300]}), 502
 
 
 @dashboard_bp.route('/api/dashboard/settings', methods=['PUT'])
