@@ -205,7 +205,7 @@ def _flag_count():
     try:
         today = datetime.now(timezone.utc)
         jobs, seen = [], set()
-        for i in range(12):        # open-ended search by creation date, 30-day slices over the last year
+        for i in range(6):         # search by creation date, 30-day slices over the last 6 months
             end = today - timedelta(days=30 * i); start = end - timedelta(days=30)
             page = 1
             while page <= 10:
@@ -215,7 +215,7 @@ def _flag_count():
                     if j.get('id') not in seen and not j.get('isFinanciallyComplete'): seen.add(j.get('id')); jobs.append(j)
                 if len(items) < 1000: break
                 page += 1
-            st(beat=time.time(), running=True, msg=f'Finding jobs ({i + 1} of 12)')
+            st(beat=time.time(), running=True, msg=f'Finding jobs ({i + 1} of 6)')
         counts, done = {}, 0
 
         def one(j):
