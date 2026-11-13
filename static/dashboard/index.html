@@ -20,15 +20,18 @@ input.q{width:5.5rem}pre{background:#f3f5f6;padding:.6rem;border-radius:8px;over
   <div id="doneNote" class="muted" style="margin-top:.5rem"></div></div>
 <div class="card" style="background:#fff8dc"><h2>Allocated work booked in - next 3 months</h2>
   <div style="display:flex;gap:2.5rem;flex-wrap:wrap;align-items:flex-end"><div><div class="muted">Allocated jobs</div><div id="bk" style="font-size:2.4rem;font-weight:700">...</div></div><div id="bkm" style="display:flex;gap:1.8rem"></div></div>
-  <div id="bkNote" class="muted" style="margin-top:.4rem"></div></div>
+  <div id="bkNote" class="muted" style="margin-top:.4rem"></div><div id="bkCats" style="margin-top:.4rem"></div></div>
 <div class="card" style="background:#fdeaea"><h2 style="color:#b00020">Unallocated jobs</h2>
   <div style="display:flex;gap:2.5rem;flex-wrap:wrap"><div><div class="muted">Total unallocated</div><div id="un" style="font-size:2.4rem;font-weight:700">...</div></div>
   <div><div class="muted">New</div><div id="unNew" style="font-size:1.6rem;font-weight:700;margin-top:.6rem">...</div></div>
   <div><div class="muted">Unscheduled</div><div id="unSch" style="font-size:1.6rem;font-weight:700;margin-top:.6rem">...</div></div></div>
-  <div id="unNote" class="muted" style="margin-top:.4rem"></div></div>
+  <div id="unNote" class="muted" style="margin-top:.4rem"></div><div id="unCats" style="margin-top:.4rem"></div></div>
 <div id="next"></div>
 </div>
 <script>
+const esc = s => String(s ?? '').replace(/[&<>"]/g, c => ({'&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;'}[c]));
+function cats(list) { return (list || []).map(c => `<details style="margin-top:.4rem"><summary style="cursor:pointer;font-weight:600">${esc(c.name)} <span class="muted">(${c.count})</span></summary>
+  <table><tr><th>Job</th><th>Customer</th><th>Description</th><th>Engineer</th><th>Date</th></tr>${c.jobs.map(j => `<tr><td>${esc(j.ref)}</td><td>${esc(j.client)}</td><td>${esc(j.desc)}</td><td>${esc(j.engineer) || '<span class="muted">unallocated</span>'}</td><td>${esc(j.date)}</td></tr>`).join('')}</table>${c.count > c.jobs.length ? '<div class="muted">Showing the first ' + c.jobs.length + '.</div>' : ''}</details>`).join(''); }
 const $ = id => document.getElementById(id);
 function today() { const d = new Date(); return d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0') + '-' + String(d.getDate()).padStart(2, '0'); }
 async function get(path) { const r = await fetch('/api/dashboard' + path); const j = await r.json().catch(() => ({})); if (r.status === 401) { location.href = '/login?next=/dashboard/'; throw new Error('Sign in again'); } if (!r.ok) throw new Error(j.error || 'Server problem'); return j; }
@@ -47,11 +50,11 @@ async function loadNext() { const box = $('next'); box.innerHTML = '<div class="
       <div><div class="muted">Engineers with jobs</div><div style="font-size:2.2rem;font-weight:700">${x.engineers} / ${x.totalEngineers}</div></div>
       <div><div class="muted">Average per engineer</div><div style="font-size:2.2rem;font-weight:700">${x.average}</div></div></div></div>`).join('') + '</div>';
   } catch (e) { box.innerHTML = '<div class="card err">' + e.message + '</div>'; } }
-async function loadUn() { try { const j = await get('/unallocated'); $('un').textContent = j.unallocated; $('unNew').textContent = j.new; $('unSch').textContent = j.unscheduled; $('unNote').textContent = j.otherJobs + ' job(s) in other categories are not counted.'; }
+async function loadUn() { try { const j = await get('/unallocated'); $('un').textContent = j.unallocated; $('unNew').textContent = j.new; $('unSch').textContent = j.unscheduled; $('unNote').textContent = j.otherJobs + ' job(s) in other categories are not counted.'; $('unCats').innerHTML = cats(j.categories); }
   catch (e) { $('un').textContent = '-'; $('unNote').innerHTML = '<span class="err">' + e.message + '</span>'; } }
 async function loadBk() { try { const j = await get('/booked'); $('bk').textContent = j.total;
   $('bkm').innerHTML = j.months.map(m => `<div><div class="muted">${new Date(m.month + '-15T12:00:00').toLocaleDateString('en-GB', {month: 'long', year: 'numeric'})}</div><div style="font-size:1.6rem;font-weight:700">${m.jobs}</div></div>`).join('');
-  $('bkNote').textContent = `Jobs planned from ${j.from} to ${j.to} with an engineer booked, not yet completed or cancelled (your six categories), across ${j.engineers} engineers.`; }
+  $('bkNote').textContent = `Jobs planned from ${j.from} to ${j.to} with an engineer booked, not yet completed or cancelled (your six categories), across ${j.engineers} engineers.`; $('bkCats').innerHTML = cats(j.categories); }
   catch (e) { $('bk').textContent = '-'; $('bkNote').innerHTML = '<span class="err">' + e.message + '</span>'; } }
 $('date').value = today(); load(); loadNext(); loadUn(); loadBk();
 </script></body></html>
