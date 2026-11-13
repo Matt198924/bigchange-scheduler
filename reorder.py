@@ -100,7 +100,8 @@ def check():
     try:
         body = _ws('ListStockReorderLevel')
         rows = _rows(body)
-        return jsonify({'ok': True, 'count': len(rows), 'sample': rows[:3], 'wrapperKeys': list(body.keys()) if isinstance(body, dict) else 'list'})
+        import json as _j
+        return jsonify({'ok': True, 'count': len(rows), 'sample': rows[:3], 'wrapperKeys': list(body.keys()) if isinstance(body, dict) else 'list', 'raw': _j.dumps(body)[:1200]})
     except Exception as ex:
         return jsonify({'ok': False, 'error': str(ex)[:500]})
 
