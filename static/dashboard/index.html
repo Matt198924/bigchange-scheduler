@@ -11,13 +11,17 @@
 input.q{width:5.5rem}pre{background:#f3f5f6;padding:.6rem;border-radius:8px;overflow:auto;font-size:12px}</style></head><body>
 <div class="topbar"><div class="brand"><div class="brand-mark"><img src="/static/logo-mark.png" alt="R&amp;S"></div><span class="brand-name">Daily dashboard</span></div><a class="btn-home" href="/">⌂ Home</a></div>
 <div class="wrap">
-<div class="card" style="display:flex;gap:1rem;align-items:center;flex-wrap:wrap"><h2 style="margin:0">Operations dashboard</h2><input id="date" type="date" style="width:auto" onchange="load()"> <button class="sm" onclick="load();loadNext();loadUn();loadBk()">Refresh</button></div>
+<div class="card" style="display:flex;gap:1rem;align-items:center;flex-wrap:wrap"><h2 style="margin:0">Operations dashboard</h2><input id="date" type="date" style="width:auto" onchange="load()"> <button class="sm" onclick="load();loadNext();loadUn();loadBk();loadFl()">Refresh</button></div>
 <div class="card"><h2 id="dh">Jobs</h2>
   <div style="display:flex;gap:2.5rem;flex-wrap:wrap">
     <div><div class="muted" id="l1">Jobs completed</div><div id="done" style="font-size:2.4rem;font-weight:700">...</div></div>
     <div><div class="muted">Engineers with jobs</div><div style="font-size:2.4rem;font-weight:700"><span id="eng">...</span> / <input id="tot" type="number" min="1" style="width:5rem;font:inherit;font-size:2.4rem;font-weight:700;padding:0 .2rem;border:1px dashed #9aa5ab" onchange="saveTot()"></div></div>
     <div><div class="muted">Average jobs per engineer</div><div id="avg" style="font-size:2.4rem;font-weight:700">...</div></div></div>
   <div id="doneNote" class="muted" style="margin-top:.5rem"></div></div>
+<div class="card"><h2>Flags <span class="muted" style="font-weight:400">(jobs not yet financially complete)</span></h2>
+  <div style="display:flex;gap:1rem;flex-wrap:wrap" id="fl"></div><div id="flNote" class="muted" style="margin-top:.4rem"></div>
+  <details style="margin-top:.4rem"><summary style="cursor:pointer;font-weight:600">Flag setup</summary><div class="muted">Check these are the right flags. Edit the ids (comma separated) if not.</div>
+    <div id="flSet"></div><div id="flList"></div></details></div>
 <div class="card" style="background:#fff8dc"><h2>Allocated work booked in - next 3 months</h2>
   <div style="display:flex;gap:2.5rem;flex-wrap:wrap;align-items:flex-end"><div><div class="muted">Allocated jobs</div><div id="bk" style="font-size:2.4rem;font-weight:700">...</div></div><div id="bkm" style="display:flex;gap:1.8rem"></div></div>
   <div id="bkNote" class="muted" style="margin-top:.4rem"></div><div id="bkCats" style="margin-top:.4rem"></div></div>
@@ -56,5 +60,19 @@ async function loadBk() { try { const j = await get('/booked'); $('bk').textCont
   $('bkm').innerHTML = j.months.map(m => `<div><div class="muted">${new Date(m.month + '-15T12:00:00').toLocaleDateString('en-GB', {month: 'long', year: 'numeric'})}</div><div style="font-size:1.6rem;font-weight:700">${m.jobs}</div></div>`).join('');
   $('bkNote').textContent = `Jobs planned from ${j.from} to ${j.to} with an engineer booked, not yet completed or cancelled (your six categories), across ${j.engineers} engineers.`; $('bkCats').innerHTML = cats(j.categories); }
   catch (e) { $('bk').textContent = '-'; $('bkNote').innerHTML = '<span class="err">' + e.message + '</span>'; } }
-$('date').value = today(); load(); loadNext(); loadUn(); loadBk();
+const FC = {pink: ['#f6c6ee', 'Pink flags'], black: ['#d9dcde', 'Black flags'], yellow: ['#fff3b0', 'Yellow flags']};
+let flTimer;
+async function loadFl() { clearTimeout(flTimer);
+  try { const j = await get('/flags'); const n = j.now;
+    $('fl').innerHTML = Object.keys(FC).map(c => `<div style="background:${FC[c][0]};border-radius:10px;padding:.7rem 1.2rem;min-width:11rem;text-align:center"><div style="font-weight:700">${FC[c][1]}</div><div class="muted" style="margin-top:-.1rem">${(j.names[c] || []).map(esc).join(', ')}</div><div style="font-size:2.4rem;font-weight:700">${n ? n[c] : '...'}</div>
+      <div class="muted">Started day on ${j.startDay ? j.startDay[c] : '-'}<br>Started week on ${j.startWeek ? j.startWeek[c] : '-'}</div></div>`).join('');
+    const s = j.state; $('flNote').innerHTML = s.running ? `<b>Counting...</b> ${esc(s.msg || '')} (this runs in the background; you can leave the page)` : (s.error ? '<span class="err">' + esc(s.error) + '</span>' : (s.finishedTs ? 'Counted ' + s.jobs + ' open jobs, updated ' + new Date(s.finishedTs * 1000).toLocaleTimeString('en-GB', {hour: '2-digit', minute: '2-digit'}) + '. Refreshes hourly. ' : '') + '<a href="#" onclick="recount();return false">Recount now</a>');
+    $('flSet').innerHTML = Object.keys(FC).map(c => `<label style="display:inline-block;margin-right:1rem">${FC[c][1]} ids <input id="fm-${c}" value="${j.map[c].join(', ')}" style="width:12rem"></label>`).join('') + ' <button class="sm" onclick="saveFl()">Save</button>';
+    $('flList').innerHTML = '<table><tr><th>Id</th><th>Flag</th><th>Colour</th><th>Jobs</th></tr>' + j.flags.map(f => `<tr><td>${f.id}</td><td>${esc(f.name)}</td><td>${esc(f.color)}</td><td>${f.count}</td></tr>`).join('') + '</table>';
+    if (s.running) flTimer = setTimeout(loadFl, 15000);
+  } catch (e) { $('flNote').innerHTML = '<span class="err">' + esc(e.message) + '</span>'; } }
+async function recount() { await fetch('/api/dashboard/flags/recount', {method: 'POST'}); loadFl(); }
+async function saveFl() { const b = {}; for (const c of Object.keys(FC)) b[c] = $('fm-' + c).value.split(',').map(x => x.trim()).filter(Boolean).map(Number);
+  const r = await fetch('/api/dashboard/flags/config', {method: 'PUT', headers: {'Content-Type': 'application/json'}, body: JSON.stringify(b)}); if (!r.ok) { alert('Flag ids must be numbers'); return; } loadFl(); }
+$('date').value = today(); load(); loadNext(); loadUn(); loadBk(); loadFl();
 </script></body></html>
