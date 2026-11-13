@@ -91,19 +91,24 @@ def settings():
 def unallocated():
     """Jobs with no engineer booked yet (status new or unscheduled), counted in the chosen categories."""
     if _cache.get('unalloc') and time.time() - _cache['unalloc'][0] < 120: return jsonify(_cache['unalloc'][1])
-    now = datetime.now(timezone.utc)
-    f, t = (now - timedelta(days=730)).strftime('%Y-%m-%dT00:00:00Z'), (now + timedelta(days=90)).strftime('%Y-%m-%dT23:59:59Z')
+    now = datetime.now()
+    # BigChange rejects very wide date ranges, so look back in 150-day slices (plus the next 90 days)
+    slices, end = [], now + timedelta(days=90)
+    for _ in range(6):
+        start = end - timedelta(days=150)
+        slices.append((start.strftime('%Y-%m-%dT00:00:00'), end.strftime('%Y-%m-%dT23:59:59'))); end = start
     seen, jobs = set(), []
     try:
-        for st in ('new', 'unscheduled'):
-            page = 1
-            while page <= 10:
-                data = leave.bc_hooks['get']('/jobs', {'statusModifiedAtFrom': f, 'statusModifiedAtTo': t, 'status': st, 'pageSize': 1000, 'pageNumber': page})
-                items = data if isinstance(data, list) else (data.get('items') or [])
-                for j in items:
-                    if j.get('id') not in seen: seen.add(j.get('id')); jobs.append(j)
-                if len(items) < 1000: break
-                page += 1
+        for f, t in slices:
+            for st in ('new', 'unscheduled'):
+                page = 1
+                while page <= 10:
+                    data = leave.bc_hooks['get']('/jobs', {'statusModifiedAtFrom': f, 'statusModifiedAtTo': t, 'status': st, 'pageSize': 1000, 'pageNumber': page})
+                    items = data if isinstance(data, list) else (data.get('items') or [])
+                    for j in items:
+                        if j.get('id') not in seen: seen.add(j.get('id')); jobs.append(j)
+                    if len(items) < 1000: break
+                    page += 1
     except Exception as ex: return jsonify({'error': str(ex)[:300]}), 502
     counted = [j for j in jobs if j.get('categoryId') in COUNT_CATEGORIES]
     res = {'unallocated': len(counted), 'new': sum(1 for j in counted if j.get('status') == 'new'),
