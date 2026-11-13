@@ -29,6 +29,9 @@ def _tables():
         done_at TEXT, lines INTEGER DEFAULT 0)''')
     leave.execute(f'''CREATE TABLE IF NOT EXISTS demand_lines (id {pk}, job_id TEXT, part TEXT, name TEXT, qty REAL,
         done_at TEXT, resource_id TEXT, resource_name TEXT)''')
+    for col in ('cost', 'sell'):
+        try: leave.execute(f'ALTER TABLE demand_lines ADD COLUMN {col} REAL DEFAULT 0')
+        except Exception: pass
     leave.execute('CREATE INDEX IF NOT EXISTS demand_lines_part ON demand_lines (part)')
 
 
@@ -93,8 +96,8 @@ def _sync(days):
     """Parts sold = invoice lines coded to nominal 5000, over the last `days` days."""
     try:
         _tables()
-        if leave.get_setting('demand_source') != 'invoice':      # earlier job-stock data is replaced by invoice data
-            leave.execute('DELETE FROM demand_lines'); leave.execute('DELETE FROM demand_jobs'); leave.set_setting('demand_source', 'invoice')
+        if leave.get_setting('demand_source') != 'invoice2':      # earlier job-stock data is replaced by invoice data
+            leave.execute('DELETE FROM demand_lines'); leave.execute('DELETE FROM demand_jobs'); leave.set_setting('demand_source', 'invoice2')
         nid = _nominal_id('5000')
         if not nid: raise RuntimeError('Nominal code 5000 was not found in BigChange')
         end = datetime.now(timezone.utc)
@@ -135,8 +138,10 @@ def _sync(days):
                     part, name = _split_model(desc)
                     if not part: part, name = desc[:60], ''
                     if not rid and inv.get('jobId'): rid, rname = _job_resource(inv['jobId'])
-                    leave.execute('INSERT INTO demand_lines (job_id, part, name, qty, done_at, resource_id, resource_name) VALUES (?,?,?,?,?,?,?)',
-                                  (iid, part, name[:120], qty, when, rid, rname))
+                    try: cost, sell = float(ln.get('unitCost') or 0), float(ln.get('unitSellingPrice') or 0)
+                    except (TypeError, ValueError): cost = sell = 0
+                    leave.execute('INSERT INTO demand_lines (job_id, part, name, qty, done_at, resource_id, resource_name, cost, sell) VALUES (?,?,?,?,?,?,?,?,?)',
+                                  (iid, part, name[:120], qty, when, rid, rname, cost, sell))
                     n += 1
                 leave.execute('INSERT INTO demand_jobs (job_id, resource_id, resource_name, done_at, lines) VALUES (?,?,?,?,?)', (iid, rid, rname, when, n))
                 new += 1
@@ -158,7 +163,7 @@ def analyse(cfg, days=182):
     """Per part: usage over the window and suggested holdings."""
     _tables()
     since = (datetime.now() - timedelta(days=days)).strftime('%Y-%m-%d')
-    rows = leave.query('SELECT job_id, part, name, qty, done_at, resource_id FROM demand_lines WHERE done_at >= ?', (since,))
+    rows = leave.query('SELECT job_id, part, name, qty, done_at, resource_id, cost, sell FROM demand_lines WHERE done_at >= ?', (since,))
     weeks = max(1, days // 7)
     t0 = datetime.strptime(since, '%Y-%m-%d')
     vans_seen = {r['resource_id'] for r in rows if r['resource_id']}
@@ -167,10 +172,11 @@ def analyse(cfg, days=182):
     parts = {}
     for r in rows:
         p = parts.setdefault(r['part'], {'part': r['part'], 'name': r['name'] or '', 'qty': 0.0, 'jobs': set(), 'eng': set(),
-                                         'wk': [0.0] * (weeks + 1), 'mo': [0.0] * 7, 'last': ''})
+                                         'wk': [0.0] * (weeks + 1), 'mo': [0.0] * 7, 'last': '', 'cq': 0.0, 'cv': 0.0, 'sv': 0.0})
         q = float(r['qty'])
         d = datetime.strptime(r['done_at'], '%Y-%m-%d')
         p['qty'] += q; p['jobs'].add(r['job_id'])
+        if q > 0 and (r['cost'] or 0) > 0: p['cq'] += q; p['cv'] += q * r['cost']; p['sv'] += q * (r['sell'] or 0)
         if r['resource_id']: p['eng'].add(r['resource_id'])
         p['wk'][min(weeks, (d - t0).days // 7)] += q
         p['mo'][min(6, (d - t0).days // 30)] += q
@@ -194,11 +200,14 @@ def analyse(cfg, days=182):
         rop = math.ceil(m * lead + z * s * math.sqrt(lead) - 1e-9) if jobs >= 2 else 0
         if jobs >= 2: room, rop = max(room, 1), max(rop, 1)
         if p['qty'] <= 0: continue
-        out.append({'part': p['part'], 'name': p['name'], 'qty': round(p['qty'], 2), 'jobs': jobs, 'engineers': len(p['eng']),
+        cost = round(p['cv'] / p['cq'], 2) if p['cq'] else 0
+        sell = round(p['sv'] / p['cq'], 2) if p['cq'] else 0
+        out.append({'cost': cost, 'sell': sell, 'vanValue': round(van * cost, 2), 'roomValue': round(room * cost, 2), 'totalValue': round((room + van * vans) * cost, 2), 'part': p['part'], 'name': p['name'], 'qty': round(p['qty'], 2), 'jobs': jobs, 'engineers': len(p['eng']),
                     'perWeek': round(m, 2), 'months': [round(x, 1) for x in p['mo'][:6]], 'last': p['last'],
                     'van': van, 'room': room, 'reorder': rop, 'totalHeld': room + van * vans, 'kind': kind})
     out.sort(key=lambda x: -x['qty'])
-    return {'parts': out, 'vans': vans, 'vansSeen': len(vans_seen), 'since': since, 'jobs': len({r['job_id'] for r in rows}), 'cfg': cfg}
+    tot = {'room': round(sum(x['roomValue'] for x in out), 2), 'perVan': round(sum(x['vanValue'] for x in out), 2), 'allVans': round(sum(x['vanValue'] for x in out) * vans, 2), 'noCost': sum(1 for x in out if not x['cost'])}
+    return {'totals': tot, 'parts': out, 'vans': vans, 'vansSeen': len(vans_seen), 'since': since, 'jobs': len({r['job_id'] for r in rows}), 'cfg': cfg}
 
 
 @demand_bp.route('/demand')
