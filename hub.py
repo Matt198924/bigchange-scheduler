@@ -20,9 +20,9 @@ STATIC = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'static')
 COOKIE = 'rs_hub'
 MAX_AGE = 60 * 60 * 24 * 30
 APPS = [('scheduler', 'Scheduler'), ('leave', 'Annual leave'), ('parts', 'Parts'),
-        ('incident', 'Accident / incident report'), ('callout', 'Call out rota'), ('demand', 'Parts demand'), ('reorder', 'Reorder levels'), ('stockmoves', 'Stock movements'), ('handbook', 'Company handbook'), ('policies', 'Company policies')]
+        ('incident', 'Accident / incident report'), ('callout', 'Call out rota'), ('demand', 'Parts demand'), ('reorder', 'Reorder levels'), ('stockmoves', 'Stock movements'), ('dashboard', 'Daily dashboard'), ('handbook', 'Company handbook'), ('policies', 'Company policies')]
 APP_KEYS = [k for k, _ in APPS]
-RESTRICTED = {'demand', 'reorder', 'stockmoves'}     # nobody sees these until the office grants access
+RESTRICTED = {'demand', 'reorder', 'stockmoves', 'dashboard'}     # nobody sees these until the office grants access
 RULE_APPS = {'callout'}      # default: managers plus the people who report to Chris Scott
 RULE_MANAGER_NAME = ('chris', 'scott')
 
@@ -30,7 +30,7 @@ RULE_MANAGER_NAME = ('chris', 'scott')
 EXACT = {'/callout': 'callout', '/callout/': 'callout', '/staff-admin': 'office', '/staff-admin/': 'office', '/scheduler': 'scheduler', '/leave': 'leave', '/leave/': 'leave', '/incident/': 'incident', '/incident': 'incident',
          '/handbook/': 'handbook', '/handbook': 'handbook', '/api/handbook': 'handbook', '/api/parts/stock': 'parts',
          '/api/incident/report': 'incident', '/static/handbook/pages.json': 'handbook', '/static/handbook/handbook.pdf': 'handbook'}
-PREFIX = [('/stockmoves', 'stockmoves'), ('/api/stockmoves', 'stockmoves'), ('/static/stockmoves/', 'stockmoves'), ('/reorder', 'reorder'), ('/api/reorder', 'reorder'), ('/static/reorder/', 'reorder'), ('/demand', 'demand'), ('/api/demand', 'demand'), ('/static/demand/', 'demand'), ('/api/jobs', 'scheduler'), ('/api/schedule', 'scheduler'), ('/api/categories', 'scheduler'),
+PREFIX = [('/dashboard', 'dashboard'), ('/api/dashboard', 'dashboard'), ('/static/dashboard/', 'dashboard'), ('/stockmoves', 'stockmoves'), ('/api/stockmoves', 'stockmoves'), ('/static/stockmoves/', 'stockmoves'), ('/reorder', 'reorder'), ('/api/reorder', 'reorder'), ('/static/reorder/', 'reorder'), ('/demand', 'demand'), ('/api/demand', 'demand'), ('/static/demand/', 'demand'), ('/api/jobs', 'scheduler'), ('/api/schedule', 'scheduler'), ('/api/categories', 'scheduler'),
           ('/parts', 'parts'), ('/static/parts/', 'parts'), ('/policies', 'policies'), ('/static/policies/', 'policies'),
           ('/static/handbook/pages/', 'handbook'), ('/static/callout/', 'callout')]
 OPEN_PREFIX = ('/static/parts/icons/', '/static/parts/manifest')          # needed before sign-in or by the browser

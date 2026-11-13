@@ -1,0 +1,35 @@
+<!DOCTYPE html>
+<html lang="en"><head>
+<meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<meta name="theme-color" content="#0B2A4A"><title>Daily dashboard – R&amp;S Services</title>
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="/static/incident/common.css">
+<style>.wrap{max-width:1200px}.card{background:#fff;border:1px solid var(--line);border-radius:10px;box-shadow:var(--shadow);padding:1rem;margin:.8rem 0}
+.muted{color:var(--slate);font-size:13px}.err{color:#b00020;margin:.4rem 0}.ok{color:#0a7a3a}
+.sm{padding:.4rem .8rem;border-radius:8px;border:1px solid var(--line);background:#fff;font:inherit;font-weight:600;cursor:pointer}.sm.p{background:#0B2A4A;color:#fff}.sm:disabled{opacity:.5}
+.loc>summary{cursor:pointer;font-weight:700;padding:.2rem 0}table{width:100%;border-collapse:collapse;font-size:.9rem}th{text-align:left;padding:.3rem .4rem}td{padding:.3rem .4rem;border-top:1px solid #E2E6E7}
+input.q{width:5.5rem}pre{background:#f3f5f6;padding:.6rem;border-radius:8px;overflow:auto;font-size:12px}</style></head><body>
+<div class="topbar"><div class="brand"><div class="brand-mark"><img src="/static/logo-mark.png" alt="R&amp;S"></div><span class="brand-name">Daily dashboard</span></div><a class="btn-home" href="/">⌂ Home</a></div>
+<div class="wrap">
+<div class="card" style="display:flex;gap:1rem;align-items:center;flex-wrap:wrap"><h2 style="margin:0">Operations dashboard</h2><input id="date" type="date" style="width:auto" onchange="load()"> <button class="sm" onclick="load()">Refresh</button></div>
+<div class="card"><h2 id="dh">Jobs</h2>
+  <div style="display:flex;gap:2.5rem;flex-wrap:wrap">
+    <div><div class="muted" id="l1">Jobs completed</div><div id="done" style="font-size:2.4rem;font-weight:700">...</div></div>
+    <div><div class="muted">Engineers with jobs</div><div style="font-size:2.4rem;font-weight:700"><span id="eng">...</span> / <input id="tot" type="number" min="1" style="width:5rem;font:inherit;font-size:2.4rem;font-weight:700;padding:0 .2rem;border:1px dashed #9aa5ab" onchange="saveTot()"></div></div>
+    <div><div class="muted">Average jobs per engineer</div><div id="avg" style="font-size:2.4rem;font-weight:700">...</div></div></div>
+  <div id="doneNote" class="muted" style="margin-top:.5rem"></div></div>
+</div>
+<script>
+const $ = id => document.getElementById(id);
+function today() { const d = new Date(); return d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0') + '-' + String(d.getDate()).padStart(2, '0'); }
+async function get(path) { const r = await fetch('/api/dashboard' + path); const j = await r.json().catch(() => ({})); if (r.status === 401) { location.href = '/login?next=/dashboard/'; throw new Error('Sign in again'); } if (!r.ok) throw new Error(j.error || 'Server problem'); return j; }
+async function load() {
+  const date = $('date').value; $('done').textContent = '...';
+  try { const j = await get('/day?date=' + date); $('dh').textContent = new Date(date + 'T12:00:00').toLocaleDateString('en-GB', {weekday: 'long', day: 'numeric', month: 'long'}) + ' jobs';
+    $('l1').textContent = j.basis === 'completed' ? 'Jobs completed' : 'Planned jobs'; $('done').textContent = j.jobs; $('eng').textContent = j.engineers; $('tot').value = j.totalEngineers; $('avg').textContent = j.average;
+    $('doneNote').textContent = (j.basis === 'completed' ? `${j.withIssues} of the completed jobs finished with issues. ${j.planned - j.completed} counted job(s) not yet completed. ` : '') + `${j.otherJobs} job(s) in other categories are not counted. Engineers = people with at least one counted job planned that day.`;
+  } catch (e) { $('done').textContent = '-'; $('eng').textContent = '-'; $('avg').textContent = '-'; $('doneNote').innerHTML = '<span class="err">' + e.message + '</span>'; }
+}
+async function saveTot() { try { const r = await fetch('/api/dashboard/settings', {method: 'PUT', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({totalEngineers: Number($('tot').value)})}); if (!r.ok) throw 0; } catch (e) { alert('Could not save that number'); } }
+$('date').value = today(); load();
+</script></body></html>
