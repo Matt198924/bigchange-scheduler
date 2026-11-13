@@ -21,7 +21,7 @@ input.q{width:5.5rem}pre{background:#f3f5f6;padding:.6rem;border-radius:8px;over
 <div class="card"><h2>Locations with reorder levels</h2>
   <input id="fq" placeholder="Filter locations" style="width:100%;margin-bottom:.5rem" oninput="draw()">
   <div id="summary" class="muted">Loading…</div><div id="locs"></div></div>
-<div class="card"><button class="sm" onclick="check()">Check connection to BigChange</button> <input id="ceid" placeholder="Van ID (optional)" style="width:9rem"> <span class="muted">Shows what BigChange sends back. Add a van ID to try asking for that van.</span><pre id="chk" style="display:none"></pre></div>
+<div class="card"><button class="sm" onclick="check()">Check connection to BigChange</button> <input id="ceid" placeholder="Van ID (optional)" style="width:9rem"> <input id="csid" placeholder="Stock ID (optional)" style="width:9rem"> <span class="muted">Shows what BigChange sends back. Add a van ID to try asking for that van.</span><pre id="chk" style="display:none"></pre></div>
 </div>
 <script>
 const $ = id => document.getElementById(id);
@@ -75,6 +75,6 @@ async function addAll() {
     $('amsg').innerHTML = `<span class="${j.failed.length ? 'err' : 'ok'}">${j.done} added${j.failed.length ? ', ' + j.failed.length + ' failed: ' + esc(j.failed[0].error) : ''}.</span>`; qcache = {}; load();
   } catch (e) { $('amsg').innerHTML = '<span class="err">' + esc(e.message) + '</span>'; }
 }
-async function check() { const p = $('chk'); p.style.display = 'block'; p.textContent = 'Asking BigChange...'; try { p.textContent = JSON.stringify(await api('/check?entityId=' + encodeURIComponent($('ceid').value.trim())), null, 1); } catch (e) { p.textContent = e.message; } }
+async function check() { const p = $('chk'); p.style.display = 'block'; p.textContent = 'Asking BigChange...'; try { p.textContent = JSON.stringify(await api('/check?entityId=' + encodeURIComponent($('ceid').value.trim()) + '&stockId=' + encodeURIComponent($('csid').value.trim())), null, 1); } catch (e) { p.textContent = e.message; } }
 load();
 </script></body></html>

@@ -113,6 +113,10 @@ def check():
     if eid.isdigit():
         variants += [('EntityType=2 + EntityId', {'EntityType': 2, 'EntityId': eid}), ('EntityId only', {'EntityId': eid}),
                      ('AssetId', {'AssetId': eid}), ('EntityType=2 + EntityId + StockId=0', {'EntityType': 2, 'EntityId': eid, 'StockId': 0})]
+    sid = (request.args.get('stockId') or '').strip()
+    if sid.isdigit():
+        variants += [('StockId only', {'StockId': sid})]
+        if eid.isdigit(): variants += [('EntityType=2 + EntityId + StockId', {'EntityType': 2, 'EntityId': eid, 'StockId': sid})]
     out = []
     for name, p in variants:
         try:
