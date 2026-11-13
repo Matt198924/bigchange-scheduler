@@ -45,8 +45,8 @@ function demRender() {
     <div class="card"><h2>Money tied up at these levels (at cost)</h2><p><b>£${Math.round(d.totals.room).toLocaleString()}</b> in the stock room · <b>£${Math.round(d.totals.perVan).toLocaleString()}</b> per van · <b>£${Math.round(d.totals.allVans).toLocaleString()}</b> across ${d.vans} vans · <b>£${Math.round(d.totals.room + d.totals.allVans).toLocaleString()}</b> in total</p>${d.totals.noCost ? `<p class="muted">${d.totals.noCost} parts have no cost price in BigChange (supplier cost on the stock make/model) so count as £0.</p>` : ''}</div>
     <div class="card"><input id="dm-q" placeholder="Search part or description" value="${E(q)}" oninput="demRender()" style="width:100%;margin-bottom:.5rem">
     <div class="muted" style="margin-bottom:.4rem">${rows.length} parts. Sort: ${[['qty', 'most used'], ['van', 'van level'], ['room', 'stock room'], ['value', 'money tied up'], ['part', 'part no.']].map(([k, l]) => `<a href="#" onclick="demSort='${k}';demRender();return false" style="${demSort === k ? 'font-weight:700' : ''}">${l}</a>`).join(' · ')}</div>
-    <div style="overflow-x:auto"><table style="width:100%;border-collapse:collapse;font-size:.85rem"><tr style="text-align:left"><th>Part</th><th>Used (6 mo)</th><th>By month</th><th>Invoices</th><th>Per week</th><th>Cost each</th><th>Per van</th><th>Per van £</th><th>Stock room</th><th>Stock room £</th><th>Reorder at</th><th>Plan</th></tr>`
-    + rows.slice(0, 400).map(p => `<tr style="border-top:1px solid #E2E6E7"><td><b>${E(p.part)}</b><br><span class="muted">${E(p.name)}</span></td><td>${p.qty}</td><td>${bars(p.months)}</td><td>${p.jobs}</td><td>${p.perWeek}</td><td>${p.cost ? '£' + p.cost.toFixed(2) : '-'}</td><td><b>${p.van}</b></td><td>£${p.vanValue.toFixed(0)}</td><td><b>${p.room}</b></td><td>£${p.roomValue.toFixed(0)}</td><td>${p.reorder}</td><td class="muted">${E(p.kind)}</td></tr>`).join('')
+    <div style="overflow-x:auto"><table style="width:100%;border-collapse:collapse;font-size:.85rem"><tr style="text-align:left"><th>Part</th><th>Used (6 mo)</th><th>By month</th><th>Invoices</th><th>Per week</th><th>Per month</th><th>Cost each</th><th>Per van</th><th>Per van £</th><th>Stock room</th><th>Stock room £</th><th>Reorder at</th><th>Plan</th></tr>`
+    + rows.slice(0, 400).map(p => `<tr style="border-top:1px solid #E2E6E7"><td><b>${E(p.part)}</b><br><span class="muted">${E(p.name)}</span></td><td>${p.qty}</td><td>${bars(p.months)}</td><td>${p.jobs}</td><td>${p.perWeek}</td><td>${p.perMonth}</td><td>${p.cost ? '£' + p.cost.toFixed(2) : '-'}</td><td><b>${p.van}</b></td><td>£${p.vanValue.toFixed(0)}</td><td><b>${p.room}</b></td><td>£${p.roomValue.toFixed(0)}</td><td>${p.reorder}</td><td class="muted">${E(p.kind)}</td></tr>`).join('')
     + `</table></div>${rows.length > 400 ? '<p class="muted">Showing the top 400 - search to find others.</p>' : ''}</div>`;
   const qi = $('dm-q'); if (qi && q && document.activeElement !== qi) { qi.focus(); qi.setSelectionRange(q.length, q.length); }
 }
@@ -56,9 +56,9 @@ async function demSave() {
 }
 async function demSync() { try { await api('/sync', 'POST', {}); tabDemand(); } catch (e) { alert(e.message); } }
 function demCsv() {
-  const h = ['Part', 'Description', 'Used 6 months', 'Invoices', 'Per week', 'Cost each', 'Suggested per van', 'Per van cost', 'Suggested stock room', 'Stock room cost', 'Reorder at', 'Plan'];
+  const h = ['Part', 'Description', 'Used 6 months', 'Invoices', 'Per week', 'Per month', 'Cost each', 'Suggested per van', 'Per van cost', 'Suggested stock room', 'Stock room cost', 'Reorder at', 'Plan'];
   const q = v => '"' + String(v).replace(/"/g, '""') + '"';
-  const t = [h.map(q).join(',')].concat(DEM.parts.map(p => [p.part, p.name, p.qty, p.jobs, p.perWeek, p.cost, p.van, p.vanValue, p.room, p.roomValue, p.reorder, p.kind].map(q).join(','))).join('\n');
+  const t = [h.map(q).join(',')].concat(DEM.parts.map(p => [p.part, p.name, p.qty, p.jobs, p.perWeek, p.perMonth, p.cost, p.van, p.vanValue, p.room, p.roomValue, p.reorder, p.kind].map(q).join(','))).join('\n');
   const a = document.createElement('a'); a.href = URL.createObjectURL(new Blob([t], {type: 'text/csv'})); a.download = 'parts-demand.csv'; a.click();
 }
 tabDemand().catch(e => { $('a-body').innerHTML = '<div class="card"><div class="err">Could not load: ' + esc(e.message) + '</div></div>'; });

@@ -239,7 +239,7 @@ def analyse(cfg, days=182):
         cost = round(cmap[p['part']], 2) if p['part'] in cmap else (round(p['cv'] / p['cq'], 2) if p['cq'] else 0)
         sell = round(p['sv'] / p['cq'], 2) if p['cq'] else 0
         out.append({'cost': cost, 'sell': sell, 'vanValue': round(van * cost, 2), 'roomValue': round(room * cost, 2), 'totalValue': round((room + van * vans) * cost, 2), 'part': p['part'], 'name': p['name'], 'qty': round(p['qty'], 2), 'jobs': jobs, 'engineers': len(p['eng']),
-                    'perWeek': round(m, 2), 'months': [round(x, 1) for x in p['mo'][:6]], 'last': p['last'],
+                    'perWeek': round(m, 2), 'perMonth': round(m * 52 / 12, 1), 'months': [round(x, 1) for x in p['mo'][:6]], 'last': p['last'],
                     'van': van, 'room': room, 'reorder': rop, 'totalHeld': room + van * vans, 'kind': kind})
     out.sort(key=lambda x: -x['qty'])
     tot = {'room': round(sum(x['roomValue'] for x in out), 2), 'perVan': round(sum(x['vanValue'] for x in out), 2), 'allVans': round(sum(x['vanValue'] for x in out) * vans, 2), 'noCost': sum(1 for x in out if not x['cost'])}
