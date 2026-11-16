@@ -352,6 +352,8 @@ async function loadAll() {
     setBadge('ok','Live');
   } catch(e) {
     setBadge('error','Error');
+    const b = document.getElementById('conn-badge'); b.title = e.message || String(e); b.style.cursor = 'pointer';
+    b.onclick = () => alert('Scheduler error:\n\n' + (e.message || e));
     console.error(e);
   }
   renderSameSite();
