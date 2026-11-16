@@ -272,6 +272,14 @@ def quantities():
     return jsonify({'quantities': qty})
 
 
+def _split_model(model):
+    """'** vs ** YELLOW PUSH ON FEMALES 6.3MM 613013 (534-553)' -> ('613013 (534-553)', 'YELLOW PUSH ON FEMALES 6.3MM')."""
+    m = re.search(r'(\S*\d\S*(?:\s*\([^)]*\))?)\s*$', model or '')
+    if not m: return (model or '').strip(), ''
+    desc = re.sub(r'^\W*vs\W*', '', (model[:m.start()]).strip(), flags=re.I).strip(' *-')
+    return m.group(1).strip(), desc
+
+
 def _items_retry(path, params, tries=6):
     """Like _items, but waits and retries when BigChange says 429 (too many requests)."""
     for n in range(tries):
@@ -284,7 +292,6 @@ def _items_retry(path, params, tries=6):
 def _stock_catalog():
     """All stock records, cached for an hour. Pages are fetched gently and kept, so a rate-limit stop resumes where it left off."""
     if _cache.get('cat') and time.time() - _cache['cat'][0] < 3600: return _cache['cat'][1]
-    from demand import _split_model
     st = _cache.setdefault('catpart', {'page': 1, 'out': []})
     out = st['out']
     while st['page'] <= 100:
