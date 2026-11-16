@@ -11,12 +11,10 @@ CORS(app)
 from leave import leave_bp  # annual leave booking (/leave)
 app.register_blueprint(leave_bp)
 from parts import parts_bp
-from demand import demand_bp  # parts demand planner (Staff admin)
 from reorder import reorder_bp  # stock reorder levels
 from stockmoves import stockmoves_bp  # stock movements
 from dashboard import dashboard_bp  # daily dashboard
 app.register_blueprint(parts_bp)
-app.register_blueprint(demand_bp)
 app.register_blueprint(reorder_bp)
 app.register_blueprint(stockmoves_bp)
 app.register_blueprint(dashboard_bp)
