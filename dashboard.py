@@ -159,6 +159,7 @@ def booked():
 
 
 # ── Flags (pink / black / yellow) on jobs that are not financially complete ─────────────────────
+FLAGS_ENABLED = False      # flag counting is switched off for now (it made too many BigChange calls); set True to bring it back
 _flag_lock = threading.Lock()
 BOOT = os.urandom(8).hex()      # changes on every restart, so a count left 'running' by an older process is restarted at once
 COLOURS = ('pink', 'black', 'yellow')
@@ -250,6 +251,7 @@ def _by_colour(counts, fmap):
 
 @dashboard_bp.route('/api/dashboard/flags')
 def flags():
+    if not FLAGS_ENABLED: return jsonify({'error': 'Flag counting is switched off'}), 404
     leave.init_db()
     with _flag_lock:
         s = _jget('dash_flagcount', {})
@@ -287,6 +289,7 @@ def flags_config():
 
 @dashboard_bp.route('/api/dashboard/flags/recount', methods=['POST'])
 def flags_recount():
+    if not FLAGS_ENABLED: return jsonify({'error': 'Flag counting is switched off'}), 404
     with _flag_lock:
         s = _jget('dash_flagcount', {})
         if s.get('running') and s.get('boot') == BOOT and time.time() - float(s.get('beat') or 0) < 600: return jsonify({'ok': True})
