@@ -76,15 +76,21 @@ def cache_clear_schedules():
         _cache.pop(k, None)
 
 def bc_get(path, params=None):
-    token = get_token()
     url = f'{API_BASE}{path}'
-    print(f"[API] GET {url} params={params}")
-    resp = requests.get(url, headers={
-        'Authorization': f'Bearer {token}',
-        'Content-Type': 'application/json',
-        'customer-id': CUSTOMER_ID,
-    }, params=params, timeout=30)
-    print(f"[API] {resp.status_code}: {resp.text[:200]}")
+    for attempt in range(4):
+        token = get_token()
+        print(f"[API] GET {url} params={params}")
+        resp = requests.get(url, headers={
+            'Authorization': f'Bearer {token}',
+            'Content-Type': 'application/json',
+            'customer-id': CUSTOMER_ID,
+        }, params=params, timeout=30)
+        print(f"[API] {resp.status_code}: {resp.text[:200]}")
+        if resp.status_code == 429 and attempt < 3:      # BigChange says slow down: wait, then try again
+            try: wait = min(float(resp.headers.get('Retry-After') or 0), 20)
+            except ValueError: wait = 0
+            time.sleep(wait or (3 + attempt * 4)); continue
+        break
     resp.raise_for_status()
     return resp.json()
 
@@ -201,10 +207,17 @@ def fetch_window(days=SCHEDULE_DAYS):
         return cached
     start = datetime.now()
     end   = start + timedelta(days=days)
-    raw = fetch_paged({
-        'plannedAtFrom': start.strftime('%Y-%m-%dT00:00:00'),
-        'plannedAtTo':   end.strftime('%Y-%m-%dT23:59:59'),
-    })
+    try:
+        raw = fetch_paged({
+            'plannedAtFrom': start.strftime('%Y-%m-%dT00:00:00'),
+            'plannedAtTo':   end.strftime('%Y-%m-%dT23:59:59'),
+        })
+    except Exception as ex:
+        old = _cache.get(key)
+        if old:        # BigChange is busy or erroring: keep showing the last good schedule rather than an error page
+            print(f"[WINDOW] Fetch failed ({ex}); using the last good copy")
+            return old['data']
+        raise
     print(f"[WINDOW] Fetched {len(raw)} jobs over {days + 1} days")
     cache_set(key, raw)
     return raw

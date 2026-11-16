@@ -172,6 +172,7 @@ def booked():
 
 
 # ── Flags (pink / black / yellow) on jobs that are not financially complete ─────────────────────
+FLAGS_ENABLED = False      # flag counting is switched off for now (it made too many BigChange calls); set True to bring it back
 _flag_lock = threading.Lock()
 BOOT = os.urandom(8).hex()      # changes on every restart, so a count left 'running' by an older process is restarted at once
 COLOURS = ('pink', 'black', 'yellow')
@@ -227,13 +228,14 @@ def _flag_count():
         skipped = [0]
 
         def one(j):
+            time.sleep(0.25)       # keep well inside BigChange's rate limit so the scheduler is not squeezed
             try:
                 data = _get_retry(f"/jobs/{j['id']}/flags")
             except Exception as ex:       # a job that has gone or cannot be read (404 etc.) is skipped, not fatal
                 skipped[0] += 1
                 return []
             return data if isinstance(data, list) else (data.get('items') or [])
-        with ThreadPoolExecutor(max_workers=4) as pool:
+        with ThreadPoolExecutor(max_workers=2) as pool:
             for flags in pool.map(one, jobs):
                 for f in flags: counts[str(f.get('flagId'))] = counts.get(str(f.get('flagId')), 0) + 1
                 done += 1
@@ -254,12 +256,16 @@ def _by_colour(counts, fmap):
 
 @dashboard_bp.route('/api/dashboard/flags')
 def flags():
+    if not FLAGS_ENABLED: return jsonify({'error': 'Flag counting is switched off'}), 404
     leave.init_db()
     with _flag_lock:
         s = _jget('dash_flagcount', {})
         stale = s.get('running') and (s.get('boot') != BOOT or time.time() - float(s.get('beat') or 0) > 600)
-        due = not s.get('running') and (not s.get('finishedTs') or time.time() - float(s['finishedTs']) > 3600) and time.time() - float(s.get('lastTry') or 0) > 300
-        if stale or due:
+        due = not s.get('running') and s.get('finishedTs') and time.time() - float(s['finishedTs']) > 6 * 3600 and time.time() - float(s.get('lastTry') or 0) > 300
+        if stale and not due:       # interrupted by a deploy: do not restart on its own (that hammers BigChange); press Recount now
+            leave.set_setting('dash_flagcount', json.dumps({**s, 'running': False, 'msg': 'Interrupted by an update - press Recount now'}))
+            s = _jget('dash_flagcount', {})
+        elif due:
             leave.set_setting('dash_flagcount', json.dumps({**s, 'running': True, 'boot': BOOT, 'beat': time.time(), 'lastTry': time.time(), 'msg': 'Starting...', 'error': ''}))
             threading.Thread(target=_flag_count, daemon=True).start()
             s = _jget('dash_flagcount', {})
@@ -288,6 +294,7 @@ def flags_config():
 
 @dashboard_bp.route('/api/dashboard/flags/recount', methods=['POST'])
 def flags_recount():
+    if not FLAGS_ENABLED: return jsonify({'error': 'Flag counting is switched off'}), 404
     with _flag_lock:
         s = _jget('dash_flagcount', {})
         if s.get('running') and s.get('boot') == BOOT and time.time() - float(s.get('beat') or 0) < 600: return jsonify({'ok': True})
