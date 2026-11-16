@@ -75,9 +75,18 @@ def cache_clear_schedules():
     for k in [k for k in _cache if k.startswith('schedule_')]:
         _cache.pop(k, None)
 
+_bc_block = {'until': 0, 'why': ''}
+
+def bc_cooling_down():
+    return time.time() < _bc_block['until']
+
 def bc_get(path, params=None):
     url = f'{API_BASE}{path}'
-    for attempt in range(4):
+    # After a 429 stop calling BigChange for a while so every open tab / background job isn't keeping us throttled.
+    if bc_cooling_down():
+        left = int(_bc_block['until'] - time.time())
+        raise RuntimeError(f"BigChange is rate-limiting this account (429). Paused for {left}s before trying again. {_bc_block['why']}")
+    for attempt in range(2):
         token = get_token()
         print(f"[API] GET {url} params={params}")
         resp = requests.get(url, headers={
@@ -86,10 +95,15 @@ def bc_get(path, params=None):
             'customer-id': CUSTOMER_ID,
         }, params=params, timeout=30)
         print(f"[API] {resp.status_code}: {resp.text[:200]}")
-        if resp.status_code == 429 and attempt < 3:      # BigChange says slow down: wait, then try again
-            try: wait = min(float(resp.headers.get('Retry-After') or 0), 20)
-            except ValueError: wait = 0
-            time.sleep(wait or (3 + attempt * 4)); continue
+        if resp.status_code == 429:
+            try: ra = float(resp.headers.get('Retry-After') or 0)
+            except ValueError: ra = 0
+            if attempt == 0 and 0 < ra <= 10:
+                time.sleep(ra); continue
+            pause = min(max(ra, 300), 900)
+            _bc_block['until'] = time.time() + pause
+            _bc_block['why'] = f"BigChange said: {resp.text[:200]} (Retry-After: {resp.headers.get('Retry-After')})"
+            raise RuntimeError(f"BigChange 429 (too many requests). Paused {int(pause)}s. {_bc_block['why']}")
         break
     resp.raise_for_status()
     return resp.json()
@@ -276,6 +290,7 @@ def get_unassigned_jobs():
 
         all_raw = []
         seen_ids = set()
+        failed = []
 
         # Use a wide date window to catch all unassigned jobs
         # Jobs can sit unassigned for months so look back 180 days
@@ -303,9 +318,14 @@ def get_unassigned_jobs():
                     page += 1
                 except Exception as e:
                     print(f"[UNASSIGNED] status={status_val} page={page} failed: {e}")
+                    failed.append(str(e))
                     break
 
         print(f"[UNASSIGNED] Total fetched: {len(all_raw)}")
+        if failed:   # incomplete data: never cache it; show the last good list if there is one
+            old = _cache.get('unassigned_jobs')
+            if old: return jsonify({'jobs': old['data'], 'total': len(old['data']), 'stale': True})
+            raise RuntimeError(failed[0])
 
         jobs = []
         for j in all_raw:
