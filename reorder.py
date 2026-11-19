@@ -289,15 +289,29 @@ def _items_retry(path, params, tries=6):
             time.sleep(2 + n * 3)
 
 
+def _saved_catalog():
+    """Last full catalog kept in the database, so part names still show when BigChange's API is unavailable or over quota."""
+    try:
+        import json
+        raw = leave.get_setting('stock_catalog_v1')
+        return json.loads(raw) if raw else []
+    except Exception: return []
+
 def _stock_catalog():
     """All stock records, cached for an hour. Pages are fetched gently and kept, so a rate-limit stop resumes where it left off."""
     if _cache.get('cat') and time.time() - _cache['cat'][0] < 3600: return _cache['cat'][1]
+    if not _cache.get('cat'):
+        saved = _saved_catalog()
+        if saved: _cache['cat'] = (time.time() - 3000, saved)   # use the saved copy now; refresh again in ~10 min
+        if saved: return saved
     st = _cache.setdefault('catpart', {'page': 1, 'out': []})
     out = st['out']
     while st['page'] <= 100:
         try: items = _items_retry('/stockDetails', {'pageSize': 200, 'pageNumber': st['page']})
         except Exception:
             if _cache.get('cat'): return _cache['cat'][1]     # use the older copy rather than fail
+            saved = _saved_catalog()
+            if saved: return saved
             raise
         for s in items:
             if not s.get('id'): continue
@@ -309,6 +323,10 @@ def _stock_catalog():
         time.sleep(0.4)
     _cache['cat'] = (time.time(), out)
     _cache.pop('catpart', None)
+    try:
+        import json
+        if out: leave.set_setting('stock_catalog_v1', json.dumps(out, separators=(',', ':')))
+    except Exception as ex: print('[CATALOG] could not save copy:', ex)
     return out
 
 
