@@ -334,7 +334,7 @@ def _stock_catalog():
         if saved: return saved
     st = _cache.setdefault('catpart', {'page': 1, 'out': []})
     out = st['out']
-    while st['page'] <= 100:
+    while st["page"] <= 600:
         try: items = _items_retry('/stockDetails', {'pageSize': 200, 'pageNumber': st['page']})
         except Exception:
             if _cache.get('cat'): return _cache['cat'][1]     # use the older copy rather than fail
