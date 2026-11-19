@@ -282,14 +282,16 @@ def levels():
         L = locs.setdefault(k, {'entityType': r['entityType'], 'entityId': r['entityId'], 'kind': ETYPE.get(r['entityType'], 'Location'), 'items': [], 'label': ''})
         L['label'] = L['label'] or r['entityName'] or (an.get(r['entityId']) or veh.get(r['entityId']) if r['entityType'] == 2 else cn.get(r['entityId'])) or f"{ETYPE.get(r['entityType'], 'Location')} {r['entityId']}"
         L['items'].append({'stockId': r['stockId'], 'name': r['name'] or f"Stock {r['stockId']}", 'level': r['level'], 'reorderId': r['reorderId']})
-    try: names = {s['id']: s['text'] for s in _stock_catalog()}
-    except Exception: names = {}
+    # Name only the parts that are in reorder levels: use any catalog copy we already hold (never fetch the whole stock list here),
+    # then look up the rest one by one and remember them.
+    cat = (_cache.get('cat') or (0, None))[1] or _saved_catalog()
+    names = {s['id']: s['text'] for s in cat}
     for L in locs.values():
         for i in L['items']:
             if names.get(i['stockId']): i['name'] = names[i['stockId']]
     missing = sorted({i['stockId'] for L in locs.values() for i in L['items'] if i['name'].startswith('Stock ')})
     if missing:
-        found = _lookup_names(missing)
+        found = _lookup_names(missing, limit=500)
         for L in locs.values():
             for i in L['items']:
                 if found.get(i['stockId']): i['name'] = found[i['stockId']]
