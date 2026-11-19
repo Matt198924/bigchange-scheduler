@@ -222,6 +222,28 @@ def check():
     return jsonify({'results': out})
 
 
+def _lookup_names(ids, limit=40):
+    """Look up individual stock IDs the catalog doesn't name. Found names are saved so each ID is only asked once."""
+    import json
+    try: known = json.loads(leave.get_setting('stock_names_v1') or '{}')
+    except Exception: known = {}
+    got, changed = {}, False
+    for sid in ids:
+        if str(sid) in known: got[sid] = known[str(sid)]; continue
+        if limit <= 0: continue
+        limit -= 1
+        try:
+            d = leave.bc_hooks['get'](f'/stockDetails/{sid}', {})
+            d = d[0] if isinstance(d, list) and d else d
+            t = ' '.join(str(x) for x in (d.get('make'), d.get('model'), d.get('modelNumber')) if x).strip() if isinstance(d, dict) else ''
+        except Exception as ex:
+            print('[LOOKUP] stock', sid, 'failed:', str(ex)[:150]); break    # stop on the first failure (404 / 429): don't burn quota
+        if t: known[str(sid)] = t; got[sid] = t; changed = True
+    if changed:
+        try: leave.set_setting('stock_names_v1', json.dumps(known, separators=(',', ':')))
+        except Exception: pass
+    return got
+
 @reorder_bp.route('/api/reorder/levels')
 def levels():
     try: rows, _ = _levels()
@@ -245,6 +267,12 @@ def levels():
     for L in locs.values():
         for i in L['items']:
             if names.get(i['stockId']): i['name'] = names[i['stockId']]
+    missing = sorted({i['stockId'] for L in locs.values() for i in L['items'] if i['name'].startswith('Stock ')})
+    if missing:
+        found = _lookup_names(missing)
+        for L in locs.values():
+            for i in L['items']:
+                if found.get(i['stockId']): i['name'] = found[i['stockId']]
     for vid, vname in veh.items():   # vans with no reorder levels yet still get listed so parts can be added
         if (2, vid) not in locs and 'stock' not in vname.lower():
             locs[(2, vid)] = {'entityType': 2, 'entityId': vid, 'kind': 'Asset', 'items': [], 'label': vname}
@@ -289,15 +317,29 @@ def _items_retry(path, params, tries=6):
             time.sleep(2 + n * 3)
 
 
+def _saved_catalog():
+    """Last full catalog kept in the database, so part names still show when BigChange's API is unavailable or over quota."""
+    try:
+        import json
+        raw = leave.get_setting('stock_catalog_v1')
+        return json.loads(raw) if raw else []
+    except Exception: return []
+
 def _stock_catalog():
     """All stock records, cached for an hour. Pages are fetched gently and kept, so a rate-limit stop resumes where it left off."""
     if _cache.get('cat') and time.time() - _cache['cat'][0] < 3600: return _cache['cat'][1]
+    if not _cache.get('cat'):
+        saved = _saved_catalog()
+        if saved: _cache['cat'] = (time.time() - 3000, saved)   # use the saved copy now; refresh again in ~10 min
+        if saved: return saved
     st = _cache.setdefault('catpart', {'page': 1, 'out': []})
     out = st['out']
     while st['page'] <= 100:
         try: items = _items_retry('/stockDetails', {'pageSize': 200, 'pageNumber': st['page']})
         except Exception:
             if _cache.get('cat'): return _cache['cat'][1]     # use the older copy rather than fail
+            saved = _saved_catalog()
+            if saved: return saved
             raise
         for s in items:
             if not s.get('id'): continue
@@ -309,6 +351,10 @@ def _stock_catalog():
         time.sleep(0.4)
     _cache['cat'] = (time.time(), out)
     _cache.pop('catpart', None)
+    try:
+        import json
+        if out: leave.set_setting('stock_catalog_v1', json.dumps(out, separators=(',', ':')))
+    except Exception as ex: print('[CATALOG] could not save copy:', ex)
     return out
 
 
