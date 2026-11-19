@@ -189,6 +189,26 @@ def _vehicles():
 def page(): return send_from_directory(PAGE_DIR, 'index.html')
 
 
+@reorder_bp.route('/api/reorder/lookup', methods=['POST'])
+def lookup_ids():
+    """Look up pasted stock IDs one at a time and show exactly what BigChange says, so naming problems can be diagnosed."""
+    import json as _j
+    ids = [int(x) for x in re.findall(r'\d+', (request.get_json(silent=True) or {}).get('ids', ''))][:15]
+    cat = {}
+    try: cat = {s['id']: s['text'] for s in _stock_catalog()}
+    except Exception as ex: cat_err = str(ex)[:200]
+    out = []
+    for sid in ids:
+        r = {'id': sid, 'inCatalog': cat.get(sid) or None}
+        for label, path, params in (('/stockDetails/{id}', f'/stockDetails/{sid}', {}), ('/stockDetails?id=', '/stockDetails', {'id': sid})):
+            try:
+                d = _rest(path, params)
+                r[label] = _j.dumps(d)[:400]
+            except Exception as ex: r[label] = 'ERROR: ' + str(ex)[:250]
+        out.append(r)
+    return jsonify({'results': out})
+
+
 @reorder_bp.route('/api/reorder/check')
 def check():
     """Raw answers from BigChange. With ?entityId= also tries asking for one van in several ways."""

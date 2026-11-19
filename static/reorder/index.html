@@ -27,6 +27,8 @@ input.q{width:5.5rem}pre{background:#f3f5f6;padding:.6rem;border-radius:8px;over
   <div style="margin-top:.6rem"><button class="sm" style="color:#b00020;border-color:#b00020" onclick="remPart()">Remove from ticked vans</button> <span id="rmsg" class="muted"></span></div></div>
 <div class="card"><h2>Upload levels from a spreadsheet</h2><div class="muted">Pick a van or stock room, then choose a CSV or Excel file: part in the first column, reorder level in the second. You see a preview before anything changes. Existing levels for those parts are replaced.</div>
   <div style="margin-top:.5rem"><select id="usel" style="max-width:100%"></select> <input type="file" accept=".csv,.xlsx" onchange="vup($('usel').value,this,true)"></div><div id="vu-top" style="margin-top:.4rem"></div></div>
+<div class="card"><h2>Look up stock IDs</h2><div class="muted">Paste stock IDs (spaces, commas or one per line, up to 15) to see what BigChange says about each.</div>
+  <textarea id="lids" rows="3" style="width:100%"></textarea><div><button class="sm" onclick="lookIds()">Look up</button></div><pre id="lres" style="white-space:pre-wrap;display:none"></pre></div>
 <div class="card"><h2>Locations with reorder levels</h2>
   <input id="fq" placeholder="Filter locations" style="width:100%;margin-bottom:.5rem" oninput="draw()">
   <div id="summary" class="muted">Loading…</div><div id="locs"></div></div>
@@ -106,6 +108,8 @@ async function vdel(k, n, label) { const [et, eid] = k.split('-'), m = $('vd-' +
   const t = prompt(`Type DELETE to confirm removing ${n} reorder levels from ${label}`); if (t !== 'DELETE') { m.textContent = 'Cancelled.'; return; }
   m.textContent = 'Deleting ' + n + '...';
   try { const j = await api('/delete-all', 'POST', {entityType: et, entityId: eid, expect: n}); m.innerHTML = `<span class="${j.failed.length || j.left ? 'err' : 'ok'}">${j.deleted} deleted${j.failed.length ? ', ' + j.failed.length + ' failed' : ''}${j.left ? ', ' + j.left + ' still showing' : ''}.</span>`; qcache = {}; load(); } catch (e) { m.innerHTML = '<span class="err">' + esc(e.message) + '</span>'; } }
+async function lookIds() { const b = $('lres'); b.style.display = ''; b.textContent = 'Looking up...';
+  try { const j = await api('/lookup', 'POST', {ids: $('lids').value}); b.textContent = j.results.map(r => JSON.stringify(r, null, 1)).join('\n\n'); } catch (e) { b.textContent = e.message; } }
 let st; function srch() { clearTimeout(st); st = setTimeout(async () => { const q = $('aq').value.trim(); if (q.length < 2) { $('ares').textContent = ''; return; }
   $('ares').textContent = 'Searching...'; try { const j = await api('/search?q=' + encodeURIComponent(q)); $('ares').innerHTML = j.results.length ? j.results.map(r => `<a href="#" onclick="pick(${r.id},this);return false" data-t="${esc(r.text)}" style="display:block;padding:.15rem 0">${esc(r.text)}</a>`).join('') : 'No match.'; } catch (e) { $('ares').innerHTML = '<span class="err">' + esc(e.message) + '</span>'; } }, 350); }
 function pick(id, a) { PICK = {id, text: a.dataset.t}; $('apick').innerHTML = '<b>Selected:</b> ' + esc(PICK.text); $('ares').textContent = ''; }
