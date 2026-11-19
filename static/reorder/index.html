@@ -25,6 +25,8 @@ input.q{width:5.5rem}pre{background:#f3f5f6;padding:.6rem;border-radius:8px;over
   <div><b>Vans</b> <a href="#" onclick="rsel(true);return false">Select all</a> &middot; <a href="#" onclick="rsel(false);return false">Select none</a> <span id="rcount" class="muted"></span></div>
   <div id="rlist" style="display:grid;grid-template-columns:repeat(auto-fill,minmax(10rem,1fr));gap:.2rem .8rem;margin-top:.4rem;max-height:14rem;overflow:auto"></div>
   <div style="margin-top:.6rem"><button class="sm" style="color:#b00020;border-color:#b00020" onclick="remPart()">Remove from ticked vans</button> <span id="rmsg" class="muted"></span></div></div>
+<div class="card"><h2>Upload levels from a spreadsheet</h2><div class="muted">Pick a van or stock room, then choose a CSV or Excel file: part in the first column, reorder level in the second. You see a preview before anything changes. Existing levels for those parts are replaced.</div>
+  <div style="margin-top:.5rem"><select id="usel" style="max-width:100%"></select> <input type="file" accept=".csv,.xlsx" onchange="vup($('usel').value,this,true)"></div><div id="vu-top" style="margin-top:.4rem"></div></div>
 <div class="card"><h2>Locations with reorder levels</h2>
   <input id="fq" placeholder="Filter locations" style="width:100%;margin-bottom:.5rem" oninput="draw()">
   <div id="summary" class="muted">Loading…</div><div id="locs"></div></div>
@@ -42,9 +44,10 @@ async function api(path, method = 'GET', body) {
 }
 let LOCS = [], PICK = null, qcache = {};
 async function load() {
-  try { const j = await api('/levels'); LOCS = j.locations; $('summary').textContent = LOCS.length + ' locations (' + LOCS.filter(l => !l.items.length).length + ' with none yet), ' + j.total + ' reorder levels.'; draw(); }
+  try { const j = await api('/levels'); LOCS = j.locations; $('summary').textContent = LOCS.length + ' locations (' + LOCS.filter(l => !l.items.length).length + ' with none yet), ' + j.total + ' reorder levels.'; fillSel(); draw(); }
   catch (e) { $('summary').innerHTML = '<span class="err">' + esc(e.message) + '</span>'; }
 }
+function fillSel() { const v = $('usel').value; $('usel').innerHTML = '<option value="">Choose location...</option>' + LOCS.map(l => `<option value="${l.entityType}-${l.entityId}">${esc(l.label)}</option>`).join(''); $('usel').value = v; }
 function draw() {
   const q = $('fq').value.toLowerCase(); const open = new Set([...document.querySelectorAll('details.loc[open]')].map(d => d.dataset.k));
   $('locs').innerHTML = LOCS.filter(l => !q || l.label.toLowerCase().includes(q)).map(l => { const k = l.entityType + '-' + l.entityId;
@@ -86,15 +89,15 @@ async function vadd(k) { const [et, eid] = k.split('-'), m = $('vm-' + k), p = v
   if (!confirm(`Add "${p.text}" with a reorder level of ${qty} here?`)) return;
   try { const j = await api('/set', 'POST', {stockId: p.id, entityType: et, entityId: eid, quantity: qty}); m.innerHTML = (j.now != null && Number(j.now) !== qty) ? `<span class="err">BigChange now shows ${j.now}, not ${qty}.</span>` : '<span class="ok">Added.</span>'; qcache = {}; load(); } catch (e) { m.innerHTML = '<span class="err">' + esc(e.message) + '</span>'; } }
 const vrows = {};
-async function vup(k, inp) { const f = inp.files[0]; if (!f) return; const [et, eid] = k.split('-'), box = $('vu-' + k); box.textContent = 'Reading and matching...';
+async function vup(k, inp, top) { const f = inp.files[0]; if (!f) return; if (!k) { alert('Pick a van or stock room first.'); inp.value = ''; return; } const [et, eid] = k.split('-'), box = $(top ? 'vu-top' : 'vu-' + k); box.dataset.k = k; box.textContent = 'Reading and matching...';
   try { const r = await fetch(`/api/reorder/upload-preview?entityType=${et}&entityId=${eid}`, {method: 'POST', body: await f.arrayBuffer()}); const j = await r.json(); if (!r.ok) throw new Error(j.error || 'Server problem');
     vrows[k] = j.matched.filter(x => x.now == null || Number(x.now) !== x.quantity);
     box.innerHTML = `<div>${j.matched.length} parts matched, ${vrows[k].length} would change${j.unmatched.length ? ', <span class="err">' + j.unmatched.length + ' not matched</span>' : ''}.</div>
       <table><tr><th>Part</th><th>Now</th><th>New level</th></tr>${vrows[k].slice(0, 200).map(x => `<tr><td>${esc(x.name)}</td><td>${x.now ?? '-'}</td><td><b>${x.quantity}</b></td></tr>`).join('')}</table>
       ${j.unmatched.length ? '<div class="muted">Not matched: ' + j.unmatched.slice(0, 40).map(x => esc(x.asked) + ' (' + x.why + ')').join(', ') + '</div>' : ''}
-      ${vrows[k].length ? `<div style="margin-top:.4rem"><button class="sm p" onclick="vapply('${k}')">Apply ${vrows[k].length} changes</button></div>` : ''}`;
+      ${vrows[k].length ? `<div style="margin-top:.4rem"><button class="sm p" onclick="vapply('${k}',${!!top})">Apply ${vrows[k].length} changes</button></div>` : ''}`;
   } catch (e) { box.innerHTML = '<span class="err">' + esc(e.message) + '</span>'; } inp.value = ''; }
-async function vapply(k) { const [et, eid] = k.split('-'), box = $('vu-' + k), rows = vrows[k]; if (!rows || !confirm(`Apply ${rows.length} reorder level changes in BigChange?`)) return;
+async function vapply(k, top) { const [et, eid] = k.split('-'), box = $(top ? 'vu-top' : 'vu-' + k), rows = vrows[k]; if (!rows || !confirm(`Apply ${rows.length} reorder level changes in BigChange?`)) return;
   box.textContent = 'Applying ' + rows.length + ' changes... this can take a while.';
   try { const j = await api('/upload-apply', 'POST', {entityType: et, entityId: eid, rows: rows.map(x => ({stockId: x.stockId, quantity: x.quantity}))});
     box.innerHTML = `<span class="${j.failed.length || j.mismatch.length ? 'err' : 'ok'}">${j.done} applied${j.failed.length ? ', ' + j.failed.length + ' failed' : ''}${j.mismatch.length ? ', ' + j.mismatch.length + ' do not show the level you asked for (BigChange may add rather than replace)' : ''}.</span>`; qcache = {}; load(); } catch (e) { box.innerHTML = '<span class="err">' + esc(e.message) + '</span>'; } }
