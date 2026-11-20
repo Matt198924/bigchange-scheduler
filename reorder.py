@@ -554,7 +554,8 @@ def upload_preview():
             if k: by_part.setdefault(k, []).append(s)
     have = {r['stockId']: r['level'] for r in cur if r['entityType'] == et and r['entityId'] == eid}
     ok, bad = [], []
-    for text, q in rows:
+    asked_bc = 0
+    for text, q, model in rows:
         k = _norm(text); hits = by_part.get(k) or []
         if not hits:   # "make model" from a spreadsheet: the stock record's name is "make model [model number]"
             hits = [s for s in cat if k and (_norm(s['text']) == k or _norm(s['text']).startswith(k + ' '))]
@@ -562,8 +563,20 @@ def upload_preview():
         if not hits:
             hits = [s for s in cat if k and k in _norm(s['text'])]
             hits = hits if len(hits) == 1 else []
+        if not hits and model and len(_norm(model)) >= 4:   # the model alone (e.g. an HP part number)
+            km = _norm(model)
+            hits = [s for s in cat if km == _norm(s['part']) or km == _norm(s['num']) or (' ' + km + ' ') in (' ' + _norm(s['text']) + ' ')]
+            hits = hits if len(hits) == 1 else []
+        if not hits and model and asked_bc < 300:   # not in our copy of the stock list: ask BigChange for that model directly
+            asked_bc += 1
+            try:
+                found = _items('/stockDetails', {'model': model, 'pageSize': 20})
+                found = [{'id': f['id'], 'text': ' '.join(str(x) for x in (f.get('make'), f.get('model'), f.get('modelNumber')) if x).strip()} for f in found if f.get('id') and _norm(f.get('model')) == _norm(model)]
+                exact = [f for f in found if _norm(f['text']).startswith(k)] or found
+                hits = exact if len(exact) == 1 else []
+            except Exception: asked_bc = 10**6      # stop asking BigChange after the first failure
         if len(hits) == 1: ok.append({'stockId': hits[0]['id'], 'name': hits[0]['text'], 'asked': text, 'quantity': q, 'now': have.get(hits[0]['id'])})
-        else: bad.append({'asked': text, 'quantity': q, 'why': 'More than one match' if len(by_part.get(k) or []) > 1 else 'Not found'})
+        else: bad.append({'asked': text, 'quantity': q, 'why': 'More than one match' if len(by_part.get(k) or []) > 1 else 'Not found (stock list has %d parts)' % len(cat)})
     return jsonify({'matched': ok, 'unmatched': bad})
 
 
