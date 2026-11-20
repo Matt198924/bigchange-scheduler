@@ -513,6 +513,16 @@ def _read_upload(data):
         txt = data.decode('utf-8-sig', errors='replace')
         raw = list(csv.reader(io.StringIO(txt)))
     # Spreadsheet with headed columns (Make, Model, ... Level): the part is "make model", the level comes from the level column.
+    for i, r in enumerate(raw[:10]):   # file exported from a van: Stock ID, Part, Re-Order Level
+        low = [str(c or '').strip().lower().replace(' ', '') for c in r]
+        if 'stockid' in low and any('level' in c for c in low):
+            si, li = low.index('stockid'), next(j for j, c in enumerate(low) if 'level' in c)
+            ni = next((j for j, c in enumerate(low) if c in ('part', 'name', 'make')), None)
+            for rr in raw[i + 1:]:
+                try: sid, q = int(float(str(rr[si]))), float(str(rr[li]).replace(',', ''))
+                except (ValueError, IndexError, TypeError): continue
+                rows.append((str(rr[ni]).strip() if ni is not None and len(rr) > ni and rr[ni] is not None else str(sid), q, None, sid))
+            return rows
     hdr = None
     for i, r in enumerate(raw[:10]):
         low = [str(c or '').strip().lower() for c in r]
