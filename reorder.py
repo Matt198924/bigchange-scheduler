@@ -512,6 +512,21 @@ def _read_upload(data):
         import csv, io
         txt = data.decode('utf-8-sig', errors='replace')
         raw = list(csv.reader(io.StringIO(txt)))
+    # Spreadsheet with headed columns (Make, Model, ... Level): the part is "make model", the level comes from the level column.
+    hdr = None
+    for i, r in enumerate(raw[:10]):
+        low = [str(c or '').strip().lower() for c in r]
+        if 'make' in low and 'model' in low and any('level' in c or 'qty' in c or 'quantity' in c for c in low):
+            hdr = (i, low.index('make'), low.index('model'), next(j for j, c in enumerate(low) if 'level' in c or 'qty' in c or 'quantity' in c)); break
+    if hdr:
+        _, mk, md, lv = hdr
+        for r in raw[hdr[0] + 1:]:
+            if len(r) <= max(mk, md, lv): continue
+            try: q = float(str(r[lv]).replace(',', '').strip())
+            except ValueError: continue
+            text = ' '.join(str(x).strip() for x in (r[mk], r[md]) if x not in (None, ''))
+            if text: rows.append((text, q))
+        return rows
     for r in raw:
         if len(r) < 2 or r[0] in (None, ''): continue
         try: q = float(str(r[1]).replace(',', '').strip())
@@ -541,6 +556,9 @@ def upload_preview():
     ok, bad = [], []
     for text, q in rows:
         k = _norm(text); hits = by_part.get(k) or []
+        if not hits:   # "make model" from a spreadsheet: the stock record's name is "make model [model number]"
+            hits = [s for s in cat if k and (_norm(s['text']) == k or _norm(s['text']).startswith(k + ' '))]
+            hits = hits if len(hits) == 1 else []
         if not hits:
             hits = [s for s in cat if k and k in _norm(s['text'])]
             hits = hits if len(hits) == 1 else []
