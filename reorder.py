@@ -535,13 +535,13 @@ def _read_upload(data):
             try: q = float(str(r[lv]).replace(',', '').strip())
             except ValueError: continue
             text = ' '.join(str(x).strip() for x in (r[mk], r[md]) if x not in (None, ''))
-            if text: rows.append((text, q))
+            if text: rows.append((text, q, str(r[md]).strip() if r[md] not in (None, '') else None, None))
         return rows
     for r in raw:
         if len(r) < 2 or r[0] in (None, ''): continue
         try: q = float(str(r[1]).replace(',', '').strip())
         except ValueError: continue       # header row or junk
-        rows.append((str(r[0]).strip(), q))
+        rows.append((str(r[0]).strip(), q, None, None))
     return rows
 
 
@@ -567,7 +567,9 @@ def upload_preview():
     have = {r['stockId']: r['level'] for r in cur if r['entityType'] == et and r['entityId'] == eid}
     ok, bad = [], []
     asked_bc = 0
-    for text, q, model in rows:
+    for text, q, model, sid in rows:
+        if sid:   # exported file: the stock ID is already known, no matching needed
+            ok.append({'stockId': sid, 'name': text, 'asked': text, 'quantity': q, 'now': have.get(sid)}); continue
         k = _norm(text); hits = by_part.get(k) or []
         if not hits:   # "make model" from a spreadsheet: the stock record's name is "make model [model number]"
             hits = [s for s in cat if k and (_norm(s['text']) == k or _norm(s['text']).startswith(k + ' '))]
