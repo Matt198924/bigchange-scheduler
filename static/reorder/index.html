@@ -29,6 +29,11 @@ input.q{width:5.5rem}pre{background:#f3f5f6;padding:.6rem;border-radius:8px;over
   <div style="margin-top:.5rem"><select id="usel" style="max-width:100%"></select> <input type="file" accept=".csv,.xlsx" onchange="vup($('usel').value,this,true)"></div><div id="vu-top" style="margin-top:.4rem"></div></div>
 <div class="card"><h2>Look up stock IDs</h2><div class="muted">Paste stock IDs (spaces, commas or one per line, up to 15) to see what BigChange says about each.</div>
   <textarea id="lids" rows="3" style="width:100%"></textarea><div><button class="sm" onclick="lookIds()">Look up</button></div><pre id="lres" style="white-space:pre-wrap;display:none"></pre></div>
+<div class="card"><h2>Copy or export levels from a van</h2><div class="muted">Pick a van that already has the right levels. Copy them to other vans (their existing levels for those parts are replaced), or download them as a file you can upload to any van.</div>
+  <div style="margin-top:.5rem"><select id="csrc" style="max-width:100%" onchange="cpDraw()"></select> <button class="sm" onclick="cpExport()">Download as CSV</button></div>
+  <div style="margin-top:.5rem"><b>Copy to</b> <a href="#" onclick="cpSel(true);return false">Select all</a> &middot; <a href="#" onclick="cpSel(false);return false">Select none</a> <span id="cpcount" class="muted"></span></div>
+  <div id="cplist" style="display:grid;grid-template-columns:repeat(auto-fill,minmax(10rem,1fr));gap:.2rem .8rem;margin-top:.4rem;max-height:14rem;overflow:auto"></div>
+  <div style="margin-top:.6rem"><button class="sm p" onclick="cpGo()">Copy levels to ticked vans</button> <span id="cpmsg" class="muted"></span></div></div>
 <div class="card"><h2>Locations with reorder levels</h2>
   <input id="fq" placeholder="Filter locations" style="width:100%;margin-bottom:.5rem" oninput="draw()">
   <div id="summary" class="muted">Loading…</div><div id="locs"></div></div>
@@ -46,7 +51,7 @@ async function api(path, method = 'GET', body) {
 }
 let LOCS = [], PICK = null, qcache = {};
 async function load() {
-  try { const j = await api('/levels'); LOCS = j.locations; $('summary').textContent = LOCS.length + ' locations (' + LOCS.filter(l => !l.items.length).length + ' with none yet), ' + j.total + ' reorder levels.'; fillSel(); draw(); }
+  try { const j = await api('/levels'); LOCS = j.locations; $('summary').textContent = LOCS.length + ' locations (' + LOCS.filter(l => !l.items.length).length + ' with none yet), ' + j.total + ' reorder levels.'; fillSel(); cpFill(); draw(); }
   catch (e) { $('summary').innerHTML = '<span class="err">' + esc(e.message) + '</span>'; }
 }
 function fillSel() { const v = $('usel').value; $('usel').innerHTML = '<option value="">Choose location...</option>' + LOCS.map(l => `<option value="${l.entityType}-${l.entityId}">${esc(l.label)}</option>`).join(''); $('usel').value = v; }
@@ -108,6 +113,23 @@ async function vdel(k, n, label) { const [et, eid] = k.split('-'), m = $('vd-' +
   const t = prompt(`Type DELETE to confirm removing ${n} reorder levels from ${label}`); if (t !== 'DELETE') { m.textContent = 'Cancelled.'; return; }
   m.textContent = 'Deleting ' + n + '...';
   try { const j = await api('/delete-all', 'POST', {entityType: et, entityId: eid, expect: n}); m.innerHTML = `<span class="${j.failed.length || j.left ? 'err' : 'ok'}">${j.deleted} deleted${j.failed.length ? ', ' + j.failed.length + ' failed' : ''}${j.left ? ', ' + j.left + ' still showing' : ''}.</span>`; qcache = {}; load(); } catch (e) { m.innerHTML = '<span class="err">' + esc(e.message) + '</span>'; } }
+function cpFill() { const v = $('csrc').value; $('csrc').innerHTML = '<option value="">Choose the van to copy from...</option>' + LOCS.filter(l => l.items.length).map(l => `<option value="${l.entityType}-${l.entityId}">${esc(l.label)} (${l.items.length} items)</option>`).join(''); $('csrc').value = v; cpDraw(); }
+function cpDraw() { const src = $('csrc').value; const ticked = new Set([...document.querySelectorAll('.cpk:checked')].map(c => c.value));
+  $('cplist').innerHTML = LOCS.filter(l => l.entityType == 2 && (l.entityType + '-' + l.entityId) !== src && !/stock/i.test(l.label)).map(l => { const k = l.entityType + '-' + l.entityId; return `<label><input type="checkbox" class="cpk" value="${k}" ${ticked.has(k) ? 'checked' : ''} onchange="cpCount()"> ${esc(l.label)}</label>`; }).join(''); cpCount(); }
+function cpSel(on) { document.querySelectorAll('.cpk').forEach(c => c.checked = on); cpCount(); }
+function cpCount() { $('cpcount').textContent = document.querySelectorAll('.cpk:checked').length + ' ticked'; }
+function cpExport() { const l = LOCS.find(x => x.entityType + '-' + x.entityId === $('csrc').value); if (!l) { alert('Choose a van first.'); return; }
+  const q = t => '"' + String(t).replace(/"/g, '""') + '"';
+  const csv = 'Stock ID,Part,Re-Order Level\r\n' + l.items.map(i => [i.stockId, q(i.name), i.level].join(',')).join('\r\n');
+  const a = document.createElement('a'); a.href = URL.createObjectURL(new Blob([csv], {type: 'text/csv'})); a.download = 'reorder-levels-' + l.label.replace(/[^a-z0-9]+/gi, '-') + '.csv'; a.click(); }
+async function cpGo() { const l = LOCS.find(x => x.entityType + '-' + x.entityId === $('csrc').value), m = $('cpmsg'); if (!l) { m.textContent = 'Choose a van to copy from.'; return; }
+  const to = [...document.querySelectorAll('.cpk:checked')].map(c => c.value); if (!to.length) { m.textContent = 'Tick at least one van.'; return; }
+  if (!confirm(`Copy ${l.items.length} reorder levels from ${l.label} to ${to.length} van(s)? Existing levels for those parts on those vans are replaced.`)) return;
+  const rows = l.items.map(i => ({stockId: i.stockId, quantity: i.level})); let bad = 0, n = 0;
+  for (const k of to) { const [et, eid] = k.split('-'); n++;
+    for (let o = 0; o < rows.length; o += 30) { m.textContent = `Van ${n} of ${to.length}, parts ${Math.min(o + 30, rows.length)} of ${rows.length}...`;
+      try { const j = await api('/upload-apply', 'POST', {entityType: et, entityId: eid, rows: rows.slice(o, o + 30)}); bad += j.failed.length; } catch (e) { m.innerHTML = '<span class="err">' + esc(e.message) + ' (stopped at van ' + n + ')</span>'; qcache = {}; load(); return; } } }
+  m.innerHTML = `<span class="${bad ? 'err' : 'ok'}">Done: ${to.length} van(s)${bad ? ', ' + bad + ' parts failed' : ''}.</span>`; qcache = {}; load(); }
 async function lookIds() { const b = $('lres'); b.style.display = ''; b.textContent = 'Looking up...';
   try { const j = await api('/lookup', 'POST', {ids: $('lids').value}); b.textContent = j.results.map(r => JSON.stringify(r, null, 1)).join('\n\n'); } catch (e) { b.textContent = e.message; } }
 let st; function srch() { clearTimeout(st); st = setTimeout(async () => { const q = $('aq').value.trim(); if (q.length < 2) { $('ares').textContent = ''; return; }
