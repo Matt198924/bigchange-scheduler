@@ -556,7 +556,9 @@ def upload_preview():
     except Exception as ex: return jsonify({'error': f'Could not read that file: {ex}'}), 400
     if not rows: return jsonify({'error': 'No rows found - the first column needs the part, the second the quantity'}), 400
     if len(rows) > 2000: return jsonify({'error': 'Too many rows (limit 2000)'}), 400
-    try: cat = _stock_catalog(); cur, _ = _levels()
+    try:
+        cur, _ = _levels()
+        cat = [] if all(r[3] for r in rows) else _stock_catalog()   # a file exported from a van has Stock IDs: no need to read the whole stock list
     except Exception as ex: return jsonify({'error': str(ex)[:300]}), 502
     by_part = {}
     for s in cat:
